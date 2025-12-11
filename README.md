@@ -4,6 +4,8 @@
 
 A openalgo charting using `lightweight-charts` and React.
 
+*Inspired by [TradingView](https://www.tradingview.com/) — UI and charting concepts influenced this project.*
+
 ## Quick start
 
 - Clone the repo:
