@@ -705,6 +705,20 @@ function App() {
             };
             return newData;
           }
+          // Fallback: Create item from WebSocket data if quotes API failed
+          const symbolData = watchlistSymbols.find(s =>
+            (typeof s === 'string' ? s : s.symbol) === ticker.symbol
+          );
+          if (symbolData) {
+            return [...prev, {
+              symbol: ticker.symbol,
+              exchange: typeof symbolData === 'string' ? 'NSE' : (symbolData.exchange || 'NSE'),
+              last: ticker.last.toFixed(2),
+              chg: ticker.chg.toFixed(2),
+              chgP: ticker.chgP.toFixed(2) + '%',
+              up: ticker.chg >= 0
+            }];
+          }
           return prev;
         });
       });
