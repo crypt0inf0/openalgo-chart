@@ -17,7 +17,7 @@ const Topbar = ({
     onUndo, onRedo, onMenuClick, theme, onToggleTheme,
     onDownloadImage, onCopyImage, onFullScreen,
     layout, onLayoutChange, onSaveLayout, onAlertClick, onCompareClick, onReplayClick,
-    isReplayMode = false, onSettingsClick, onTemplatesClick
+    isReplayMode = false, onSettingsClick, onTemplatesClick, onOptionChainClick
 }) => {
     const [showIndicators, setShowIndicators] = useState(false);
     const [showTimeframes, setShowTimeframes] = useState(false);
@@ -651,7 +651,7 @@ const Topbar = ({
                                                 </div>
                                             </div>
 
-                                            {/* Alerts & Replay */}
+                                            {/* Alerts, Replay & Option Chain */}
                                             <div className={styles.separatorWrap}><div className={styles.separator}></div></div>
                                             <div className={styles.group}>
                                                 <button className={classNames(styles.button)} aria-label="Create Alert" onClick={onAlertClick}>
@@ -666,6 +666,17 @@ const Topbar = ({
                                                     </div>
                                                     <div className={styles.text}>Replay</div>
                                                 </button>
+                                                {onOptionChainClick && (
+                                                    <button className={classNames(styles.button)} aria-label="Option Chain" onClick={onOptionChainClick}>
+                                                        <div className={styles.icon}>
+                                                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 28 28" width="28" height="28" fill="currentColor">
+                                                                <path d="M4 7h9v1H4V7zm0 5h9v1H4v-1zm0 5h9v1H4v-1zm11-10h9v1h-9V7zm0 5h9v1h-9v-1zm0 5h9v1h-9v-1z" />
+                                                                <circle cx="14" cy="14" r="2.5" fill="none" stroke="currentColor" strokeWidth="1" />
+                                                            </svg>
+                                                        </div>
+                                                        <div className={styles.text}>Options</div>
+                                                    </button>
+                                                )}
                                             </div>
 
                                             {/* Undo / Redo */}

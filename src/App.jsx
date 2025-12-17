@@ -22,6 +22,7 @@ import MobileNav from './components/MobileNav';
 import CommandPalette from './components/CommandPalette/CommandPalette';
 import LayoutTemplateDialog from './components/LayoutTemplates/LayoutTemplateDialog';
 import ShortcutsDialog from './components/ShortcutsDialog/ShortcutsDialog';
+import OptionChainModal from './components/OptionChainModal';
 import { initTimeService } from './services/timeService';
 import logger from './utils/logger';
 import { useIsMobile, useCommandPalette, useGlobalShortcuts } from './hooks';
@@ -276,6 +277,7 @@ function AppContent({ isAuthenticated, setIsAuthenticated }) {
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
   const [isTemplateDialogOpen, setIsTemplateDialogOpen] = useState(false);
   const [isShortcutsDialogOpen, setIsShortcutsDialogOpen] = useState(false);
+  const [isOptionChainOpen, setIsOptionChainOpen] = useState(false);
   // const [indicators, setIndicators] = useState({ sma: false, ema: false }); // Moved to charts state
   const [toasts, setToasts] = useState([]);
   const toastIdCounter = React.useRef(0);
@@ -1935,6 +1937,20 @@ function AppContent({ isAuthenticated, setIsAuthenticated }) {
     setIsTemplateDialogOpen(true);
   };
 
+  // Option Chain handlers
+  const handleOptionChainClick = () => {
+    setIsOptionChainOpen(true);
+  };
+
+  const handleOptionSelect = (symbol, exchange) => {
+    // Load the selected option chart in the active chart
+    setCharts(prev => prev.map(chart =>
+      chart.id === activeChartId ? { ...chart, symbol, exchange } : chart
+    ));
+    setIsOptionChainOpen(false);
+
+  };
+
   const handleLoadTemplate = useCallback((template) => {
     if (!template) return;
 
@@ -2225,6 +2241,7 @@ function AppContent({ isAuthenticated, setIsAuthenticated }) {
             onSaveLayout={handleSaveLayout}
             onSettingsClick={handleSettingsClick}
             onTemplatesClick={handleTemplatesClick}
+            onOptionChainClick={handleOptionChainClick}
           />
         }
         leftToolbar={
@@ -2450,6 +2467,11 @@ function AppContent({ isAuthenticated, setIsAuthenticated }) {
       <ShortcutsDialog
         isOpen={isShortcutsDialogOpen}
         onClose={() => setIsShortcutsDialogOpen(false)}
+      />
+      <OptionChainModal
+        isOpen={isOptionChainOpen}
+        onClose={() => setIsOptionChainOpen(false)}
+        onSelectOption={handleOptionSelect}
       />
     </>
   );

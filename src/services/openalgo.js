@@ -917,6 +917,129 @@ export const saveUserPreferences = async (preferences) => {
     }
 };
 
+/**
+ * Get Option Chain for an underlying
+ * @param {string} underlying - Underlying symbol (e.g., NIFTY, BANKNIFTY, RELIANCE)
+ * @param {string} exchange - Exchange code (NSE_INDEX, NSE, NFO, BSE_INDEX, BSE, BFO)
+ * @param {string} expiryDate - Optional expiry date in DDMMMYY format (e.g., 30DEC25)
+ * @param {number} strikeCount - Number of strikes above and below ATM (1-100)
+ */
+export const getOptionChain = async (underlying, exchange = 'NFO', expiryDate = null, strikeCount = 10) => {
+    try {
+        const requestBody = {
+            apikey: getApiKey(),
+            underlying,
+            exchange,
+            strike_count: strikeCount
+        };
+
+        // Add expiry_date if specified
+        if (expiryDate) {
+            requestBody.expiry_date = expiryDate;
+        }
+
+        logger.debug('[OpenAlgo] Option Chain request:', requestBody);
+
+        const response = await fetch(`${getApiBase()}/optionchain`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            credentials: 'include',
+            body: JSON.stringify(requestBody)
+        });
+
+        if (!response.ok) {
+            if (response.status === 401) {
+                window.location.href = getLoginUrl();
+                return null;
+            }
+            throw new Error(`OpenAlgo optionchain error: ${response.status} ${response.statusText}`);
+        }
+
+        const data = await response.json();
+        logger.debug('[OpenAlgo] Option Chain response:', data);
+
+        // Response format: { status, underlying, underlying_ltp, expiry_date, atm_strike, chain: [...] }
+        if (data && data.status === 'success') {
+            return {
+                underlying: data.underlying,
+                underlyingLTP: parseFloat(data.underlying_ltp || 0),
+                underlyingPrevClose: parseFloat(data.underlying_prev_close || 0),
+                expiryDate: data.expiry_date,
+                atmStrike: parseFloat(data.atm_strike || 0),
+                chain: data.chain || []
+            };
+        }
+
+        return null;
+    } catch (error) {
+        console.error('Error fetching option chain:', error);
+        return null;
+    }
+};
+
+/**
+ * Get Option Greeks for a specific option symbol
+ * @param {string} symbol - Option symbol (e.g., NIFTY02DEC2526000CE)
+ * @param {string} exchange - Exchange code (NFO, BFO, CDS, MCX)
+ * @param {Object} options - Optional parameters (interest_rate, forward_price, etc.)
+ */
+export const getOptionGreeks = async (symbol, exchange = 'NFO', options = {}) => {
+    try {
+        const requestBody = {
+            apikey: getApiKey(),
+            symbol,
+            exchange,
+            ...options // interest_rate, forward_price, underlying_symbol, underlying_exchange, expiry_time
+        };
+
+        logger.debug('[OpenAlgo] Option Greeks request:', requestBody);
+
+        const response = await fetch(`${getApiBase()}/optiongreeks`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            credentials: 'include',
+            body: JSON.stringify(requestBody)
+        });
+
+        if (!response.ok) {
+            if (response.status === 401) {
+                window.location.href = getLoginUrl();
+                return null;
+            }
+            throw new Error(`OpenAlgo optiongreeks error: ${response.status} ${response.statusText}`);
+        }
+
+        const data = await response.json();
+        logger.debug('[OpenAlgo] Option Greeks response:', data);
+
+        // Response includes: symbol, exchange, underlying, strike, option_type, expiry_date,
+        // days_to_expiry, spot_price, option_price, implied_volatility, greeks: { delta, gamma, theta, vega, rho }
+        if (data && data.status === 'success') {
+            return {
+                symbol: data.symbol,
+                underlying: data.underlying,
+                strike: parseFloat(data.strike || 0),
+                optionType: data.option_type,
+                expiryDate: data.expiry_date,
+                daysToExpiry: data.days_to_expiry,
+                spotPrice: parseFloat(data.spot_price || 0),
+                optionPrice: parseFloat(data.option_price || 0),
+                iv: parseFloat(data.implied_volatility || 0),
+                greeks: data.greeks || {}
+            };
+        }
+
+        return null;
+    } catch (error) {
+        console.error('Error fetching option greeks:', error);
+        return null;
+    }
+};
+
 export default {
     checkAuth,
     getKlines,
@@ -927,5 +1050,7 @@ export default {
     searchSymbols,
     getIntervals,
     fetchUserPreferences,
-    saveUserPreferences
+    saveUserPreferences,
+    getOptionChain,
+    getOptionGreeks
 };
