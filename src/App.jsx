@@ -238,7 +238,9 @@ function AppContent({ isAuthenticated, setIsAuthenticated }) {
       // Profile
       tpo: { enabled: false, blockSize: '30m', tickSize: 'auto' },
       // First Candle Strategy
-      firstCandle: { enabled: false, highlightColor: '#FFD700', highLineColor: '#ef5350', lowLineColor: '#26a69a' }
+      firstCandle: { enabled: false, highlightColor: '#FFD700', highLineColor: '#ef5350', lowLineColor: '#26a69a' },
+      // Price Action Range Strategy
+      priceActionRange: { enabled: false, supportColor: '#26a69a', resistanceColor: '#ef5350' }
     };
     // Migration function: converts old boolean SMA/EMA to object format
     const migrateIndicators = (indicators) => {
@@ -1660,7 +1662,8 @@ function AppContent({ isAuthenticated, setIsAuthenticated }) {
           vwap: { enabled: false, color: '#FF9800' },
           supertrend: { enabled: false, period: 10, multiplier: 3 },
           tpo: { enabled: false, blockSize: '30m', tickSize: 'auto' },
-          firstCandle: { enabled: false, highlightColor: '#FFD700', highLineColor: '#ef5350', lowLineColor: '#26a69a' }
+          firstCandle: { enabled: false, highlightColor: '#FFD700', highLineColor: '#ef5350', lowLineColor: '#26a69a' },
+          priceActionRange: { enabled: false, supportColor: '#26a69a', resistanceColor: '#ef5350' }
         };
         for (let i = newCharts.length; i < count; i++) {
           newCharts.push({
@@ -2140,7 +2143,8 @@ function AppContent({ isAuthenticated, setIsAuthenticated }) {
         vwap: { enabled: false, color: '#FF9800' },
         supertrend: { enabled: false, period: 10, multiplier: 3 },
         tpo: { enabled: false, blockSize: '30m', tickSize: 'auto' },
-        firstCandle: { enabled: false, highlightColor: '#FFD700', highLineColor: '#ef5350', lowLineColor: '#26a69a' }
+        firstCandle: { enabled: false, highlightColor: '#FFD700', highLineColor: '#ef5350', lowLineColor: '#26a69a' },
+        priceActionRange: { enabled: false, supportColor: '#26a69a', resistanceColor: '#ef5350' }
       };
 
       const loadedCharts = template.charts.map((chart, index) => ({

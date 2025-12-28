@@ -104,6 +104,15 @@ const INDICATOR_CONFIG = {
       { key: 'lowLineColor', label: 'Low Line Color', type: 'color' },
     ]
   },
+  priceActionRange: {
+    name: 'Price Action Range',
+    shortName: 'PAR',
+    description: 'Identifies buyer/seller strength from first candle, forms dynamic support/resistance range',
+    fields: [
+      { key: 'supportColor', label: 'Support Color', type: 'color' },
+      { key: 'resistanceColor', label: 'Resistance Color', type: 'color' },
+    ]
+  },
 };
 
 // Sidebar sections with their indicators
@@ -177,7 +186,7 @@ const SECTIONS = [
   {
     id: 'strategy',
     label: 'Strategy',
-    indicators: ['firstCandle'],
+    indicators: ['firstCandle', 'priceActionRange'],
     icon: (
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2">
         <circle cx="12" cy="12" r="10" />

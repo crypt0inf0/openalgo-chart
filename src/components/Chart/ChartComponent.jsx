@@ -27,6 +27,7 @@ import {
 } from '../../utils/indicators';
 import { calculateTPO } from '../../utils/indicators/tpo';
 import { calculateFirstCandle } from '../../utils/indicators/firstCandle';
+import { calculatePriceActionRange } from '../../utils/indicators/priceActionRange';
 import { TPOProfilePrimitive } from '../../plugins/tpo-profile/TPOProfilePrimitive';
 import { calculateHeikinAshi } from '../../utils/chartUtils';
 import { calculateRenko } from '../../utils/renkoUtils';
@@ -155,6 +156,7 @@ const ChartComponent = forwardRef(({
     const tpoProfileRef = useRef(null); // Ref for TPO Profile primitive
     const oiPriceLinesRef = useRef({ maxCallOI: null, maxPutOI: null, maxPain: null }); // Refs for OI price lines
     const firstCandleSeriesRef = useRef([]); // Array of line series for all days' high/low
+    const priceActionRangeSeriesRef = useRef([]); // Array of line series for PAR support/resistance
     const wsRef = useRef(null);
     const chartTypeRef = useRef(chartType);
     const dataRef = useRef([]);
@@ -2565,6 +2567,69 @@ const ChartComponent = forwardRef(({
                 } catch (e) { /* ignore */ }
             }
             firstCandleSeriesRef.current = [];
+        }
+
+        // ========== PRICE ACTION RANGE INDICATOR (All timeframes) ==========
+        const priceActionRangeConfig = indicatorsConfig.priceActionRange;
+
+        if (priceActionRangeConfig?.enabled) {
+            const supportColor = priceActionRangeConfig.supportColor || '#26a69a';
+            const resistanceColor = priceActionRangeConfig.resistanceColor || '#ef5350';
+
+            const parResult = calculatePriceActionRange(data, {
+                supportColor: supportColor,
+                resistanceColor: resistanceColor
+            });
+
+            // Remove old line series if count changed
+            const existingParCount = priceActionRangeSeriesRef.current.length;
+            const neededParCount = parResult.allLevels.length;
+
+            if (existingParCount !== neededParCount) {
+                // Remove all existing series
+                for (const series of priceActionRangeSeriesRef.current) {
+                    try {
+                        chartRef.current.removeSeries(series);
+                    } catch (e) { /* ignore */ }
+                }
+                priceActionRangeSeriesRef.current = [];
+            }
+
+            // Create/update line series for each level
+            if (parResult.allLevels && parResult.allLevels.length > 0 && canAddSeries) {
+                let parSeriesIndex = 0;
+
+                for (const level of parResult.allLevels) {
+                    const { type, value, startTime, endTime, color } = level;
+
+                    // Create or update line series
+                    if (!priceActionRangeSeriesRef.current[parSeriesIndex]) {
+                        priceActionRangeSeriesRef.current[parSeriesIndex] = chartRef.current.addSeries(LineSeries, {
+                            color: color,
+                            lineWidth: 2,
+                            lineStyle: 0, // Solid line
+                            priceLineVisible: false,
+                            lastValueVisible: false,
+                            crosshairMarkerVisible: false,
+                        });
+                    }
+
+                    // Set data for line (horizontal line from start to end of day)
+                    priceActionRangeSeriesRef.current[parSeriesIndex].setData([
+                        { time: startTime, value: value },
+                        { time: endTime, value: value }
+                    ]);
+                    parSeriesIndex++;
+                }
+            }
+        } else {
+            // Remove all PAR line series when disabled
+            for (const series of priceActionRangeSeriesRef.current) {
+                try {
+                    chartRef.current.removeSeries(series);
+                } catch (e) { /* ignore */ }
+            }
+            priceActionRangeSeriesRef.current = [];
         }
 
         // ========== VOLUME INDICATOR (Overlay at bottom of chart) ==========
