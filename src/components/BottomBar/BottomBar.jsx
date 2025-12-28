@@ -13,7 +13,9 @@ const BottomBar = ({
     onToggleLogScale,
     onToggleAutoScale,
     onResetZoom,
-    isToolbarVisible = true
+    isToolbarVisible = true,
+    showOILines = false,
+    onToggleOILines,
 }) => {
     // Local time state - updates every second
     const [localTime, setLocalTime] = useState(new Date());
@@ -145,6 +147,13 @@ const BottomBar = ({
                     <span className={styles.timezone}>{timezone}</span>
                 </div>
                 <div className={styles.separator} />
+                <div
+                    className={classNames(styles.item, styles.actionItem, { [styles.active]: showOILines })}
+                    onClick={onToggleOILines}
+                    title="Toggle OI Lines (Max Call OI, Max Put OI, Max Pain)"
+                >
+                    OI
+                </div>
                 <div
                     className={classNames(styles.item, styles.actionItem, { [styles.active]: isLogScale })}
                     onClick={onToggleLogScale}

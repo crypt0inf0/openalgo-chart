@@ -955,6 +955,13 @@ export const getOptionChain = async (underlying, exchange = 'NFO', expiryDate = 
                 window.location.href = getLoginUrl();
                 return null;
             }
+            // 400 typically means the symbol doesn't have F&O trading
+            if (response.status === 400) {
+                const error = new Error(`Symbol does not support F&O trading`);
+                error.code = 'NO_FO_SUPPORT';
+                error.status = 400;
+                throw error;
+            }
             throw new Error(`OpenAlgo optionchain error: ${response.status} ${response.statusText}`);
         }
 

@@ -11,12 +11,67 @@ const optionChainCache = new Map();
 const CACHE_TTL_MS = 300000; // 5 minutes cache (increased from 60s to avoid rate limits)
 const STORAGE_KEY = 'optionChainCache';
 
+// Negative cache for symbols that don't support F&O (prevents repeated failed API calls)
+const noFOSymbolsCache = new Set();
+const NO_FO_STORAGE_KEY = 'noFOSymbolsCache';
+const NO_FO_CACHE_DURATION_MS = 24 * 60 * 60 * 1000; // 24 hours
+
 // Rate limit protection: Track last API call time to prevent rapid repeated calls
 let lastApiCallTime = 0;
 const MIN_API_INTERVAL_MS = 5000; // Minimum 5 seconds between API calls
 
 // Generate cache key from underlying and expiry
 const getCacheKey = (underlying, expiry) => `${underlying}_${expiry || 'default'}`;
+
+// Load negative cache from localStorage
+const loadNoFOCacheFromStorage = () => {
+    try {
+        const stored = localStorage.getItem(NO_FO_STORAGE_KEY);
+        if (stored) {
+            const parsed = JSON.parse(stored);
+            // Only load entries that haven't expired
+            const now = Date.now();
+            Object.entries(parsed).forEach(([symbol, timestamp]) => {
+                if (now - timestamp < NO_FO_CACHE_DURATION_MS) {
+                    noFOSymbolsCache.add(symbol);
+                }
+            });
+            console.log('[OptionChain] Loaded', noFOSymbolsCache.size, 'non-F&O symbols from cache');
+        }
+    } catch (e) {
+        console.warn('[OptionChain] Failed to load no-F&O cache:', e.message);
+    }
+};
+
+// Save negative cache to localStorage with timestamps
+const saveNoFOCacheToStorage = () => {
+    try {
+        const now = Date.now();
+        const obj = {};
+        noFOSymbolsCache.forEach(symbol => {
+            obj[symbol] = now;
+        });
+        localStorage.setItem(NO_FO_STORAGE_KEY, JSON.stringify(obj));
+    } catch (e) {
+        console.warn('[OptionChain] Failed to save no-F&O cache:', e.message);
+    }
+};
+
+// Check if symbol is known to not support F&O
+const isNonFOSymbol = (symbol) => noFOSymbolsCache.has(symbol?.toUpperCase());
+
+// Mark a symbol as not supporting F&O
+const markAsNonFOSymbol = (symbol) => {
+    const upperSymbol = symbol?.toUpperCase();
+    if (upperSymbol) {
+        noFOSymbolsCache.add(upperSymbol);
+        saveNoFOCacheToStorage();
+        console.log('[OptionChain] Marked as non-F&O symbol:', upperSymbol);
+    }
+};
+
+// Load negative cache on module init
+loadNoFOCacheFromStorage();
 
 // Check if cache entry is still valid
 const isCacheValid = (cacheEntry) => {
@@ -197,6 +252,14 @@ export const formatExpiryTab = (expiryStr, index) => {
  * @returns {Promise<Object>} Option chain data with LTP, OI, etc.
  */
 export const getOptionChain = async (underlying, exchange = 'NFO', expiryDate = null, strikeCount = 15, forceRefresh = false) => {
+    // Check if symbol is known to not support F&O (negative cache)
+    if (isNonFOSymbol(underlying)) {
+        console.log('[OptionChain] Symbol known to not support F&O:', underlying);
+        const error = new Error(`${underlying} does not support F&O trading`);
+        error.code = 'NO_FO_SUPPORT';
+        throw error;
+    }
+
     const cacheKey = getCacheKey(underlying, expiryDate);
     const cached = optionChainCache.get(cacheKey);
 
@@ -223,19 +286,23 @@ export const getOptionChain = async (underlying, exchange = 'NFO', expiryDate = 
     }
 
     try {
-        // Find the underlying config to get correct index exchange
+        // Find the underlying config to get correct index exchange (for underlying price lookup)
         // For known indices (NIFTY, BANKNIFTY), use their indexExchange (NSE_INDEX/BSE_INDEX)
         // For stocks (not in UNDERLYINGS), use 'NSE' or 'BSE' directly
         const underlyingConfig = UNDERLYINGS.find(u => u.symbol === underlying);
         const indexExchange = underlyingConfig?.indexExchange || (exchange === 'BFO' ? 'BSE' : 'NSE');
 
-        console.log('[OptionChain] Fetching fresh chain:', { underlying, indexExchange, expiryDate, strikeCount });
+        // The option chain API expects the F&O exchange (NFO/BFO), not the underlying exchange
+        // The 'exchange' parameter passed to this function should already be NFO or BFO
+        const optionExchange = exchange; // NFO or BFO
+
+        console.log('[OptionChain] Fetching fresh chain:', { underlying, optionExchange, indexExchange, expiryDate, strikeCount });
 
         // Update last API call time
         lastApiCallTime = Date.now();
 
-        // Call OpenAlgo Option Chain API
-        const result = await fetchOptionChainAPI(underlying, indexExchange, expiryDate, strikeCount);
+        // Call OpenAlgo Option Chain API with the F&O exchange (NFO/BFO)
+        const result = await fetchOptionChainAPI(underlying, optionExchange, expiryDate, strikeCount);
 
         if (!result) {
             console.error('[OptionChain] API returned null');
@@ -326,6 +393,12 @@ export const getOptionChain = async (underlying, exchange = 'NFO', expiryDate = 
         return processedData;
     } catch (error) {
         console.error('[OptionChain] Error fetching option chain:', error);
+
+        // If symbol doesn't support F&O, add to negative cache and re-throw
+        if (error.code === 'NO_FO_SUPPORT') {
+            markAsNonFOSymbol(underlying);
+            throw error; // Re-throw so caller knows this is a non-F&O symbol
+        }
 
         // On error, return stale cache if available (better than nothing)
         if (cached) {
