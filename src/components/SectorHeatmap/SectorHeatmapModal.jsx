@@ -199,7 +199,7 @@ const SectorHeatmapModal = ({ isOpen, onClose, watchlistData, onSectorSelect, on
             key={sector.sector}
             className={styles.treemapSector}
             style={{
-              flexBasis: `${Math.max(sector.size, 8)}%`,
+              flex: `${sector.stockCount} 1 ${Math.max(sector.stockCount * 25, 100)}px`,
               backgroundColor: getBackgroundColor(sector.avgChange),
             }}
             onClick={() => handleRowClick(sector.sector)}
