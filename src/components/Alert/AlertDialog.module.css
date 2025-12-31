@@ -144,3 +144,89 @@
 .saveButton:hover {
     background-color: #1e53e5;
 }
+
+.saveButton:disabled {
+    background-color: #787b86;
+    cursor: not-allowed;
+}
+
+.title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.symbol {
+    color: #2962ff;
+    font-weight: 700;
+}
+
+.inputError {
+    border-color: #F23645 !important;
+}
+
+.errorMessage {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: #F23645;
+    font-size: 12px;
+    margin-top: 4px;
+}
+
+.conditionPreview {
+    background-color: #f0f3fa;
+    border-radius: 4px;
+    padding: 10px 12px;
+    font-size: 13px;
+    color: #787b86;
+    margin-bottom: 16px;
+}
+
+[data-theme='dark'] .conditionPreview {
+    background-color: #2a2e39;
+    color: #9598a1;
+}
+
+.notificationSection {
+    border-top: 1px solid #e0e3eb;
+    padding-top: 16px;
+    margin-top: 8px;
+}
+
+[data-theme='dark'] .notificationSection {
+    border-top-color: #2a2e39;
+}
+
+.sectionLabel {
+    display: block;
+    font-size: 12px;
+    color: #787b86;
+    margin-bottom: 10px;
+    font-weight: 500;
+}
+
+.notificationOptions {
+    display: flex;
+    gap: 20px;
+}
+
+.checkboxLabel {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    cursor: pointer;
+    color: #131722;
+}
+
+[data-theme='dark'] .checkboxLabel {
+    color: #d1d4dc;
+}
+
+.checkboxLabel input[type="checkbox"] {
+    width: 16px;
+    height: 16px;
+    accent-color: #2962ff;
+    cursor: pointer;
+}

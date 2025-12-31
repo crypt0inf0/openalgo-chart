@@ -26,10 +26,13 @@ import { OptionChainPicker } from './components/OptionChainPicker';
 import OptionChainModal from './components/OptionChainModal';
 import { initTimeService } from './services/timeService';
 import logger from './utils/logger';
+import { playAlertSound } from './utils/soundManager';
 import { useIsMobile, useCommandPalette, useGlobalShortcuts } from './hooks';
 import { useCloudWorkspaceSync } from './hooks/useCloudWorkspaceSync';
 import IndicatorSettingsModal from './components/IndicatorSettings/IndicatorSettingsModal';
 import PositionTracker from './components/PositionTracker';
+import { SectorHeatmapModal } from './components/SectorHeatmap';
+import { IntradayBoost } from './components/IntradayBoost';
 const VALID_INTERVAL_UNITS = new Set(['s', 'm', 'h', 'd', 'w', 'M']);
 const DEFAULT_FAVORITE_INTERVALS = []; // No default favorites
 
@@ -235,7 +238,9 @@ function AppContent({ isAuthenticated, setIsAuthenticated }) {
       volume: { enabled: false, colorUp: '#089981', colorDown: '#F23645' },
       vwap: { enabled: false, color: '#FF9800' },
       // Profile
-      tpo: { enabled: false, blockSize: '30m', tickSize: 'auto' }
+      tpo: { enabled: false, blockSize: '30m', tickSize: 'auto' },
+      // Open Interest
+      oiProfile: { enabled: false, showTop5Only: false, compactMode: false, callColor: '#26a69a', putColor: '#ef5350' }
     };
     // Migration function: converts old boolean SMA/EMA to object format
     const migrateIndicators = (indicators) => {
@@ -328,6 +333,7 @@ function AppContent({ isAuthenticated, setIsAuthenticated }) {
   });
   const alertsRef = React.useRef(alerts); // Ref to avoid race condition in WebSocket callback
   React.useEffect(() => { alertsRef.current = alerts; }, [alerts]);
+  const previousPricesRef = React.useRef({}); // Track previous prices for crossing direction detection
 
   const [alertLogs, setAlertLogs] = useState(() => {
     const saved = safeParseJSON(localStorage.getItem('tv_alert_logs'), []);
@@ -388,6 +394,9 @@ function AppContent({ isAuthenticated, setIsAuthenticated }) {
       console.error('Failed to persist position tracker settings:', error);
     }
   }, [positionTrackerSettings]);
+
+  // Sector Heatmap Modal State
+  const [isSectorHeatmapOpen, setIsSectorHeatmapOpen] = useState(false);
 
   // Theme State
   const [theme, setTheme] = useState(() => {
@@ -460,6 +469,30 @@ function AppContent({ isAuthenticated, setIsAuthenticated }) {
   // Remove a specific toast
   const removeToast = (id) => {
     setToasts(prev => prev.filter(t => t.id !== id));
+  };
+
+  // Show browser push notification for alerts
+  const showPushNotification = (title, body) => {
+    // Check if notifications are supported and permission is granted
+    if (!('Notification' in window)) {
+      return;
+    }
+
+    if (Notification.permission === 'granted') {
+      try {
+        new Notification(title, {
+          body,
+          icon: '/favicon.ico',
+          tag: 'alert-notification', // Prevents duplicate notifications
+          requireInteraction: false,
+        });
+      } catch (error) {
+        console.warn('[App] Push notification failed:', error);
+      }
+    } else if (Notification.permission === 'default') {
+      // Request permission for future notifications
+      Notification.requestPermission();
+    }
   };
 
   const showSnapshotToast = (message) => {
@@ -1015,6 +1048,14 @@ function AppContent({ isAuthenticated, setIsAuthenticated }) {
     if (alertWsSymbols.length === 0) return;
 
     const ws = subscribeToMultiTicker(alertWsSymbols, (ticker) => {
+      const tickerKey = `${ticker.symbol}-${ticker.exchange || 'NSE'}`;
+      const currentPrice = parseFloat(ticker.last);
+
+      // Get previous price for this symbol
+      const previousPrice = previousPricesRef.current[tickerKey];
+      // Update previous price for next tick
+      previousPricesRef.current[tickerKey] = currentPrice;
+
       setAlerts(prevAlerts => {
         let hasChanges = false;
         const newAlerts = prevAlerts.map(alert => {
@@ -1024,17 +1065,63 @@ function AppContent({ isAuthenticated, setIsAuthenticated }) {
           const tickerExchange = ticker.exchange || 'NSE';
           if (alert.status !== 'Active' || alert.symbol !== ticker.symbol || alertExchange !== tickerExchange) return alert;
 
-          const currentPrice = parseFloat(ticker.last);
           const targetPrice = parseFloat(alert.price);
           if (!Number.isFinite(currentPrice) || !Number.isFinite(targetPrice) || targetPrice === 0) return alert;
 
-          // Simple crossing logic (triggered if price is within 0.1% range)
-          const threshold = targetPrice * 0.001; // 0.1% tolerance
+          // Use fixed minimum threshold (5 paise) or 0.05% of price for larger prices
+          const threshold = Math.max(0.05, targetPrice * 0.0005);
+          const conditionType = alert.conditionType || 'Crossing';
+          let triggered = false;
+          let triggerMessage = '';
 
-          if (Math.abs(currentPrice - targetPrice) <= threshold) {
+          switch (conditionType) {
+            case 'Crossing':
+              // Trigger when price is within threshold of target
+              if (Math.abs(currentPrice - targetPrice) <= threshold) {
+                triggered = true;
+                triggerMessage = `crossed ${formatPrice(targetPrice)}`;
+              }
+              break;
+            case 'Crossing Up':
+              // Trigger when price crosses from below to above (or touches from below)
+              if (previousPrice !== undefined && previousPrice < targetPrice && currentPrice >= targetPrice - threshold) {
+                triggered = true;
+                triggerMessage = `crossed up ${formatPrice(targetPrice)}`;
+              }
+              break;
+            case 'Crossing Down':
+              // Trigger when price crosses from above to below (or touches from above)
+              if (previousPrice !== undefined && previousPrice > targetPrice && currentPrice <= targetPrice + threshold) {
+                triggered = true;
+                triggerMessage = `crossed down ${formatPrice(targetPrice)}`;
+              }
+              break;
+            case 'Greater Than':
+              // Trigger when price goes above target
+              if (currentPrice > targetPrice) {
+                triggered = true;
+                triggerMessage = `went above ${formatPrice(targetPrice)}`;
+              }
+              break;
+            case 'Less Than':
+              // Trigger when price goes below target
+              if (currentPrice < targetPrice) {
+                triggered = true;
+                triggerMessage = `went below ${formatPrice(targetPrice)}`;
+              }
+              break;
+            default:
+              // Fallback to crossing logic
+              if (Math.abs(currentPrice - targetPrice) <= threshold) {
+                triggered = true;
+                triggerMessage = `crossed ${formatPrice(targetPrice)}`;
+              }
+          }
+
+          if (triggered) {
             hasChanges = true;
 
-            const displayPrice = formatPrice(targetPrice);
+            const alertLabel = alert.name || `${alert.symbol}:${alertExchange}`;
 
             // Log the alert with exchange
             const logEntry = {
@@ -1042,12 +1129,27 @@ function AppContent({ isAuthenticated, setIsAuthenticated }) {
               alertId: alert.id,
               symbol: alert.symbol,
               exchange: alertExchange,
-              message: `Alert triggered: ${alert.symbol}:${alertExchange} crossed ${displayPrice}`,
+              message: `Alert triggered: ${alertLabel} ${triggerMessage}`,
               time: new Date().toISOString()
             };
             setAlertLogs(prev => [logEntry, ...prev]);
             setUnreadAlertCount(prev => prev + 1);
-            showToast(`Alert Triggered: ${alert.symbol}:${alertExchange} at ${displayPrice}`, 'info');
+
+            // Play sound notification if enabled for this alert
+            if (alert.enableSound !== false) {
+              playAlertSound('default');
+            }
+
+            // Show browser push notification if enabled for this alert
+            if (alert.enablePush !== false) {
+              showPushNotification(
+                `Alert Triggered: ${alertLabel}`,
+                `${alert.symbol}:${alertExchange} ${triggerMessage}`
+              );
+            }
+
+            // Always show toast
+            showToast(`Alert Triggered: ${alertLabel} ${triggerMessage}`, 'info');
 
             return { ...alert, status: 'Triggered' };
           }
@@ -1639,7 +1741,8 @@ function AppContent({ isAuthenticated, setIsAuthenticated }) {
           stochastic: { enabled: false, kPeriod: 14, dPeriod: 3, smooth: 3, kColor: '#2962FF', dColor: '#FF6D00' },
           vwap: { enabled: false, color: '#FF9800' },
           supertrend: { enabled: false, period: 10, multiplier: 3 },
-          tpo: { enabled: false, blockSize: '30m', tickSize: 'auto' }
+          tpo: { enabled: false, blockSize: '30m', tickSize: 'auto' },
+          oiProfile: { enabled: false, showTop5Only: false, compactMode: false, callColor: '#26a69a', putColor: '#ef5350' }
         };
         for (let i = newCharts.length; i < count; i++) {
           newCharts.push({
@@ -1815,13 +1918,18 @@ function AppContent({ isAuthenticated, setIsAuthenticated }) {
 
   const handleSaveAlert = (alertData) => {
     const priceDisplay = formatPrice(alertData.value);
+    const conditionType = alertData.condition || 'Crossing';
 
     const newAlert = {
       id: Date.now(),
       symbol: currentSymbol,
       exchange: currentExchange,
       price: priceDisplay,
-      condition: `Crossing ${priceDisplay}`,
+      conditionType: conditionType, // Store the actual condition type for logic
+      condition: `${conditionType} ${priceDisplay}`, // Display string
+      name: alertData.name || null, // Optional alert name
+      enableSound: alertData.enableSound ?? true, // Sound notification
+      enablePush: alertData.enablePush ?? true, // Push notification
       status: 'Active',
       created_at: new Date().toISOString(),
     };
@@ -1830,7 +1938,8 @@ function AppContent({ isAuthenticated, setIsAuthenticated }) {
     setAlerts(prev => [...prev, newAlert]);
 
     // Show toast with formatted price
-    showToast(`Alert created for ${currentSymbol}:${currentExchange} at ${priceDisplay}`, 'success');
+    const alertLabel = alertData.name ? `"${alertData.name}"` : `${currentSymbol}:${currentExchange}`;
+    showToast(`Alert created: ${alertLabel} at ${priceDisplay}`, 'success');
 
     // Set flag to skip the next sync notification (prevent duplicate toast)
     skipNextSyncRef.current = { type: 'add', alertId: newAlert.id, chartId: activeChartId };
@@ -1907,6 +2016,24 @@ function AppContent({ isAuthenticated, setIsAuthenticated }) {
 
     // Update status to Paused
     setAlerts(prev => prev.map(a => a.id === id ? { ...a, status: 'Paused' } : a));
+  };
+
+  const handleClearAllTriggered = () => {
+    setAlerts(prev => {
+      const triggeredAlerts = prev.filter(a => a.status?.toLowerCase() === 'triggered');
+
+      // Remove chart-side visuals for all triggered alerts
+      triggeredAlerts.forEach(target => {
+        if (target._source === 'lineTools' && target.chartId != null && target.externalId) {
+          const chartRef = chartRefs.current[target.chartId];
+          if (chartRef && typeof chartRef.removePriceAlert === 'function') {
+            chartRef.removePriceAlert(target.externalId);
+          }
+        }
+      });
+
+      return prev.filter(a => a.status?.toLowerCase() !== 'triggered');
+    });
   };
 
   const handleChartAlertsSync = (chartId, symbol, exchange, chartAlerts) => {
@@ -2118,7 +2245,8 @@ function AppContent({ isAuthenticated, setIsAuthenticated }) {
         stochastic: { enabled: false, kPeriod: 14, dPeriod: 3, smooth: 3, kColor: '#2962FF', dColor: '#FF6D00' },
         vwap: { enabled: false, color: '#FF9800' },
         supertrend: { enabled: false, period: 10, multiplier: 3 },
-        tpo: { enabled: false, blockSize: '30m', tickSize: 'auto' }
+        tpo: { enabled: false, blockSize: '30m', tickSize: 'auto' },
+        oiProfile: { enabled: false, showTop5Only: false, compactMode: false, callColor: '#26a69a', putColor: '#ef5350' }
       };
 
       const loadedCharts = template.charts.map((chart, index) => ({
@@ -2388,6 +2516,7 @@ function AppContent({ isAuthenticated, setIsAuthenticated }) {
             strategyConfig={activeChart?.strategyConfig}
             onIndicatorSettingsClick={() => setIsIndicatorSettingsOpen(true)}
             onOptionsClick={() => setIsOptionChainOpen(true)}
+            onHeatmapClick={() => setIsSectorHeatmapOpen(true)}
           />
         }
         leftToolbar={
@@ -2500,6 +2629,7 @@ function AppContent({ isAuthenticated, setIsAuthenticated }) {
               onRemoveAlert={handleRemoveAlert}
               onRestartAlert={handleRestartAlert}
               onPauseAlert={handlePauseAlert}
+              onClearAllTriggered={handleClearAllTriggered}
             />
           ) : activeRightPanel === 'position_tracker' ? (
             <PositionTracker
@@ -2517,6 +2647,17 @@ function AppContent({ isAuthenticated, setIsAuthenticated }) {
                 ));
               }}
               isAuthenticated={isAuthenticated}
+            />
+          ) : activeRightPanel === 'boost' ? (
+            <IntradayBoost
+              isAuthenticated={isAuthenticated}
+              onSymbolSelect={(symData) => {
+                const symbol = typeof symData === 'string' ? symData : symData.symbol;
+                const exchange = typeof symData === 'string' ? 'NSE' : (symData.exchange || 'NSE');
+                setCharts(prev => prev.map(chart =>
+                  chart.id === activeChartId ? { ...chart, symbol: symbol, exchange: exchange, strategyConfig: null } : chart
+                ));
+              }}
             />
           ) : null
         }
@@ -2598,6 +2739,7 @@ function AppContent({ isAuthenticated, setIsAuthenticated }) {
         onClose={() => setIsAlertOpen(false)}
         onSave={handleSaveAlert}
         initialPrice={alertPrice}
+        symbol={`${currentSymbol}:${currentExchange}`}
         theme={theme}
       />
       <SettingsPopup
@@ -2652,6 +2794,23 @@ function AppContent({ isAuthenticated, setIsAuthenticated }) {
           setIsStraddlePickerOpen(false);
         }}
         spotPrice={activeChart?.ltp || null}
+      />
+      <SectorHeatmapModal
+        isOpen={isSectorHeatmapOpen}
+        onClose={() => setIsSectorHeatmapOpen(false)}
+        watchlistData={watchlistData}
+        onSectorSelect={(sector) => {
+          setPositionTrackerSettings(prev => ({ ...prev, sectorFilter: sector }));
+          setIsSectorHeatmapOpen(false);
+        }}
+        onSymbolSelect={(symData) => {
+          const symbol = typeof symData === 'string' ? symData : symData.symbol;
+          const exchange = typeof symData === 'string' ? 'NSE' : (symData.exchange || 'NSE');
+          setCharts(prev => prev.map(chart =>
+            chart.id === activeChartId ? { ...chart, symbol: symbol, exchange: exchange, strategyConfig: null } : chart
+          ));
+          setIsSectorHeatmapOpen(false);
+        }}
       />
       <OptionChainModal
         isOpen={isOptionChainOpen}
