@@ -26,11 +26,13 @@ import {
     calculateSupertrend
 } from '../../utils/indicators';
 import { calculateTPO } from '../../utils/indicators/tpo';
+import { calculateFirstCandle } from '../../utils/indicators/firstCandle';
 import { TPOProfilePrimitive } from '../../plugins/tpo-profile/TPOProfilePrimitive';
 import { calculateHeikinAshi } from '../../utils/chartUtils';
 import { calculateRenko } from '../../utils/renkoUtils';
 import { intervalToSeconds } from '../../utils/timeframes';
 import { logger } from '../../utils/logger.js';
+import { useFirstRedCandle } from '../../hooks/useFirstRedCandle';
 
 import { LineToolManager, PriceScaleTimer } from '../../plugins/line-tools/line-tools.js';
 import '../../plugins/line-tools/line-tools.css';
@@ -150,6 +152,10 @@ const ChartComponent = forwardRef(({
     const lineToolManagerRef = useRef(null);
     const priceScaleTimerRef = useRef(null); // Ref for the candle countdown timer
     const tpoProfileRef = useRef(null); // Ref for TPO Profile primitive
+    const firstCandleSeriesRef = useRef([]); // Array of line series for all days' high/low (original FRC)
+    // First Red Candle (FRC) indicator refs (hook-based approach)
+    const frcHighSeriesRef = useRef(null);
+    const frcLowSeriesRef = useRef(null);
     const wsRef = useRef(null);
     const chartTypeRef = useRef(chartType);
     const dataRef = useRef([]);
@@ -205,6 +211,9 @@ const ChartComponent = forwardRef(({
     useEffect(() => { exchangeRef.current = exchange; }, [exchange]);
     useEffect(() => { intervalRef.current = interval; }, [interval]);
     useEffect(() => { indicatorsRef.current = indicators; }, [indicators]);
+
+    // First Red Candle (FRC) indicator - fetches 5min data independently
+    const { levels: frcLevels } = useFirstRedCandle(symbol, exchange, true);
 
     // ============================================
     // CONFIGURABLE CHART CONSTANTS
@@ -2478,6 +2487,90 @@ const ChartComponent = forwardRef(({
             }
         }
 
+        // ========== FIRST CANDLE INDICATOR (5-min only - Lines + Markers for ALL days) ==========
+        const firstCandleConfig = indicatorsConfig.firstCandle;
+        const is5MinChart = intervalRef.current === '5' || intervalRef.current === '5m';
+
+        if (firstCandleConfig?.enabled && is5MinChart) {
+            const highLineColor = firstCandleConfig.highLineColor || '#ef5350';
+            const lowLineColor = firstCandleConfig.lowLineColor || '#26a69a';
+
+            const result = calculateFirstCandle(data, {
+                highlightColor: firstCandleConfig.highlightColor || '#FFD700',
+                signalColor: highLineColor,
+                highLineColor: highLineColor,
+                lowLineColor: lowLineColor
+            });
+
+            // Remove old line series if count changed
+            const existingCount = firstCandleSeriesRef.current.length;
+            const neededCount = result.allLevels.length * 2; // 2 lines per day (high + low)
+
+            if (existingCount !== neededCount) {
+                // Remove all existing series
+                for (const series of firstCandleSeriesRef.current) {
+                    try {
+                        chartRef.current.removeSeries(series);
+                    } catch (e) { /* ignore */ }
+                }
+                firstCandleSeriesRef.current = [];
+            }
+
+            // Create/update line series for each day's high and low
+            if (result.allLevels && result.allLevels.length > 0 && canAddSeries) {
+                let seriesIndex = 0;
+
+                for (const level of result.allLevels) {
+                    const { high, low, startTime, endTime } = level;
+
+                    // High line series for this day
+                    if (!firstCandleSeriesRef.current[seriesIndex]) {
+                        firstCandleSeriesRef.current[seriesIndex] = chartRef.current.addSeries(LineSeries, {
+                            color: highLineColor,
+                            lineWidth: 2,
+                            lineStyle: 2, // Dashed
+                            priceLineVisible: false,
+                            lastValueVisible: false,
+                            crosshairMarkerVisible: false,
+                        });
+                    }
+                    // Set data for high line (horizontal line from start to end of day)
+                    firstCandleSeriesRef.current[seriesIndex].setData([
+                        { time: startTime, value: high },
+                        { time: endTime, value: high }
+                    ]);
+                    seriesIndex++;
+
+                    // Low line series for this day
+                    if (!firstCandleSeriesRef.current[seriesIndex]) {
+                        firstCandleSeriesRef.current[seriesIndex] = chartRef.current.addSeries(LineSeries, {
+                            color: lowLineColor,
+                            lineWidth: 2,
+                            lineStyle: 2, // Dashed
+                            priceLineVisible: false,
+                            lastValueVisible: false,
+                            crosshairMarkerVisible: false,
+                        });
+                    }
+                    // Set data for low line (horizontal line from start to end of day)
+                    firstCandleSeriesRef.current[seriesIndex].setData([
+                        { time: startTime, value: low },
+                        { time: endTime, value: low }
+                    ]);
+                    seriesIndex++;
+                }
+            }
+
+        } else {
+            // Remove all first candle line series when disabled or not 5-min chart
+            for (const series of firstCandleSeriesRef.current) {
+                try {
+                    chartRef.current.removeSeries(series);
+                } catch (e) { /* ignore */ }
+            }
+            firstCandleSeriesRef.current = [];
+        }
+
         // ========== VOLUME INDICATOR (Overlay at bottom of chart) ==========
         const volumeHidden = indicatorsConfig.volume?.hidden;
         if (indicatorsConfig.volume?.enabled) {
@@ -2790,6 +2883,50 @@ const ChartComponent = forwardRef(({
             }
         }
     }, [indicators, updateIndicators]);
+
+    // ========== FIRST RED CANDLE (FRC) INDICATOR ==========
+    // Draw horizontal price lines at FRC high and low levels
+    useEffect(() => {
+        // Remove existing FRC price lines
+        if (frcHighSeriesRef.current && mainSeriesRef.current) {
+            try {
+                mainSeriesRef.current.removePriceLine(frcHighSeriesRef.current);
+            } catch (e) {}
+            frcHighSeriesRef.current = null;
+        }
+        if (frcLowSeriesRef.current && mainSeriesRef.current) {
+            try {
+                mainSeriesRef.current.removePriceLine(frcLowSeriesRef.current);
+            } catch (e) {}
+            frcLowSeriesRef.current = null;
+        }
+
+        // If no FRC levels or chart not ready, exit
+        if (!frcLevels || !mainSeriesRef.current || isDisposedRef.current) return;
+
+        console.log('[FRC] Drawing price lines at High:', frcLevels.high, 'Low:', frcLevels.low);
+
+        // Create FRC High price line (resistance - red dashed)
+        frcHighSeriesRef.current = mainSeriesRef.current.createPriceLine({
+            price: frcLevels.high,
+            color: '#ef5350',
+            lineWidth: 2,
+            lineStyle: 2, // Dashed
+            axisLabelVisible: true,
+            title: 'FRC High',
+        });
+
+        // Create FRC Low price line (support - green dashed)
+        frcLowSeriesRef.current = mainSeriesRef.current.createPriceLine({
+            price: frcLevels.low,
+            color: '#26a69a',
+            lineWidth: 2,
+            lineStyle: 2, // Dashed
+            axisLabelVisible: true,
+            title: 'FRC Low',
+        });
+
+    }, [frcLevels, symbol]);
 
     // Handle Magnet Mode
     useEffect(() => {

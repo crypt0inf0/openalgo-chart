@@ -94,6 +94,16 @@ const INDICATOR_CONFIG = {
       { key: 'color', label: 'Line Color', type: 'color' },
     ]
   },
+  firstCandle: {
+    name: 'First Red Candle',
+    shortName: 'FRC',
+    description: '5-min only: Marks first RED candle of day, shows its high/low as support/resistance',
+    fields: [
+      { key: 'highlightColor', label: 'Marker Color', type: 'color' },
+      { key: 'highLineColor', label: 'High Line Color', type: 'color' },
+      { key: 'lowLineColor', label: 'Low Line Color', type: 'color' },
+    ]
+  },
 };
 
 // Sidebar sections with their indicators
@@ -161,6 +171,17 @@ const SECTIONS = [
         <rect x="3" y="12" width="4" height="8" />
         <rect x="10" y="8" width="4" height="12" />
         <rect x="17" y="4" width="4" height="16" />
+      </svg>
+    )
+  },
+  {
+    id: 'strategy',
+    label: 'Strategy',
+    indicators: ['firstCandle'],
+    icon: (
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2">
+        <circle cx="12" cy="12" r="10" />
+        <polyline points="12 6 12 12 16 14" />
       </svg>
     )
   },
