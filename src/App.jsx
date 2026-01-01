@@ -30,6 +30,7 @@ import { playAlertSound } from './utils/soundManager';
 import { useIsMobile, useCommandPalette, useGlobalShortcuts } from './hooks';
 import { useCloudWorkspaceSync } from './hooks/useCloudWorkspaceSync';
 import IndicatorSettingsModal from './components/IndicatorSettings/IndicatorSettingsModal';
+import OrderFlowSettingsPanel, { DEFAULT_ORDER_FLOW_SETTINGS } from './components/OrderFlow/OrderFlowSettingsPanel';
 import PositionTracker from './components/PositionTracker';
 import { SectorHeatmapModal } from './components/SectorHeatmap';
 import { IntradayBoost } from './components/IntradayBoost';
@@ -1660,6 +1661,11 @@ function AppContent({ isAuthenticated, setIsAuthenticated }) {
   const [isSessionBreakVisible, setIsSessionBreakVisible] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isIndicatorSettingsOpen, setIsIndicatorSettingsOpen] = useState(false);
+  const [isOrderFlowSettingsOpen, setIsOrderFlowSettingsOpen] = useState(false);
+  const [orderFlowSettings, setOrderFlowSettings] = useState(() => {
+    const saved = localStorage.getItem('oa_orderflow_settings');
+    return saved ? JSON.parse(saved) : DEFAULT_ORDER_FLOW_SETTINGS;
+  });
   const [websocketUrl, setWebsocketUrl] = useState(() => {
     return localStorage.getItem('oa_ws_url') || '127.0.0.1:8765';
   });
@@ -2515,6 +2521,7 @@ function AppContent({ isAuthenticated, setIsAuthenticated }) {
             onStraddleClick={() => setIsStraddlePickerOpen(true)}
             strategyConfig={activeChart?.strategyConfig}
             onIndicatorSettingsClick={() => setIsIndicatorSettingsOpen(true)}
+            onOrderFlowSettingsClick={() => setIsOrderFlowSettingsOpen(true)}
             onOptionsClick={() => setIsOptionChainOpen(true)}
             onHeatmapClick={() => setIsSectorHeatmapOpen(true)}
           />
@@ -2766,6 +2773,16 @@ function AppContent({ isAuthenticated, setIsAuthenticated }) {
         theme={theme}
         indicators={activeChart.indicators}
         onIndicatorSettingsChange={updateIndicatorSettings}
+      />
+      <OrderFlowSettingsPanel
+        isOpen={isOrderFlowSettingsOpen}
+        onClose={() => setIsOrderFlowSettingsOpen(false)}
+        theme={theme}
+        settings={orderFlowSettings}
+        onSettingsChange={(newSettings) => {
+          setOrderFlowSettings(newSettings);
+          localStorage.setItem('oa_orderflow_settings', JSON.stringify(newSettings));
+        }}
       />
       <LayoutTemplateDialog
         isOpen={isTemplateDialogOpen}
