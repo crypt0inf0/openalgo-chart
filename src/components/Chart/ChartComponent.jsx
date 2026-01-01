@@ -28,6 +28,14 @@ import {
 import { calculateTPO } from '../../utils/indicators/tpo';
 import { calculateFirstCandle } from '../../utils/indicators/firstCandle';
 import { TPOProfilePrimitive } from '../../plugins/tpo-profile/TPOProfilePrimitive';
+import { OIProfilePrimitive } from '../../plugins/oi-profile';
+import { fetchOIProfile } from '../../services/oiProfileService';
+// Order Flow imports
+import { FootprintPrimitive } from '../../plugins/footprint-chart';
+import { VolumeProfilePrimitive } from '../../plugins/volume-profile';
+import { DeltaPrimitive, CumulativeDeltaPrimitive } from '../../plugins/delta-profile';
+import { BarStatsPrimitive } from '../../plugins/bar-stats';
+import { PowerTradesPrimitive } from '../../plugins/power-trades';
 import { calculateHeikinAshi } from '../../utils/chartUtils';
 import { calculateRenko } from '../../utils/renkoUtils';
 import { intervalToSeconds } from '../../utils/timeframes';
@@ -152,6 +160,14 @@ const ChartComponent = forwardRef(({
     const lineToolManagerRef = useRef(null);
     const priceScaleTimerRef = useRef(null); // Ref for the candle countdown timer
     const tpoProfileRef = useRef(null); // Ref for TPO Profile primitive
+    const oiProfileRef = useRef(null); // Ref for OI Profile primitive
+    // Order Flow primitive refs
+    const footprintRef = useRef(null);
+    const volumeProfileRef = useRef(null);
+    const deltaRef = useRef(null);
+    const cumulativeDeltaRef = useRef(null);
+    const barStatsRef = useRef(null);
+    const powerTradesRef = useRef(null);
     const firstCandleSeriesRef = useRef([]); // Array of line series for all days' high/low (original FRC)
     // First Red Candle (FRC) indicator refs (hook-based approach)
     const frcHighSeriesRef = useRef(null);
@@ -452,7 +468,7 @@ const ChartComponent = forwardRef(({
                         dataRef.current = fullDataRef.current;
                         const transformedData = transformData(fullDataRef.current, chartTypeRef.current);
                         mainSeriesRef.current.setData(transformedData);
-                        updateIndicators(fullDataRef.current, indicators);
+                        updateIndicators(fullDataRef.current, indicators, symbol);
                     }
                 }
 
@@ -1629,7 +1645,7 @@ const ChartComponent = forwardRef(({
                 }
 
                 // Update indicators with new data
-                updateIndicators(newData, currentIndicators);
+                updateIndicators(newData, currentIndicators, currentSymbol);
 
             } catch (error) {
                 if (error.name !== 'AbortError') {
@@ -1767,7 +1783,7 @@ const ChartComponent = forwardRef(({
         const existingData = transformData(dataRef.current, chartType);
         if (existingData.length) {
             replacementSeries.setData(existingData);
-            updateIndicators(dataRef.current, indicators);
+            updateIndicators(dataRef.current, indicators, symbol);
             applyDefaultCandlePosition(existingData.length);
             updateAxisLabel();
 
@@ -1919,7 +1935,7 @@ const ChartComponent = forwardRef(({
                     if (indicatorFrame) cancelAnimationFrame(indicatorFrame);
                     indicatorFrame = requestAnimationFrame(() => {
                         if (!cancelled) {
-                            updateIndicators(data, indicators);
+                            updateIndicators(data, indicators, symbol);
                         }
                     });
 
@@ -2182,7 +2198,7 @@ const ChartComponent = forwardRef(({
         }
     }, [indicators]);
 
-    const updateIndicators = useCallback((data, indicatorsConfig) => {
+    const updateIndicators = useCallback((data, indicatorsConfig, currentSymbol) => {
         if (!chartRef.current) return;
 
         // If chart is not ready yet (still in initial load), defer indicator series creation
@@ -2485,6 +2501,233 @@ const ChartComponent = forwardRef(({
                 }
                 tpoProfileRef.current = null;
             }
+        }
+
+        // ========== OI PROFILE INDICATOR ==========
+        const oiProfileConfig = indicatorsConfig.oiProfile;
+        const oiProfileHidden = oiProfileConfig?.hidden;
+
+        if (oiProfileConfig?.enabled) {
+            // Fetch OI data for the current symbol (uses cached data)
+            const fetchOIData = async () => {
+                try {
+                    const oiData = await fetchOIProfile(currentSymbol, 'NFO', null, 20);
+
+                    if (oiData && mainSeriesRef.current) {
+                        // Create OI Profile primitive if not exists
+                        if (!oiProfileRef.current) {
+                            oiProfileRef.current = new OIProfilePrimitive({
+                                visible: !oiProfileHidden,
+                                showTop5Only: oiProfileConfig.showTop5Only ?? false,
+                                compactMode: oiProfileConfig.compactMode ?? false,
+                                position: oiProfileConfig.position || 'right',
+                                callColor: oiProfileConfig.callColor || '#26a69a',
+                                putColor: oiProfileConfig.putColor || '#ef5350',
+                                showOIValues: oiProfileConfig.showOIValues ?? true,
+                                showPCR: oiProfileConfig.showPCR ?? true,
+                                showTotalOI: oiProfileConfig.showTotalOI ?? true,
+                            });
+                            mainSeriesRef.current.attachPrimitive(oiProfileRef.current);
+                        }
+
+                        // Update OI data and options
+                        if (oiProfileRef.current) {
+                            oiProfileRef.current.setData(oiData);
+                            oiProfileRef.current.applyOptions({
+                                visible: !oiProfileHidden,
+                                showTop5Only: oiProfileConfig.showTop5Only ?? false,
+                                compactMode: oiProfileConfig.compactMode ?? false,
+                                callColor: oiProfileConfig.callColor || '#26a69a',
+                                putColor: oiProfileConfig.putColor || '#ef5350',
+                                showOIValues: oiProfileConfig.showOIValues ?? true,
+                                showPCR: oiProfileConfig.showPCR ?? true,
+                                showTotalOI: oiProfileConfig.showTotalOI ?? true,
+                            });
+                        }
+                    }
+                } catch (error) {
+                    console.warn('[ChartComponent] Error fetching OI profile:', error);
+                }
+            };
+
+            fetchOIData();
+        } else {
+            // Cleanup OI Profile primitive
+            if (oiProfileRef.current && mainSeriesRef.current) {
+                try {
+                    mainSeriesRef.current.detachPrimitive(oiProfileRef.current);
+                } catch (e) {
+                    console.warn('Error detaching OI Profile primitive:', e);
+                }
+                oiProfileRef.current = null;
+            }
+        }
+
+        // ========== ORDER FLOW INDICATORS ==========
+
+        // Footprint Chart
+        const footprintConfig = indicatorsConfig.footprint;
+        if (footprintConfig?.enabled && mainSeriesRef.current) {
+            if (!footprintRef.current) {
+                footprintRef.current = new FootprintPrimitive({
+                    preset: footprintConfig.preset || 'delta_profile',
+                    cellWidth: footprintConfig.cellWidth || 60,
+                    priceStep: footprintConfig.priceStep || 1,
+                    showImbalances: footprintConfig.showImbalances ?? true,
+                    imbalanceRatio: footprintConfig.imbalanceRatio || 3,
+                    showPOC: footprintConfig.showPOC ?? true,
+                    showDelta: footprintConfig.showDelta ?? true,
+                    opacity: footprintConfig.opacity || 0.8,
+                });
+                mainSeriesRef.current.attachPrimitive(footprintRef.current);
+            }
+            // Generate footprint data from candles (simplified - real implementation needs tick data)
+            const footprintData = data.map(candle => ({
+                time: candle.time,
+                open: candle.open,
+                high: candle.high,
+                low: candle.low,
+                close: candle.close,
+                levels: [{
+                    price: (candle.high + candle.low) / 2,
+                    bidVolume: candle.volume * (candle.close < candle.open ? 0.6 : 0.4),
+                    askVolume: candle.volume * (candle.close >= candle.open ? 0.6 : 0.4),
+                }],
+                delta: candle.volume * (candle.close >= candle.open ? 0.2 : -0.2),
+                totalVolume: candle.volume,
+            }));
+            footprintRef.current.setData(footprintData);
+        } else if (footprintRef.current && mainSeriesRef.current) {
+            try {
+                mainSeriesRef.current.detachPrimitive(footprintRef.current);
+            } catch (e) { console.warn('Error detaching footprint:', e); }
+            footprintRef.current = null;
+        }
+
+        // Volume Profile
+        const volumeProfileConfig = indicatorsConfig.volumeProfile;
+        if (volumeProfileConfig?.enabled && mainSeriesRef.current) {
+            if (!volumeProfileRef.current) {
+                volumeProfileRef.current = new VolumeProfilePrimitive({
+                    profileType: volumeProfileConfig.profileType || 'session',
+                    displayMode: volumeProfileConfig.displayMode || 'total',
+                    position: volumeProfileConfig.position || 'right',
+                    width: volumeProfileConfig.width || 150,
+                    showPOC: volumeProfileConfig.showPOC ?? true,
+                    extendPOC: volumeProfileConfig.extendPOC ?? true,
+                    showValueArea: volumeProfileConfig.showValueArea ?? true,
+                    valueAreaPercent: volumeProfileConfig.valueAreaPercent || 70,
+                    opacity: volumeProfileConfig.opacity || 0.8,
+                });
+                mainSeriesRef.current.attachPrimitive(volumeProfileRef.current);
+            }
+            // Build volume profile from data
+            const levels = [];
+            const tickSize = 1;
+            data.forEach(candle => {
+                const price = Math.round((candle.high + candle.low + candle.close) / 3 / tickSize) * tickSize;
+                const existing = levels.find(l => l.price === price);
+                if (existing) {
+                    existing.buyVolume += candle.volume * 0.5;
+                    existing.sellVolume += candle.volume * 0.5;
+                } else {
+                    levels.push({ price, buyVolume: candle.volume * 0.5, sellVolume: candle.volume * 0.5 });
+                }
+            });
+            // Calculate POC
+            const poc = levels.reduce((max, l) => (l.buyVolume + l.sellVolume) > (max.buyVolume + max.sellVolume) ? l : max, levels[0])?.price;
+            volumeProfileRef.current.setData({ levels, poc, tickSize });
+        } else if (volumeProfileRef.current && mainSeriesRef.current) {
+            try {
+                mainSeriesRef.current.detachPrimitive(volumeProfileRef.current);
+            } catch (e) { console.warn('Error detaching volume profile:', e); }
+            volumeProfileRef.current = null;
+        }
+
+        // Delta Analysis
+        const deltaConfig = indicatorsConfig.delta;
+        if (deltaConfig?.enabled && mainSeriesRef.current) {
+            if (!deltaRef.current) {
+                deltaRef.current = new DeltaPrimitive({
+                    panelHeight: deltaConfig.panelHeight || 80,
+                    buyColor: deltaConfig.buyColor || '#26A69A',
+                    sellColor: deltaConfig.sellColor || '#EF5350',
+                });
+                mainSeriesRef.current.attachPrimitive(deltaRef.current);
+            }
+            // Calculate delta from candles
+            const deltaData = data.map(candle => ({
+                time: candle.time,
+                value: candle.volume * (candle.close >= candle.open ? 0.2 : -0.2),
+            }));
+            deltaRef.current.setData(deltaData);
+        } else if (deltaRef.current && mainSeriesRef.current) {
+            try {
+                mainSeriesRef.current.detachPrimitive(deltaRef.current);
+            } catch (e) { console.warn('Error detaching delta:', e); }
+            deltaRef.current = null;
+        }
+
+        // Bar Statistics
+        const barStatsConfig = indicatorsConfig.barStats;
+        if (barStatsConfig?.enabled && mainSeriesRef.current) {
+            if (!barStatsRef.current) {
+                barStatsRef.current = new BarStatsPrimitive({
+                    showPanel: barStatsConfig.showPanel ?? true,
+                    panelHeight: barStatsConfig.panelHeight || 120,
+                    showVolume: barStatsConfig.showVolume ?? true,
+                    showDelta: barStatsConfig.showDelta ?? true,
+                    showDeltaPercent: barStatsConfig.showDeltaPercent ?? true,
+                    showPOC: barStatsConfig.showPOC ?? true,
+                    showVWAP: barStatsConfig.showVWAP ?? true,
+                });
+                mainSeriesRef.current.attachPrimitive(barStatsRef.current);
+            }
+            // Calculate bar stats
+            const barStats = data.map(candle => ({
+                time: candle.time,
+                totalVolume: candle.volume || 0,
+                delta: candle.volume * (candle.close >= candle.open ? 0.2 : -0.2),
+                deltaPercent: candle.close >= candle.open ? 20 : -20,
+                poc: (candle.high + candle.low) / 2,
+                vwap: (candle.high + candle.low + candle.close) / 3,
+            }));
+            barStatsRef.current.setData(barStats);
+        } else if (barStatsRef.current && mainSeriesRef.current) {
+            try {
+                mainSeriesRef.current.detachPrimitive(barStatsRef.current);
+            } catch (e) { console.warn('Error detaching bar stats:', e); }
+            barStatsRef.current = null;
+        }
+
+        // Power Trades
+        const powerTradesConfig = indicatorsConfig.powerTrades;
+        if (powerTradesConfig?.enabled && mainSeriesRef.current) {
+            if (!powerTradesRef.current) {
+                powerTradesRef.current = new PowerTradesPrimitive({
+                    volumeThreshold: powerTradesConfig.volumeThreshold || 100,
+                    timeWindowMs: powerTradesConfig.timeWindowMs || 5000,
+                    showBubbles: powerTradesConfig.showBubbles ?? true,
+                    showLabels: powerTradesConfig.showLabels ?? true,
+                });
+                mainSeriesRef.current.attachPrimitive(powerTradesRef.current);
+            }
+            // Detect power trades from high volume candles
+            const avgVolume = data.reduce((sum, c) => sum + (c.volume || 0), 0) / data.length;
+            const powerTrades = data
+                .filter(c => c.volume > avgVolume * 2)
+                .map(c => ({
+                    time: c.time,
+                    price: c.close,
+                    volume: c.volume,
+                    side: c.close >= c.open ? 'buy' : 'sell',
+                }));
+            powerTradesRef.current.setData(powerTrades);
+        } else if (powerTradesRef.current && mainSeriesRef.current) {
+            try {
+                mainSeriesRef.current.detachPrimitive(powerTradesRef.current);
+            } catch (e) { console.warn('Error detaching power trades:', e); }
+            powerTradesRef.current = null;
         }
 
         // ========== FIRST CANDLE INDICATOR (5-min only - Lines + Markers for ALL days) ==========
@@ -2869,7 +3112,7 @@ const ChartComponent = forwardRef(({
         if (dataRef.current.length > 0) {
             // Update indicators with current data
             try {
-                updateIndicators(dataRef.current, indicators);
+                updateIndicators(dataRef.current, indicators, symbol);
                 // Update EMA last value if EMA series exists
                 if (emaSeriesRef.current && dataRef.current.length >= 20) {
                     const emaData = calculateEMA(dataRef.current, 20);
@@ -3394,7 +3637,7 @@ const ChartComponent = forwardRef(({
         }
 
         // Update indicators only with past data (use ref to avoid stale closure)
-        updateIndicators(pastData, indicatorsRef.current);
+        updateIndicators(pastData, indicatorsRef.current, symbolRef.current);
         updateAxisLabel();
 
         // Update timer with latest candle data from replay to ensure correct color
@@ -3464,7 +3707,7 @@ const ChartComponent = forwardRef(({
             dataRef.current = fullDataRef.current;
             const transformedData = transformData(fullDataRef.current, chartTypeRef.current);
             mainSeriesRef.current.setData(transformedData);
-            updateIndicators(fullDataRef.current, indicators);
+            updateIndicators(fullDataRef.current, indicators, symbol);
 
             // Restore the visible range to maintain zoom level
             // Use setTimeout to ensure data update has completed
@@ -3967,7 +4210,7 @@ const ChartComponent = forwardRef(({
                             dataRef.current = fullDataRef.current;
                             const transformedData = transformData(fullDataRef.current, chartTypeRef.current);
                             mainSeriesRef.current.setData(transformedData);
-                            updateIndicators(fullDataRef.current, indicators);
+                            updateIndicators(fullDataRef.current, indicators, symbol);
                         }
                     }}
                 />
