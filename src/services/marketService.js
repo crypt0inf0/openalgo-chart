@@ -8,8 +8,8 @@
  */
 
 import logger from '../utils/logger.js';
+import { getApiBase, getApiKey } from './openalgo.js';
 
-const DEFAULT_HOST = 'http://127.0.0.1:5000';
 const CACHE_TTL_MS = 60 * 60 * 1000; // 1 hour cache
 const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000; // 5h 30m in milliseconds
 
@@ -17,43 +17,6 @@ const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000; // 5h 30m in milliseconds
 const cache = {
     holidays: { data: null, year: null, timestamp: 0 },
     timings: new Map() // Map<date, { data, timestamp }>
-};
-
-/**
- * Get Host URL from localStorage settings or use default
- */
-const getHostUrl = () => {
-    return localStorage.getItem('oa_host_url') || DEFAULT_HOST;
-};
-
-/**
- * Check if we should use the Vite proxy
- */
-const shouldUseProxy = () => {
-    const hostUrl = getHostUrl();
-    const isDefaultHost = hostUrl === DEFAULT_HOST ||
-        hostUrl === 'http://localhost:5000' ||
-        hostUrl === 'http://127.0.0.1:5000';
-    const isLocalDev = typeof window !== 'undefined' &&
-        (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
-    return isDefaultHost && isLocalDev;
-};
-
-/**
- * Get API Base URL
- */
-const getApiBase = () => {
-    if (shouldUseProxy()) {
-        return '/api/v1';
-    }
-    return `${getHostUrl()}/api/v1`;
-};
-
-/**
- * Get API key from localStorage
- */
-const getApiKey = () => {
-    return localStorage.getItem('oa_apikey') || '';
 };
 
 /**

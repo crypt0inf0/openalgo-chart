@@ -276,7 +276,7 @@ export const getHostUrl = () => {
  * Check if we should use the Vite proxy (when using default localhost settings)
  * This avoids CORS issues during development
  */
-const shouldUseProxy = () => {
+export const shouldUseProxy = () => {
     const hostUrl = getHostUrl();
     // Use proxy when host is default localhost and we're running on localhost
     const isDefaultHost = hostUrl === DEFAULT_HOST || hostUrl === 'http://localhost:5000' || hostUrl === 'http://127.0.0.1:5000';
@@ -290,7 +290,7 @@ const shouldUseProxy = () => {
  * Returns relative path for proxy when in dev mode with default host
  * Returns full URL when using custom host
  */
-const getApiBase = () => {
+export const getApiBase = () => {
     if (shouldUseProxy()) {
         return '/api/v1';  // Use Vite proxy
     }
@@ -337,7 +337,7 @@ export const checkAuth = async () => {
 /**
  * Get API key from localStorage (set by OpenAlgo after login)
  */
-const getApiKey = () => {
+export const getApiKey = () => {
     return localStorage.getItem('oa_apikey') || '';
 };
 
@@ -1403,6 +1403,63 @@ export const getOptionGreeks = async (symbol, exchange = 'NFO', options = {}) =>
 };
 
 /**
+ * Fetch expiry dates for F&O instruments using the dedicated Expiry API
+ * @param {string} symbol - Underlying symbol (e.g., NIFTY, BANKNIFTY, RELIANCE, GOLD)
+ * @param {string} exchange - Exchange code (NFO, BFO, MCX, CDS)
+ * @param {string} instrumenttype - Type of instrument: 'futures' or 'options'
+ * @returns {Promise<Array<string>|null>} Array of expiry dates in DD-MMM-YY format or null on error
+ */
+export const fetchExpiryDates = async (symbol, exchange = 'NFO', instrumenttype = 'options') => {
+    try {
+        const requestBody = {
+            apikey: getApiKey(),
+            symbol,
+            exchange,
+            instrumenttype
+        };
+
+        logger.debug('[OpenAlgo] Expiry API request:', requestBody);
+
+        const response = await fetch(`${getApiBase()}/expiry`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            credentials: 'include',
+            body: JSON.stringify(requestBody)
+        });
+
+        if (!response.ok) {
+            if (response.status === 401) {
+                window.location.href = getLoginUrl();
+                return null;
+            }
+            // 400 typically means invalid parameters or no expiry found
+            if (response.status === 400) {
+                const error = new Error(`No expiry dates found for ${symbol} in ${exchange}`);
+                error.code = 'NO_EXPIRY_FOUND';
+                error.status = 400;
+                throw error;
+            }
+            throw new Error(`OpenAlgo expiry error: ${response.status} ${response.statusText}`);
+        }
+
+        const data = await response.json();
+        logger.debug('[OpenAlgo] Expiry API response:', data);
+
+        // Response format: { status: 'success', data: ['10-JUL-25', '17-JUL-25', ...], message: '...' }
+        if (data && data.status === 'success' && Array.isArray(data.data)) {
+            return data.data; // Sorted chronologically from earliest to latest
+        }
+
+        return null;
+    } catch (error) {
+        console.error('Error fetching expiry dates:', error);
+        return null;
+    }
+};
+
+/**
  * Save chart drawings to backend
  * Uses the existing /api/v1/chart preferences endpoint
  * @param {string} symbol - Trading symbol
@@ -1541,6 +1598,7 @@ export default {
     saveUserPreferences,
     getOptionChain,
     getOptionGreeks,
+    fetchExpiryDates,
     saveDrawings,
     loadDrawings
 };

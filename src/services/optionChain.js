@@ -3,7 +3,7 @@
  * Handles option chain fetching using OpenAlgo Option Chain API
  */
 
-import { getOptionChain as fetchOptionChainAPI, getOptionGreeks, getKlines, searchSymbols, getExpiry } from './openalgo';
+import { getOptionChain as fetchOptionChainAPI, getOptionGreeks, getKlines, searchSymbols, getExpiry, fetchExpiryDates } from './openalgo';
 
 // ==================== OPTION CHAIN CACHE ====================
 // Cache to reduce API calls and avoid Upstox rate limits (30 req/min)
@@ -419,35 +419,126 @@ export const getOptionChain = async (underlying, exchange = 'NFO', expiryDate = 
     }
 };
 
+// ==================== EXPIRY CACHE ====================
+// Cache expiry dates to reduce API calls (similar to option chain cache)
+const expiryCache = new Map();
+const EXPIRY_CACHE_TTL_MS = 300000; // 5 minutes cache
+const EXPIRY_STORAGE_KEY = 'expiryCache';
+
+// Generate expiry cache key
+const getExpiryCacheKey = (underlying, exchange, instrumenttype) =>
+    `${underlying}_${exchange}_${instrumenttype}`;
+
+// Check if expiry cache entry is still valid
+const isExpiryCacheValid = (cacheEntry) => {
+    if (!cacheEntry) return false;
+    return Date.now() - cacheEntry.timestamp < EXPIRY_CACHE_TTL_MS;
+};
+
+// Load expiry cache from localStorage on init
+const loadExpiryCacheFromStorage = () => {
+    try {
+        const stored = localStorage.getItem(EXPIRY_STORAGE_KEY);
+        if (stored) {
+            const parsed = JSON.parse(stored);
+            Object.entries(parsed).forEach(([key, value]) => {
+                expiryCache.set(key, value);
+            });
+            console.log('[OptionChain] Loaded', expiryCache.size, 'expiry cache entries from storage');
+        }
+    } catch (e) {
+        console.warn('[OptionChain] Failed to load expiry cache from storage:', e.message);
+    }
+};
+
+// Save expiry cache to localStorage
+const saveExpiryCacheToStorage = () => {
+    try {
+        const obj = Object.fromEntries(expiryCache);
+        localStorage.setItem(EXPIRY_STORAGE_KEY, JSON.stringify(obj));
+    } catch (e) {
+        console.warn('[OptionChain] Failed to save expiry cache to storage:', e.message);
+    }
+};
+
+// Load expiry cache on module init
+loadExpiryCacheFromStorage();
+
 /**
- * Get available expiries for an underlying using OpenAlgo Expiry API
- * Uses new /api/v1/expiry endpoint with fallback to symbol parsing
- * @param {string} underlying - Underlying symbol
- * @param {string} exchange - Exchange (NFO, BFO, MCX, CDS)
- * @param {string} instrumentType - 'options' or 'futures'
+ * Get available expiries for an underlying using the dedicated Expiry API
+ * Uses caching to reduce API calls with fallback to symbol parsing
+ * @param {string} underlying - Underlying symbol (e.g., NIFTY, BANKNIFTY, RELIANCE, GOLD)
+ * @param {string} exchange - Exchange for the options (NFO, BFO, MCX) - defaults based on underlying
+ * @param {string} instrumenttype - Type: 'futures' or 'options' (default: 'options')
  * @returns {Promise<Array>} Array of expiry dates in DDMMMYY format
  */
-export const getAvailableExpiries = async (underlying, exchange = 'NFO', instrumentType = 'options') => {
+export const getAvailableExpiries = async (underlying, exchange = null, instrumenttype = 'options') => {
     try {
-        // Try the new dedicated Expiry API first
-        const expiryDates = await getExpiry(underlying, exchange, instrumentType);
-
-        if (expiryDates && expiryDates.length > 0) {
-            // Convert from DD-MMM-YY to DDMMMYY format
-            const converted = expiryDates.map(date => {
-                // API returns: "02-JAN-25" -> convert to "02JAN25"
-                return date.replace(/-/g, '');
-            });
-            console.log('[OptionChain] Expiries from API for', underlying, ':', converted);
-            return converted;
+        // Determine the correct exchange for F&O based on the underlying
+        // NSE underlyings (NIFTY, BANKNIFTY, FINNIFTY, MIDCPNIFTY, stocks) -> NFO
+        // BSE underlyings (SENSEX, BANKEX) -> BFO  
+        // MCX underlyings (GOLD, SILVER, CRUDE) -> MCX
+        let foExchange = exchange;
+        if (!foExchange) {
+            const underlyingConfig = UNDERLYINGS.find(u => u.symbol === underlying);
+            if (underlyingConfig) {
+                foExchange = underlyingConfig.exchange; // NFO or BFO
+            } else {
+                // Default to NFO for unknown/stock underlyings
+                foExchange = 'NFO';
+            }
         }
 
-        // Fallback: Parse symbols to extract unique expiries
-        console.log('[OptionChain] Expiry API returned empty, falling back to symbol parsing for', underlying);
-        return await getExpiriesFromSymbolSearch(underlying);
+        // Check cache first
+        const cacheKey = getExpiryCacheKey(underlying, foExchange, instrumenttype);
+        const cached = expiryCache.get(cacheKey);
+
+        if (isExpiryCacheValid(cached)) {
+            console.log('[OptionChain] Using cached expiries for:', cacheKey, '(age:', Math.round((Date.now() - cached.timestamp) / 1000), 's)');
+            return cached.data;
+        }
+
+        console.log('[OptionChain] Fetching expiries for', underlying, 'on', foExchange);
+
+        // Try the dedicated expiry API first (fetchExpiryDates)
+        let expiryDates = await fetchExpiryDates(underlying, foExchange, instrumenttype);
+
+        // Fallback to getExpiry if fetchExpiryDates returns empty
+        if (!expiryDates || expiryDates.length === 0) {
+            console.log('[OptionChain] fetchExpiryDates returned empty, trying getExpiry for', underlying);
+            expiryDates = await getExpiry(underlying, foExchange, instrumenttype);
+        }
+
+        // Final fallback: Parse symbols to extract unique expiries
+        if (!expiryDates || expiryDates.length === 0) {
+            console.log('[OptionChain] Expiry APIs returned empty, falling back to symbol parsing for', underlying);
+            return await getExpiriesFromSymbolSearch(underlying);
+        }
+
+        // Convert from API format (DD-MMM-YY like "10-JUL-25") to our internal format (DDMMMYY like "10JUL25")
+        const expiries = expiryDates.map(dateStr => {
+            // Remove hyphens: "10-JUL-25" -> "10JUL25"
+            return dateStr.replace(/-/g, '');
+        });
+
+        // Cache the result
+        expiryCache.set(cacheKey, {
+            data: expiries,
+            timestamp: Date.now()
+        });
+        saveExpiryCacheToStorage();
+        console.log('[OptionChain] Cached expiries for:', cacheKey);
+
+        return expiries;
     } catch (error) {
-        console.error('[OptionChain] Expiry API error, falling back to symbol parsing:', error);
-        return await getExpiriesFromSymbolSearch(underlying);
+        console.error('[OptionChain] Error getting expiries:', error);
+        // Try fallback to symbol search
+        try {
+            return await getExpiriesFromSymbolSearch(underlying);
+        } catch (fallbackError) {
+            console.error('[OptionChain] Fallback symbol search also failed:', fallbackError);
+            return [];
+        }
     }
 };
 
@@ -458,36 +549,33 @@ export const getAvailableExpiries = async (underlying, exchange = 'NFO', instrum
  */
 const getExpiriesFromSymbolSearch = async (underlying) => {
     try {
-        const allOptions = await searchSymbols(underlying);
-
-        // Parse symbols to extract unique expiries
-        const expirySet = new Set();
-
-        for (const opt of allOptions) {
-            if (!opt.symbol?.endsWith('CE') && !opt.symbol?.endsWith('PE')) continue;
-
-            // Parse symbol: UNDERLYING + DD + MMM + YY + STRIKE + TYPE
-            const withoutType = opt.symbol.slice(0, -2);
-            const match = withoutType.match(/^([A-Z]+)(\d{2})([A-Z]{3})(\d{2})(\d+)$/);
-
-            if (match && match[1] === underlying) {
-                const [, , dayStr, monthStr, yearStr] = match;
-                const expiryStr = `${dayStr}${monthStr}${yearStr}`;
-                expirySet.add(expiryStr);
-            }
+        // Search for option symbols to extract expiry dates
+        const symbols = await searchSymbols(underlying);
+        if (!symbols || symbols.length === 0) {
+            return [];
         }
 
-        // Sort expiries chronologically
+        // Extract unique expiry dates from symbol names
+        const expirySet = new Set();
+        const expiryPattern = /(\d{2}[A-Z]{3}\d{2})/; // Pattern like "02JAN25"
+
+        symbols.forEach(sym => {
+            const match = sym.symbol?.match(expiryPattern);
+            if (match) {
+                expirySet.add(match[1]);
+            }
+        });
+
         const expiries = Array.from(expirySet).sort((a, b) => {
             const dateA = parseExpiryDate(a);
             const dateB = parseExpiryDate(b);
-            return dateA - dateB;
+            return (dateA?.getTime() || 0) - (dateB?.getTime() || 0);
         });
 
         console.log('[OptionChain] Expiries from symbol search for', underlying, ':', expiries);
         return expiries;
     } catch (error) {
-        console.error('[OptionChain] Error getting expiries from symbols:', error);
+        console.error('[OptionChain] Error in symbol search fallback:', error);
         return [];
     }
 };

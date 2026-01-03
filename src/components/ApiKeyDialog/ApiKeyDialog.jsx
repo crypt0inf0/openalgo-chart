@@ -28,7 +28,7 @@ const ApiKeyDialog = ({ onSave, onClose }) => {
 
             // Validate API key and fetch preferences in one request
             // Uses GET with apikey as query parameter
-            const response = await fetch(`/api/v1/chart?apikey=${encodeURIComponent(apiKey.trim())}`, {
+            const response = await fetch(`${hostUrl}/api/v1/chart?apikey=${encodeURIComponent(apiKey.trim())}`, {
                 method: 'GET',
                 credentials: 'include'
             });

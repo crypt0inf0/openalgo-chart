@@ -57,6 +57,10 @@ const OptionChainPicker = ({ isOpen, onClose, onSelect }) => {
     });
     const oiFetchAbortRef = useRef(false);
 
+    // Request tracking refs to prevent stale responses when switching symbols
+    const expiryRequestIdRef = useRef(0);
+    const chainRequestIdRef = useRef(0);
+
     // Close dropdown on outside click
     useEffect(() => {
         const handleClickOutside = (e) => {
@@ -70,33 +74,65 @@ const OptionChainPicker = ({ isOpen, onClose, onSelect }) => {
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, [addOnsOpen]);
 
-    // Fetch available expiries when underlying changes
+    // Fetch available expiries when underlying changes with stale response protection
     const fetchExpiries = useCallback(async () => {
+        // Increment request ID and capture current value
+        const requestId = ++expiryRequestIdRef.current;
+        const currentSymbol = underlying.symbol;
+        const currentExchange = underlying.exchange;
+
+        console.log('[OptionChainPicker] Fetching expiries for', currentSymbol, 'requestId:', requestId);
         setIsLoadingExpiries(true);
+
         try {
-            const expiries = await getAvailableExpiries(underlying.symbol);
+            const expiries = await getAvailableExpiries(currentSymbol, currentExchange);
+
+            // Check if this request is still current
+            if (requestId !== expiryRequestIdRef.current) {
+                console.log('[OptionChainPicker] Discarding stale expiry response for', currentSymbol);
+                return;
+            }
+
             setAvailableExpiries(expiries);
             if (expiries.length > 0) {
                 setSelectedExpiry(expiries[0]);
                 setExpiryScrollIndex(0);
             }
         } catch (err) {
-            console.error('Failed to fetch expiries:', err);
-            setAvailableExpiries([]);
+            if (requestId === expiryRequestIdRef.current) {
+                console.error('Failed to fetch expiries:', err);
+                setAvailableExpiries([]);
+            }
         } finally {
-            setIsLoadingExpiries(false);
+            if (requestId === expiryRequestIdRef.current) {
+                setIsLoadingExpiries(false);
+            }
         }
-    }, [underlying]);
+    }, [underlying.symbol, underlying.exchange]);
 
-    // Fetch option chain when underlying or expiry changes
+    // Fetch option chain when underlying or expiry changes with stale response protection
     const fetchChain = useCallback(async (forceRefresh = false) => {
         if (!selectedExpiry) return;
 
+        // Increment request ID and capture current value
+        const requestId = ++chainRequestIdRef.current;
+        const currentSymbol = underlying.symbol;
+        const currentExchange = underlying.exchange;
+        const currentExpiry = selectedExpiry;
+
+        console.log('[OptionChainPicker] Fetching chain for', currentSymbol, currentExpiry, 'requestId:', requestId);
         setIsLoading(true);
         setError(null);
         setGreeksData({});
+
         try {
-            const chain = await getOptionChain(underlying.symbol, underlying.exchange, selectedExpiry, strikeCount, forceRefresh);
+            const chain = await getOptionChain(currentSymbol, currentExchange, currentExpiry, strikeCount, forceRefresh);
+
+            // Check if this request is still current
+            if (requestId !== chainRequestIdRef.current) {
+                console.log('[OptionChainPicker] Discarding stale chain response for', currentSymbol);
+                return;
+            }
 
             // DEBUG: Log API response structure
             console.log('[OptionChainPicker] API returned:', {
@@ -115,12 +151,12 @@ const OptionChainPicker = ({ isOpen, onClose, onSelect }) => {
             if (!chain || chain.chain?.length === 0) {
                 const reason = !chain ? 'null_response'
                     : !chain.chain ? 'missing_chain_array'
-                    : 'empty_chain_array';
+                        : 'empty_chain_array';
                 console.error('[OptionChainPicker] Empty chain:', {
                     reason,
                     chainValue: chain,
-                    underlying: underlying.symbol,
-                    expiry: selectedExpiry
+                    underlying: currentSymbol,
+                    expiry: currentExpiry
                 });
                 setError(`⚠️ No data available (${reason}). Please wait 30-60 seconds and try again.`);
                 setOptionChain(null);
@@ -130,25 +166,28 @@ const OptionChainPicker = ({ isOpen, onClose, onSelect }) => {
             setOptionChain(chain);
             setLegs([]); // Clear legs when chain changes
         } catch (err) {
-            // DEBUG: Log full error details
-            console.error('[OptionChainPicker] Fetch error:', {
-                message: err.message,
-                name: err.name,
-                underlying: underlying.symbol,
-                expiry: selectedExpiry,
-                fullError: err
-            });
+            // Only handle error if request is still current
+            if (requestId === chainRequestIdRef.current) {
+                console.error('[OptionChainPicker] Fetch error:', {
+                    message: err.message,
+                    name: err.name,
+                    underlying: currentSymbol,
+                    expiry: currentExpiry,
+                    fullError: err
+                });
 
-            // Check for rate limit errors (500 or explicit rate limit message)
-            if (err.message?.includes('500') || err.message?.includes('rate limit')) {
-                setError('⚠️ Broker rate limit hit. Please wait 30-60 seconds and try again.');
-            } else {
-                setError('Failed to fetch option chain');
+                if (err.message?.includes('500') || err.message?.includes('rate limit')) {
+                    setError('⚠️ Broker rate limit hit. Please wait 30-60 seconds and try again.');
+                } else {
+                    setError('Failed to fetch option chain');
+                }
             }
         } finally {
-            setIsLoading(false);
+            if (requestId === chainRequestIdRef.current) {
+                setIsLoading(false);
+            }
         }
-    }, [underlying, selectedExpiry, strikeCount]);
+    }, [underlying.symbol, underlying.exchange, selectedExpiry, strikeCount]);
 
     // Force refresh - clears cache and refetches
     const handleForceRefresh = useCallback(() => {

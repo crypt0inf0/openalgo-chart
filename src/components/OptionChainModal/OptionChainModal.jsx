@@ -31,6 +31,12 @@ const OptionChainModal = ({ isOpen, onClose, onSelectOption, initialSymbol }) =>
     const [greeksData, setGreeksData] = useState(new Map()); // symbol -> greeks object
     const [greeksLoading, setGreeksLoading] = useState(false);
 
+    // Request tracking refs to prevent stale responses and race conditions
+    const expiryRequestIdRef = useRef(0);
+    const chainRequestIdRef = useRef(0);
+    // Track if we're waiting for initialSymbol to be processed before fetching
+    const pendingInitialSymbolRef = useRef(false);
+
     // Max strikes available (API supports up to 100)
     const MAX_STRIKE_COUNT = 100;
     const STRIKE_INCREMENT = 20; // Load 20 more strikes per click
@@ -38,19 +44,52 @@ const OptionChainModal = ({ isOpen, onClose, onSelectOption, initialSymbol }) =>
     // Set underlying from initialSymbol when modal opens
     useEffect(() => {
         if (isOpen && initialSymbol) {
+            // Mark that we're processing initialSymbol - skip auto-fetch until done
+            pendingInitialSymbolRef.current = true;
+
+            // Increment request IDs to invalidate any pending requests
+            expiryRequestIdRef.current++;
+            chainRequestIdRef.current++;
+
             // Check if it's a known index
             const known = UNDERLYINGS.find(u => u.symbol === initialSymbol.symbol);
             if (known) {
                 setUnderlying(known);
                 setIsCustomSymbol(false);
             } else {
-                // Dynamic stock - create underlying object
-                // Stock options use 'NSE' exchange (not NSE_INDEX like indices)
+                // Dynamic stock - create underlying object with correct exchange mapping
+                // Map source exchange to F&O exchange:
+                // NSE, NSE_INDEX -> NFO
+                // BSE, BSE_INDEX -> BFO
+                // MCX -> MCX
+                // CDS -> CDS
+                const sourceExchange = initialSymbol.exchange?.toUpperCase() || 'NSE';
+                let foExchange = 'NFO';
+                let indexExchange = 'NSE';
+
+                if (sourceExchange === 'BSE' || sourceExchange === 'BSE_INDEX') {
+                    foExchange = 'BFO';
+                    indexExchange = 'BSE';
+                } else if (sourceExchange === 'MCX') {
+                    foExchange = 'MCX';
+                    indexExchange = 'MCX';
+                } else if (sourceExchange === 'CDS') {
+                    foExchange = 'CDS';
+                    indexExchange = 'CDS';
+                } else if (sourceExchange === 'BFO') {
+                    foExchange = 'BFO';
+                    indexExchange = 'BSE';
+                } else if (sourceExchange === 'NFO') {
+                    foExchange = 'NFO';
+                    indexExchange = 'NSE';
+                }
+                // Default: NSE, NSE_INDEX -> NFO, NSE
+
                 setUnderlying({
                     symbol: initialSymbol.symbol,
                     name: initialSymbol.symbol,
-                    exchange: 'NFO',
-                    indexExchange: 'NSE'
+                    exchange: foExchange,
+                    indexExchange: indexExchange
                 });
                 setIsCustomSymbol(true);
             }
@@ -60,6 +99,15 @@ const OptionChainModal = ({ isOpen, onClose, onSelectOption, initialSymbol }) =>
             setSelectedExpiry(null);
             setExpiryScrollIndex(0);
             setStrikeCount(15); // Reset to default
+
+            // Mark initialization complete - allow fetches in next render cycle
+            // Use setTimeout to ensure state updates are batched first
+            setTimeout(() => {
+                pendingInitialSymbolRef.current = false;
+            }, 0);
+        } else if (isOpen && !initialSymbol) {
+            // No initialSymbol, allow immediate fetches
+            pendingInitialSymbolRef.current = false;
         }
     }, [isOpen, initialSymbol]);
 
@@ -159,39 +207,87 @@ const OptionChainModal = ({ isOpen, onClose, onSelectOption, initialSymbol }) =>
     const canScrollLeft = expiryScrollIndex > 0;
     const canScrollRight = expiryScrollIndex + 12 < totalExpiries;
 
-    // Fetch expiries
+    // Fetch expiries with request ID tracking to prevent stale responses
     const fetchExpiries = useCallback(async () => {
+        // Skip if pending initialSymbol processing
+        if (pendingInitialSymbolRef.current) {
+            console.log('[OptionChain] Skipping fetchExpiries - waiting for initialSymbol');
+            return;
+        }
+
+        // Increment request ID and capture current value
+        const requestId = ++expiryRequestIdRef.current;
+        const currentSymbol = underlying.symbol;
+        const currentExchange = underlying.exchange;
+
+        console.log('[OptionChain] Fetching expiries for', currentSymbol, 'requestId:', requestId);
         setIsLoadingExpiries(true);
+
         try {
-            const expiries = await getAvailableExpiries(underlying.symbol);
+            const expiries = await getAvailableExpiries(currentSymbol, currentExchange);
+
+            // Check if this request is still current (user hasn't switched symbols)
+            if (requestId !== expiryRequestIdRef.current) {
+                console.log('[OptionChain] Discarding stale expiry response for', currentSymbol, 'requestId:', requestId, 'current:', expiryRequestIdRef.current);
+                return;
+            }
+
             setAvailableExpiries(expiries);
             if (expiries.length > 0) {
                 setSelectedExpiry(expiries[0]);
                 setExpiryScrollIndex(0);
             }
         } catch (err) {
-            console.error('Failed to fetch expiries:', err);
-            setAvailableExpiries([]);
+            // Only handle error if request is still current
+            if (requestId === expiryRequestIdRef.current) {
+                console.error('Failed to fetch expiries:', err);
+                setAvailableExpiries([]);
+            }
         } finally {
-            setIsLoadingExpiries(false);
+            // Only update loading state if request is still current
+            if (requestId === expiryRequestIdRef.current) {
+                setIsLoadingExpiries(false);
+            }
         }
-    }, [underlying]);
+    }, [underlying.symbol, underlying.exchange]);
 
-    // Fetch chain
+    // Fetch chain with request ID tracking to prevent stale responses
     const fetchChain = useCallback(async (requestedStrikeCount = strikeCount) => {
         if (!selectedExpiry) return;
+
+        // Increment request ID and capture current value
+        const requestId = ++chainRequestIdRef.current;
+        const currentSymbol = underlying.symbol;
+        const currentExchange = underlying.exchange;
+        const currentExpiry = selectedExpiry;
+
+        console.log('[OptionChain] Fetching chain for', currentSymbol, currentExpiry, 'requestId:', requestId);
         setIsLoading(true);
         setError(null);
+
         try {
-            const chain = await getOptionChain(underlying.symbol, underlying.exchange, selectedExpiry, requestedStrikeCount);
+            const chain = await getOptionChain(currentSymbol, currentExchange, currentExpiry, requestedStrikeCount);
+
+            // Check if this request is still current
+            if (requestId !== chainRequestIdRef.current) {
+                console.log('[OptionChain] Discarding stale chain response for', currentSymbol, 'requestId:', requestId, 'current:', chainRequestIdRef.current);
+                return;
+            }
+
             setOptionChain(chain);
         } catch (err) {
-            setError('Failed to fetch option chain');
-            console.error(err);
+            // Only handle error if request is still current
+            if (requestId === chainRequestIdRef.current) {
+                setError('Failed to fetch option chain');
+                console.error(err);
+            }
         } finally {
-            setIsLoading(false);
+            // Only update loading state if request is still current
+            if (requestId === chainRequestIdRef.current) {
+                setIsLoading(false);
+            }
         }
-    }, [underlying, selectedExpiry, strikeCount]);
+    }, [underlying.symbol, underlying.exchange, selectedExpiry, strikeCount]);
 
     // Load more strikes handler
     const loadMoreStrikes = useCallback(async () => {
@@ -211,12 +307,25 @@ const OptionChainModal = ({ isOpen, onClose, onSelectOption, initialSymbol }) =>
         }
     }, [underlying, selectedExpiry, strikeCount, MAX_STRIKE_COUNT, STRIKE_INCREMENT]);
 
+    // Fetch expiries when modal opens or underlying changes
+    // Using underlying.symbol as dependency instead of fetchExpiries to avoid stale closure issues
     useEffect(() => {
-        if (isOpen) fetchExpiries();
-    }, [isOpen, fetchExpiries]);
+        if (isOpen && underlying.symbol) {
+            // Small delay to allow initialSymbol effect to complete first
+            const timeoutId = setTimeout(() => {
+                if (!pendingInitialSymbolRef.current) {
+                    fetchExpiries();
+                }
+            }, 10);
+            return () => clearTimeout(timeoutId);
+        }
+    }, [isOpen, underlying.symbol, underlying.exchange, fetchExpiries]);
 
+    // Fetch chain when expiry is selected
     useEffect(() => {
-        if (isOpen && selectedExpiry) fetchChain();
+        if (isOpen && selectedExpiry) {
+            fetchChain();
+        }
     }, [isOpen, selectedExpiry, fetchChain]);
 
     useEffect(() => {
