@@ -3,10 +3,12 @@
  * Defines Inputs and Style fields for each indicator type
  */
 
-export const INDICATOR_CONFIGS = {
+
+export const indicatorConfigs = {
     ema: {
         name: 'EMA',
         fullName: 'Exponential Moving Average',
+        pane: 'main',
         inputs: [
             { key: 'period', label: 'Length', type: 'number', min: 1, max: 500, default: 20 },
             { key: 'source', label: 'Source', type: 'select', options: ['open', 'high', 'low', 'close'], default: 'close' },
@@ -21,6 +23,7 @@ export const INDICATOR_CONFIGS = {
     sma: {
         name: 'SMA',
         fullName: 'Simple Moving Average',
+        pane: 'main',
         inputs: [
             { key: 'period', label: 'Length', type: 'number', min: 1, max: 500, default: 20 },
             { key: 'source', label: 'Source', type: 'select', options: ['open', 'high', 'low', 'close'], default: 'close' },
@@ -35,6 +38,7 @@ export const INDICATOR_CONFIGS = {
     rsi: {
         name: 'RSI',
         fullName: 'Relative Strength Index',
+        pane: 'rsi',
         inputs: [
             { key: 'period', label: 'Length', type: 'number', min: 1, max: 100, default: 14 },
             { key: 'source', label: 'Source', type: 'select', options: ['open', 'high', 'low', 'close'], default: 'close' },
@@ -51,6 +55,7 @@ export const INDICATOR_CONFIGS = {
     stochastic: {
         name: 'Stochastic',
         fullName: 'Stochastic Oscillator',
+        pane: 'stochastic',
         inputs: [
             { key: 'kPeriod', label: '%K Length', type: 'number', min: 1, max: 100, default: 14 },
             { key: 'dPeriod', label: '%D Smoothing', type: 'number', min: 1, max: 100, default: 3 },
@@ -65,6 +70,7 @@ export const INDICATOR_CONFIGS = {
     macd: {
         name: 'MACD',
         fullName: 'Moving Average Convergence Divergence',
+        pane: 'macd',
         inputs: [
             { key: 'fast', label: 'Fast Length', type: 'number', min: 1, max: 100, default: 12 },
             { key: 'slow', label: 'Slow Length', type: 'number', min: 1, max: 100, default: 26 },
@@ -82,6 +88,7 @@ export const INDICATOR_CONFIGS = {
     bollingerBands: {
         name: 'BB',
         fullName: 'Bollinger Bands',
+        pane: 'main',
         inputs: [
             { key: 'period', label: 'Length', type: 'number', min: 1, max: 200, default: 20 },
             { key: 'stdDev', label: 'StdDev', type: 'number', min: 0.5, max: 5, step: 0.5, default: 2 },
@@ -98,6 +105,7 @@ export const INDICATOR_CONFIGS = {
     atr: {
         name: 'ATR',
         fullName: 'Average True Range',
+        pane: 'atr',
         inputs: [
             { key: 'period', label: 'Length', type: 'number', min: 1, max: 100, default: 14 },
         ],
@@ -109,6 +117,7 @@ export const INDICATOR_CONFIGS = {
     supertrend: {
         name: 'Supertrend',
         fullName: 'Supertrend',
+        pane: 'main',
         inputs: [
             { key: 'period', label: 'ATR Length', type: 'number', min: 1, max: 100, default: 10 },
             { key: 'multiplier', label: 'Factor', type: 'number', min: 0.5, max: 10, step: 0.5, default: 3 },
@@ -122,6 +131,7 @@ export const INDICATOR_CONFIGS = {
     volume: {
         name: 'Volume',
         fullName: 'Volume',
+        pane: 'main',
         inputs: [],
         style: [
             { key: 'colorUp', label: 'Up Color', type: 'color', default: '#26A69A' },
@@ -132,6 +142,7 @@ export const INDICATOR_CONFIGS = {
     vwap: {
         name: 'VWAP',
         fullName: 'Volume Weighted Average Price',
+        pane: 'main',
         inputs: [
             { key: 'resetDaily', label: 'New Daily Session', type: 'boolean', default: true },
         ],
@@ -142,6 +153,7 @@ export const INDICATOR_CONFIGS = {
     tpo: {
         name: 'TPO',
         fullName: 'Time Price Opportunity',
+        pane: 'main',
         inputs: [
             { key: 'blockSize', label: 'Block Size', type: 'select', options: ['5m', '10m', '15m', '30m', '1h', '2h', '4h', 'daily'], default: '30m' },
             { key: 'sessionType', label: 'Session Type', type: 'select', options: ['daily', 'weekly', 'monthly'], default: 'daily' },
@@ -181,14 +193,14 @@ export const INDICATOR_CONFIGS = {
  * Get config for a specific indicator type
  */
 export const getIndicatorConfig = (type) => {
-    return INDICATOR_CONFIGS[type] || null;
+    return indicatorConfigs[type] || null;
 };
 
 /**
  * Get default settings for an indicator
  */
 export const getDefaultSettings = (type) => {
-    const config = INDICATOR_CONFIGS[type];
+    const config = indicatorConfigs[type];
     if (!config) return {};
 
     const defaults = {};

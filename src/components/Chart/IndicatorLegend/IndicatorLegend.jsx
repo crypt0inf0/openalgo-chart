@@ -21,7 +21,7 @@ const IndicatorRow = ({ indicator, onVisibilityToggle, onRemove, onSettings }) =
                 onClick={(e) => {
                     e.stopPropagation();
                     if (onVisibilityToggle) {
-                        onVisibilityToggle(indicator.type);
+                        onVisibilityToggle(indicator.id || indicator.type);
                     }
                 }}
                 title={indicator.isHidden ? "Show" : "Hide"}
@@ -47,7 +47,7 @@ const IndicatorRow = ({ indicator, onVisibilityToggle, onRemove, onSettings }) =
                 onClick={(e) => {
                     e.stopPropagation();
                     if (onSettings) {
-                        onSettings(indicator.type);
+                        onSettings(indicator.id || indicator.type);
                     }
                 }}
                 title="Settings"
@@ -62,7 +62,7 @@ const IndicatorRow = ({ indicator, onVisibilityToggle, onRemove, onSettings }) =
                 onClick={(e) => {
                     e.stopPropagation();
                     if (onRemove) {
-                        onRemove(indicator.type);
+                        onRemove(indicator.id || indicator.type);
                     }
                 }}
                 title="Remove"
@@ -86,7 +86,7 @@ const IndicatorRow = ({ indicator, onVisibilityToggle, onRemove, onSettings }) =
  * IndicatorLegend - Main component that renders legends for all indicators
  * 
  * @param {Array} indicators - Array of indicator objects
- * @param {Object} panePositions - Object mapping pane types to vertical positions
+ * @param {Object} panePositions - Object mapping pane types (or IDs) to vertical positions
  * @param {boolean} isToolbarVisible - Whether toolbar is visible (affects left offset)
  * @param {boolean} isCollapsed - Whether the legend is collapsed
  * @param {function} onToggleCollapse - Callback for collapse/expand toggle
@@ -117,7 +117,7 @@ const IndicatorLegend = ({
                     <div className={styles.indicatorSources}>
                         {mainIndicators.map((indicator) => (
                             <IndicatorRow
-                                key={indicator.type}
+                                key={indicator.id || indicator.type}
                                 indicator={indicator}
                                 onVisibilityToggle={onVisibilityToggle}
                                 onRemove={onRemove}
@@ -143,12 +143,12 @@ const IndicatorLegend = ({
 
             {/* Pane indicators - positioned at each pane's vertical offset */}
             {paneIndicators.map((indicator) => {
-                const paneTop = panePositions[indicator.pane];
+                const paneTop = panePositions[indicator.id] || panePositions[indicator.pane];
                 if (paneTop === undefined) return null;
 
                 return (
                     <div
-                        key={`pane-legend-${indicator.type}`}
+                        key={`pane-legend-${indicator.id || indicator.type}`}
                         className={styles.indicatorLegend}
                         style={{
                             left: leftOffset,

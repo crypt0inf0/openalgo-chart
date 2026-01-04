@@ -19,7 +19,7 @@ const Topbar = ({
     layout, onLayoutChange, onSaveLayout, onAlertClick, onCompareClick, onReplayClick,
     isReplayMode = false, onSettingsClick, onTemplatesClick,
     onStraddleClick, strategyConfig = null,
-    onOptionsClick, onHeatmapClick
+    onOptionsClick, onHeatmapClick, onAddIndicator
 }) => {
     const [showIndicators, setShowIndicators] = useState(false);
     const [showTimeframes, setShowTimeframes] = useState(false);
@@ -648,31 +648,29 @@ const Topbar = ({
                                                             style={{ top: indicatorPos.top, left: indicatorPos.left }}
                                                         >
                                                             <div className={styles.dropdownSection}>Moving Averages</div>
-                                                            <div className={classNames(styles.dropdownItem, { [styles.active]: indicators.sma?.enabled })} onClick={(e) => { e.stopPropagation(); onToggleIndicator('sma'); }}>SMA ({indicators.sma?.period || 20})</div>
-                                                            <div className={classNames(styles.dropdownItem, { [styles.active]: indicators.ema?.enabled })} onClick={(e) => { e.stopPropagation(); onToggleIndicator('ema'); }}>EMA ({indicators.ema?.period || 20})</div>
+                                                            <div className={styles.dropdownItem} onClick={(e) => { e.stopPropagation(); onAddIndicator('sma'); }}>SMA (Simple Moving Average)</div>
+                                                            <div className={styles.dropdownItem} onClick={(e) => { e.stopPropagation(); onAddIndicator('ema'); }}>EMA (Exponential Moving Average)</div>
                                                             <div className={styles.dropdownDivider}></div>
                                                             <div className={styles.dropdownSection}>Oscillators</div>
-                                                            <div className={classNames(styles.dropdownItem, { [styles.active]: indicators.rsi?.enabled })} onClick={(e) => { e.stopPropagation(); onToggleIndicator('rsi'); }}>RSI ({indicators.rsi?.period || 14})</div>
-                                                            <div className={classNames(styles.dropdownItem, { [styles.active]: indicators.stochastic?.enabled })} onClick={(e) => { e.stopPropagation(); onToggleIndicator('stochastic'); }}>Stochastic ({indicators.stochastic?.kPeriod || 14}, {indicators.stochastic?.dPeriod || 3})</div>
+                                                            <div className={styles.dropdownItem} onClick={(e) => { e.stopPropagation(); onAddIndicator('rsi'); }}>RSI (Relative Strength Index)</div>
+                                                            <div className={styles.dropdownItem} onClick={(e) => { e.stopPropagation(); onAddIndicator('stochastic'); }}>Stochastic</div>
                                                             <div className={styles.dropdownDivider}></div>
                                                             <div className={styles.dropdownSection}>Momentum</div>
-                                                            <div className={classNames(styles.dropdownItem, { [styles.active]: indicators.macd?.enabled })} onClick={(e) => { e.stopPropagation(); onToggleIndicator('macd'); }}>MACD ({indicators.macd?.fast || 12}, {indicators.macd?.slow || 26}, {indicators.macd?.signal || 9})</div>
+                                                            <div className={styles.dropdownItem} onClick={(e) => { e.stopPropagation(); onAddIndicator('macd'); }}>MACD (Moving Average Convergence Divergence)</div>
                                                             <div className={styles.dropdownDivider}></div>
                                                             <div className={styles.dropdownSection}>Volatility</div>
-                                                            <div className={classNames(styles.dropdownItem, { [styles.active]: indicators.bollingerBands?.enabled })} onClick={(e) => { e.stopPropagation(); onToggleIndicator('bollingerBands'); }}>Bollinger Bands ({indicators.bollingerBands?.period || 20}, {indicators.bollingerBands?.stdDev || 2})</div>
-                                                            <div className={classNames(styles.dropdownItem, { [styles.active]: indicators.atr?.enabled })} onClick={(e) => { e.stopPropagation(); onToggleIndicator('atr'); }}>ATR ({indicators.atr?.period || 14})</div>
+                                                            <div className={styles.dropdownItem} onClick={(e) => { e.stopPropagation(); onAddIndicator('bollingerBands'); }}>Bollinger Bands</div>
+                                                            <div className={styles.dropdownItem} onClick={(e) => { e.stopPropagation(); onAddIndicator('atr'); }}>ATR (Average True Range)</div>
                                                             <div className={styles.dropdownDivider}></div>
                                                             <div className={styles.dropdownSection}>Trend</div>
-                                                            <div className={classNames(styles.dropdownItem, { [styles.active]: indicators.supertrend?.enabled })} onClick={(e) => { e.stopPropagation(); onToggleIndicator('supertrend'); }}>Supertrend ({indicators.supertrend?.period || 10}, {indicators.supertrend?.multiplier || 3})</div>
+                                                            <div className={styles.dropdownItem} onClick={(e) => { e.stopPropagation(); onAddIndicator('supertrend'); }}>Supertrend</div>
                                                             <div className={styles.dropdownDivider}></div>
                                                             <div className={styles.dropdownSection}>Volume</div>
-                                                            <div className={classNames(styles.dropdownItem, { [styles.active]: indicators.volume?.enabled })} onClick={(e) => { e.stopPropagation(); onToggleIndicator('volume'); }}>Volume</div>
-                                                            <div className={classNames(styles.dropdownItem, { [styles.active]: indicators.vwap?.enabled })} onClick={(e) => { e.stopPropagation(); onToggleIndicator('vwap'); }}>VWAP</div>
+                                                            <div className={styles.dropdownItem} onClick={(e) => { e.stopPropagation(); onAddIndicator('volume'); }}>Volume</div>
+                                                            <div className={styles.dropdownItem} onClick={(e) => { e.stopPropagation(); onAddIndicator('vwap'); }}>VWAP</div>
                                                             <div className={styles.dropdownDivider}></div>
                                                             <div className={styles.dropdownSection}>Market Profile</div>
-                                                            <div className={classNames(styles.dropdownItem, { [styles.active]: indicators.tpo?.enabled })} onClick={(e) => { e.stopPropagation(); onToggleIndicator('tpo'); }}>TPO Profile (30m)</div>
-                                                            {/* Settings Button */}
-
+                                                            <div className={styles.dropdownItem} onClick={(e) => { e.stopPropagation(); onAddIndicator('tpo'); }}>TPO Profile (30m)</div>
                                                         </div>
                                                     )}
                                                 </div>
