@@ -28,6 +28,7 @@ import OptionChainModal from './components/OptionChainModal';
 import { initTimeService, destroyTimeService } from './services/timeService';
 import logger from './utils/logger';
 import { useIsMobile, useCommandPalette, useGlobalShortcuts } from './hooks';
+import { useLocalStorage } from './hooks/useLocalStorage';
 import { useCloudWorkspaceSync } from './hooks/useCloudWorkspaceSync';
 import { useOILines } from './hooks/useOILines';
 import { indicatorConfigs } from './components/IndicatorSettings/indicatorConfigs';
@@ -1771,37 +1772,35 @@ function AppContent({ isAuthenticated, setIsAuthenticated }) {
   const [isReplayMode, setIsReplayMode] = useState(false);
   const [isDrawingsLocked, setIsDrawingsLocked] = useState(false);
   const [isDrawingsHidden, setIsDrawingsHidden] = useState(false);
-  const [isTimerVisible, setIsTimerVisible] = useState(() => {
-    return localStorage.getItem('oa_timer_visible') === 'true';
-  });
-  const [isSessionBreakVisible, setIsSessionBreakVisible] = useState(() => {
-    return localStorage.getItem('oa_session_break_visible') === 'true';
-  });
+  const [isTimerVisible, setIsTimerVisible] = useLocalStorage('oa_timer_visible', false);
+  const [isSessionBreakVisible, setIsSessionBreakVisible] = useLocalStorage('oa_session_break_visible', false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isIndicatorSettingsOpen, setIsIndicatorSettingsOpen] = useState(false);
   const [websocketUrl, setWebsocketUrl] = useState(() => {
-    return localStorage.getItem('oa_ws_url') || '127.0.0.1:8765';
+    try {
+      return localStorage.getItem('oa_ws_url') || '127.0.0.1:8765';
+    } catch {
+      return '127.0.0.1:8765';
+    }
   });
   const [apiKey, setApiKey] = useState(() => {
-    return localStorage.getItem('oa_apikey') || '';
+    try {
+      return localStorage.getItem('oa_apikey') || '';
+    } catch {
+      return '';
+    }
   });
   const [hostUrl, setHostUrl] = useState(() => {
-    return localStorage.getItem('oa_host_url') || 'http://127.0.0.1:5000';
+    try {
+      return localStorage.getItem('oa_host_url') || 'http://127.0.0.1:5000';
+    } catch {
+      return 'http://127.0.0.1:5000';
+    }
   });
 
   const toggleDrawingToolbar = () => {
     setShowDrawingToolbar(prev => !prev);
   };
-
-  // Persist timer setting
-  useEffect(() => {
-    localStorage.setItem('oa_timer_visible', isTimerVisible);
-  }, [isTimerVisible]);
-
-  // Persist session break setting
-  useEffect(() => {
-    localStorage.setItem('oa_session_break_visible', isSessionBreakVisible);
-  }, [isSessionBreakVisible]);
 
   const handleToolChange = (tool) => {
     if (tool === 'magnet') {
