@@ -225,6 +225,153 @@
   text-align: center;
 }
 
+/* Footer Buttons Container */
+.footerButtons {
+  display: flex;
+  gap: 8px;
+}
+
+.footerButtons .addButton {
+  flex: 1;
+}
+
+/* Import Button */
+.importButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  flex: 1;
+  padding: 8px 12px;
+  background-color: transparent;
+  border: 1px dashed var(--tv-color-border);
+  border-radius: 4px;
+  color: var(--tv-color-text-secondary);
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.importButton:hover {
+  background-color: var(--tv-color-toolbar-button-background-hover);
+  border-color: var(--tv-color-text-secondary);
+  color: var(--tv-color-text-primary);
+}
+
+/* Import Panel */
+.importPanel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.importHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--tv-color-text-primary);
+}
+
+.closeBtn {
+  background: transparent;
+  border: none;
+  padding: 4px;
+  cursor: pointer;
+  color: var(--tv-color-text-secondary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 2px;
+  transition: all 0.1s ease;
+}
+
+.closeBtn:hover {
+  background-color: var(--tv-color-toolbar-button-background-hover);
+  color: var(--tv-color-text-primary);
+}
+
+.importBody {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.importTextarea {
+  width: 100%;
+  padding: 8px;
+  font-size: 12px;
+  font-family: inherit;
+  background-color: var(--tv-color-pane-background);
+  border: 1px solid var(--tv-color-border);
+  border-radius: 4px;
+  color: var(--tv-color-text-primary);
+  resize: vertical;
+  min-height: 60px;
+}
+
+.importTextarea::placeholder {
+  color: var(--tv-color-text-secondary);
+}
+
+.importTextarea:focus {
+  outline: none;
+  border-color: var(--tv-color-text-secondary);
+}
+
+.importActions {
+  display: flex;
+  gap: 8px;
+}
+
+.hiddenFileInput {
+  display: none;
+}
+
+.uploadBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 6px 12px;
+  background-color: transparent;
+  border: 1px solid var(--tv-color-border);
+  border-radius: 4px;
+  color: var(--tv-color-text-secondary);
+  font-size: 11px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.uploadBtn:hover {
+  background-color: var(--tv-color-toolbar-button-background-hover);
+  border-color: var(--tv-color-text-secondary);
+  color: var(--tv-color-text-primary);
+}
+
+.addSymbolsBtn {
+  flex: 1;
+  padding: 6px 12px;
+  background-color: var(--tv-color-brand);
+  border: none;
+  border-radius: 4px;
+  color: white;
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.addSymbolsBtn:hover:not(:disabled) {
+  background-color: var(--tv-color-brand-hover, #1e53e5);
+}
+
+.addSymbolsBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 /* Filter Tabs */
 .filterTabs {
   display: flex;

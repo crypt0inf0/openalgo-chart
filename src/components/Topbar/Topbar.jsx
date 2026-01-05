@@ -20,8 +20,7 @@ const Topbar = ({
     isReplayMode = false, onSettingsClick, onTemplatesClick,
     onStraddleClick, strategyConfig = null,
     onIndicatorSettingsClick, onOptionsClick, onHeatmapClick,
-    tradingMode = 'sandbox', onTradingModeChange,
-    onBuyClick, onSellClick
+    tradingMode = 'sandbox', onTradingModeChange
 }) => {
     const [showIndicators, setShowIndicators] = useState(false);
     const [showTimeframes, setShowTimeframes] = useState(false);
@@ -404,25 +403,6 @@ const Topbar = ({
                                                     </div>
                                                     <div className={classNames(styles.text, styles.uppercase)}>{symbol}</div>
                                                 </button>
-                                                {/* Buy/Sell Buttons */}
-                                                <Tooltip content="Buy" shortcut="B" position="bottom">
-                                                    <button
-                                                        className={classNames(styles.button, styles.buyButton)}
-                                                        onClick={onBuyClick}
-                                                        aria-label="Buy"
-                                                    >
-                                                        <span>B</span>
-                                                    </button>
-                                                </Tooltip>
-                                                <Tooltip content="Sell" shortcut="S" position="bottom">
-                                                    <button
-                                                        className={classNames(styles.button, styles.sellButton)}
-                                                        onClick={onSellClick}
-                                                        aria-label="Sell"
-                                                    >
-                                                        <span>S</span>
-                                                    </button>
-                                                </Tooltip>
                                                 <button
                                                     className={classNames(styles.button, styles.iconButton)}
                                                     aria-label="Compare or Add Symbol"

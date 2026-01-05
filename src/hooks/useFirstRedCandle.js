@@ -10,7 +10,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { getHostUrl } from '../services/openalgo';
 
-const getApiKey = () => localStorage.getItem('oa_api_key') || '';
+const getApiKey = () => localStorage.getItem('oa_apikey') || '';
 
 /**
  * Fetch 5-minute candle data for the current trading day

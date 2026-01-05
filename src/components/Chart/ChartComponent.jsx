@@ -92,6 +92,16 @@ const hexToRgba = (hex, alpha) => {
     return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 };
 
+// Helper to deduplicate candle data by timestamp (keeps last occurrence)
+const deduplicateByTime = (data) => {
+    if (!Array.isArray(data) || data.length === 0) return data;
+    const seen = new Map();
+    data.forEach(candle => {
+        seen.set(candle.time, candle);
+    });
+    return Array.from(seen.values()).sort((a, b) => a.time - b.time);
+};
+
 const ChartComponent = forwardRef(({
     symbol,
     exchange = 'NSE',
@@ -119,7 +129,6 @@ const ChartComponent = forwardRef(({
     chartAppearance = {},
     strategyConfig = null, // { strategyType, legs: [{ id, symbol, direction, quantity }], exchange, displayName }
     onOpenOptionChain, // Callback to open option chain for current symbol
-    onPriceClick, // Callback for chart-click order placement (price, position)
 }, ref) => {
     const chartContainerRef = useRef();
     const [isLoading, setIsLoading] = useState(true);
@@ -920,44 +929,6 @@ const ChartComponent = forwardRef(({
         }
     }, [isSessionBreakVisible]);
 
-    // Handle double-click on chart for quick order placement
-    useEffect(() => {
-        if (!onPriceClick || !chartContainerRef.current || !chartRef.current) return;
-
-        const handleDoubleClick = (e) => {
-            // Only handle double-clicks on the main chart area (not price scale)
-            const rect = chartContainerRef.current.getBoundingClientRect();
-            const x = e.clientX - rect.left;
-            const y = e.clientY - rect.top;
-
-            // Get the chart width (excluding price scale which is about 60px on right)
-            const chartWidth = rect.width - 60;
-
-            // Only trigger if click is in the main chart area
-            if (x > 0 && x < chartWidth && mainSeriesRef.current) {
-                try {
-                    // Convert Y coordinate to price using the series
-                    const price = mainSeriesRef.current.coordinateToPrice(y);
-
-                    if (price !== null && !isNaN(price)) {
-                        onPriceClick(price, { x: e.clientX, y: e.clientY });
-                    }
-                } catch (err) {
-                    console.warn('Failed to get price at click position:', err);
-                }
-            }
-        };
-
-        chartContainerRef.current.addEventListener('dblclick', handleDoubleClick);
-
-        return () => {
-            if (chartContainerRef.current) {
-                chartContainerRef.current.removeEventListener('dblclick', handleDoubleClick);
-            }
-        };
-    }, [onPriceClick]);
-
-
     // Handle zoom clicks on chart (both zoom-in and zoom-out)
     useEffect(() => {
         const isZoomIn = activeTool === 'zoom_in';
@@ -1642,9 +1613,9 @@ const ChartComponent = forwardRef(({
                     // Ignore
                 }
 
-                // Prepend older data to existing data
+                // Prepend older data to existing data and deduplicate
                 const prependCount = filteredOlderData.length;
-                const newData = [...filteredOlderData, ...dataRef.current];
+                const newData = deduplicateByTime([...filteredOlderData, ...dataRef.current]);
                 dataRef.current = newData;
 
                 // Update oldest loaded time
@@ -1761,13 +1732,20 @@ const ChartComponent = forwardRef(({
             // Mark chart as disposed FIRST to prevent any pending RAF callbacks
             isDisposedRef.current = true;
 
-            // Destroy lineToolManager BEFORE chart.remove() to prevent "Object is disposed" errors
+            // Clean up lineToolManager BEFORE chart.remove() to prevent "Object is disposed" errors
             // The line-tools plugin holds a reference to the chart and may try to call requestUpdate()
             if (lineToolManagerRef.current) {
                 try {
-                    lineToolManagerRef.current.destroy();
+                    // Clear any active tools first
+                    if (typeof lineToolManagerRef.current.clearTools === 'function') {
+                        lineToolManagerRef.current.clearTools();
+                    }
+                    // Detach from series if series is still available
+                    if (mainSeriesRef.current) {
+                        mainSeriesRef.current.detachPrimitive(lineToolManagerRef.current);
+                    }
                 } catch (error) {
-                    console.warn('Failed to destroy lineToolManager', error);
+                    console.warn('Failed to clean up lineToolManager', error);
                 }
                 lineToolManagerRef.current = null;
             }
@@ -1938,6 +1916,8 @@ const ChartComponent = forwardRef(({
                 if (cancelled) return;
 
                 if (Array.isArray(data) && data.length > 0 && mainSeriesRef.current) {
+                    // Deduplicate data to prevent "data must be asc ordered by time" errors
+                    data = deduplicateByTime(data);
                     dataRef.current = data;
 
                     // Track the oldest loaded timestamp for scroll-back loading

@@ -4,7 +4,6 @@
  */
 
 import logger from '../utils/logger.js';
-import { ConnectionState, setConnectionStatus } from './connectionStatus';
 
 const DEFAULT_WS_HOST = '127.0.0.1:8765';
 
@@ -26,17 +25,33 @@ const tickStore = new Map();
 
 /**
  * Get WebSocket URL
+ * Auto-detects protocol and uses Vite proxy in development
  */
 const getWebSocketUrl = () => {
     const wsHost = localStorage.getItem('oa_ws_url') || DEFAULT_WS_HOST;
-    return `ws://${wsHost}`;
+
+    // Check if we're in local development with default WebSocket host
+    const isDefaultWsHost = wsHost === DEFAULT_WS_HOST || wsHost === '127.0.0.1:8765' || wsHost === 'localhost:8765';
+    const isLocalDev = typeof window !== 'undefined' &&
+        (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+
+    // Use Vite proxy in development for localhost
+    if (isDefaultWsHost && isLocalDev) {
+        const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
+        return `${protocol}://${window.location.host}/ws`;
+    }
+
+    // For custom hosts, auto-detect protocol
+    const isSecure = typeof window !== 'undefined' && window.location.protocol === 'https:';
+    const protocol = isSecure ? 'wss' : 'ws';
+    return `${protocol}://${wsHost}`;
 };
 
 /**
  * Get API Key from localStorage
  */
 const getApiKey = () => {
-    return localStorage.getItem('oa_api_key') || '';
+    return localStorage.getItem('oa_apikey') || '';
 };
 
 /**

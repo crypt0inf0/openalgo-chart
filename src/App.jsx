@@ -33,7 +33,6 @@ import IndicatorSettingsModal from './components/IndicatorSettings/IndicatorSett
 
 import PositionTracker from './components/PositionTracker';
 import { SectorHeatmapModal } from './components/SectorHeatmap';
-import { OrderEntryModal, TradingPanel, QuickOrderPopup } from './components/Trading';
 const VALID_INTERVAL_UNITS = new Set(['s', 'm', 'h', 'd', 'w', 'M']);
 const DEFAULT_FAVORITE_INTERVALS = []; // No default favorites
 
@@ -381,20 +380,42 @@ function AppContent({ isAuthenticated, setIsAuthenticated }) {
   // Right Panel State
   const [activeRightPanel, setActiveRightPanel] = useState('watchlist');
 
-  // Position Tracker State
-  const [positionTrackerSettings, setPositionTrackerSettings] = useState(() => {
-    const saved = safeParseJSON(localStorage.getItem('tv_position_tracker_settings'), null);
-    return saved || { sourceMode: 'watchlist', customSymbols: [] };
+  // Position Tracker Lists State (supports multiple lists with individual filters)
+  const [ptListsState, setPtListsState] = useState(() => {
+    // Check for new multi-list format first
+    const newData = safeParseJSON(localStorage.getItem('tv_position_tracker_lists'), null);
+    if (newData?.lists?.length) return newData;
+
+    // Migrate from old single-list format
+    const old = safeParseJSON(localStorage.getItem('tv_position_tracker_settings'), null);
+    return {
+      lists: [{
+        id: 'pt_default',
+        name: 'My Positions',
+        customSymbols: old?.customSymbols || [],
+        filterMode: 'all',
+        sectorFilter: 'All',
+        topNCount: 10,
+        isFavorite: false,
+      }],
+      activeListId: 'pt_default',
+      sourceMode: old?.sourceMode || 'custom',
+    };
   });
 
-  // Persist position tracker settings
+  // Derive active position tracker list
+  const activePtList = ptListsState.lists.find(
+    list => list.id === ptListsState.activeListId
+  ) || ptListsState.lists[0];
+
+  // Persist position tracker lists
   useEffect(() => {
     try {
-      localStorage.setItem('tv_position_tracker_settings', JSON.stringify(positionTrackerSettings));
+      localStorage.setItem('tv_position_tracker_lists', JSON.stringify(ptListsState));
     } catch (error) {
-      console.error('Failed to persist position tracker settings:', error);
+      console.error('Failed to persist position tracker lists:', error);
     }
-  }, [positionTrackerSettings]);
+  }, [ptListsState]);
 
   // Sector Heatmap Modal State
   const [isSectorHeatmapOpen, setIsSectorHeatmapOpen] = useState(false);
@@ -1450,6 +1471,117 @@ function AppContent({ isAuthenticated, setIsAuthenticated }) {
     });
   };
 
+  // ========== Position Tracker List Handlers ==========
+
+  // Create new position tracker list
+  const handleCreatePtList = (name) => {
+    const newId = 'pt_' + Date.now();
+    setPtListsState(prev => ({
+      ...prev,
+      lists: [...prev.lists, {
+        id: newId,
+        name,
+        customSymbols: [],
+        filterMode: 'all',
+        sectorFilter: 'All',
+        topNCount: 10,
+        isFavorite: false,
+      }],
+      activeListId: newId,
+    }));
+  };
+
+  // Rename position tracker list
+  const handleRenamePtList = (id, newName) => {
+    setPtListsState(prev => ({
+      ...prev,
+      lists: prev.lists.map(list =>
+        list.id === id ? { ...list, name: newName } : list
+      ),
+    }));
+  };
+
+  // Delete position tracker list
+  const handleDeletePtList = (id) => {
+    setPtListsState(prev => {
+      if (prev.lists.length <= 1) {
+        showToast('Cannot delete the only list', 'warning');
+        return prev;
+      }
+
+      const newLists = prev.lists.filter(list => list.id !== id);
+      return {
+        ...prev,
+        lists: newLists,
+        activeListId: prev.activeListId === id
+          ? newLists[0]?.id || 'pt_default'
+          : prev.activeListId,
+      };
+    });
+  };
+
+  // Switch active position tracker list
+  const handleSwitchPtList = (id) => {
+    setPtListsState(prev => ({ ...prev, activeListId: id }));
+  };
+
+  // Copy position tracker list
+  const handleCopyPtList = (id, newName) => {
+    const sourceList = ptListsState.lists.find(list => list.id === id);
+    if (!sourceList) return;
+
+    const newId = 'pt_' + Date.now();
+    const copiedList = {
+      ...sourceList,
+      id: newId,
+      name: newName,
+      isFavorite: false,
+    };
+
+    setPtListsState(prev => ({
+      ...prev,
+      lists: [...prev.lists, copiedList],
+      activeListId: newId,
+    }));
+  };
+
+  // Clear symbols from position tracker list
+  const handleClearPtList = (id) => {
+    setPtListsState(prev => ({
+      ...prev,
+      lists: prev.lists.map(list =>
+        list.id === id ? { ...list, customSymbols: [] } : list
+      ),
+    }));
+  };
+
+  // Update custom symbols in active position tracker list
+  const handlePtCustomSymbolsChange = (symbols) => {
+    setPtListsState(prev => ({
+      ...prev,
+      lists: prev.lists.map(list =>
+        list.id === prev.activeListId ? { ...list, customSymbols: symbols } : list
+      ),
+    }));
+  };
+
+  // Change position tracker source mode (global)
+  const handlePtSourceModeChange = (mode) => {
+    setPtListsState(prev => ({ ...prev, sourceMode: mode }));
+  };
+
+  // Update filter settings for active position tracker list
+  const handlePtFilterChange = (updates) => {
+    setPtListsState(prev => ({
+      ...prev,
+      lists: prev.lists.map(list =>
+        list.id === prev.activeListId ? { ...list, ...updates } : list
+      ),
+    }));
+  };
+
+  // ========== End Position Tracker List Handlers ==========
+
   const handleSymbolChange = (symbolData) => {
     // Handle both string (legacy) and object format { symbol, exchange }
     const symbol = typeof symbolData === 'string' ? symbolData : symbolData.symbol;
@@ -1679,38 +1811,6 @@ function AppContent({ isAuthenticated, setIsAuthenticated }) {
     setTradingMode(mode);
     localStorage.setItem('oa_trading_mode', mode);
   };
-
-  // Order Entry Modal state
-  const [isOrderModalOpen, setIsOrderModalOpen] = useState(false);
-  const [orderAction, setOrderAction] = useState('BUY');
-
-  const handleBuyClick = () => {
-    setOrderAction('BUY');
-    setIsOrderModalOpen(true);
-  };
-
-  const handleSellClick = () => {
-    setOrderAction('SELL');
-    setIsOrderModalOpen(true);
-  };
-
-  // Trading Panel state
-  const [isTradingPanelOpen, setIsTradingPanelOpen] = useState(false);
-
-  // Quick Order Popup state (for chart-click trading)
-  const [quickOrderState, setQuickOrderState] = useState({
-    isOpen: false,
-    price: null,
-    position: null,
-  });
-
-  const handleChartPriceClick = useCallback((price, position) => {
-    setQuickOrderState({
-      isOpen: true,
-      price,
-      position,
-    });
-  }, []);
 
   const toggleDrawingToolbar = () => {
     setShowDrawingToolbar(prev => !prev);
@@ -2562,8 +2662,6 @@ function AppContent({ isAuthenticated, setIsAuthenticated }) {
             onHeatmapClick={() => setIsSectorHeatmapOpen(true)}
             tradingMode={tradingMode}
             onTradingModeChange={handleTradingModeChange}
-            onBuyClick={handleBuyClick}
-            onSellClick={handleSellClick}
           />
         }
         leftToolbar={
@@ -2680,12 +2778,30 @@ function AppContent({ isAuthenticated, setIsAuthenticated }) {
             />
           ) : activeRightPanel === 'position_tracker' ? (
             <PositionTracker
-              sourceMode={positionTrackerSettings.sourceMode}
-              customSymbols={positionTrackerSettings.customSymbols}
+              // List management props
+              lists={ptListsState.lists}
+              activeListId={ptListsState.activeListId}
+              activeList={activePtList}
+              onSwitchList={handleSwitchPtList}
+              onCreateList={handleCreatePtList}
+              onRenameList={handleRenamePtList}
+              onDeleteList={handleDeletePtList}
+              onCopyList={handleCopyPtList}
+              onClearList={handleClearPtList}
+              // Settings props
+              sourceMode={ptListsState.sourceMode}
+              onSourceModeChange={handlePtSourceModeChange}
+              // Symbol management
+              customSymbols={activePtList?.customSymbols || []}
+              onCustomSymbolsChange={handlePtCustomSymbolsChange}
+              // Filter props (from active list)
+              filterMode={activePtList?.filterMode}
+              sectorFilter={activePtList?.sectorFilter}
+              topNCount={activePtList?.topNCount}
+              onFilterChange={handlePtFilterChange}
+              // Data props
               watchlistData={watchlistData}
               isLoading={watchlistLoading}
-              onSourceModeChange={(mode) => setPositionTrackerSettings(prev => ({ ...prev, sourceMode: mode }))}
-              onCustomSymbolsChange={(symbols) => setPositionTrackerSettings(prev => ({ ...prev, customSymbols: symbols }))}
               onSymbolSelect={(symData) => {
                 const symbol = typeof symData === 'string' ? symData : symData.symbol;
                 const exchange = typeof symData === 'string' ? 'NSE' : (symData.exchange || 'NSE');
@@ -2733,7 +2849,6 @@ function AppContent({ isAuthenticated, setIsAuthenticated }) {
             onIndicatorVisibilityToggle={handleIndicatorVisibilityToggle}
             chartAppearance={chartAppearance}
             onOpenOptionChain={handleOpenOptionChainForSymbol}
-            onPriceClick={handleChartPriceClick}
           />
         }
       />
@@ -2838,7 +2953,7 @@ function AppContent({ isAuthenticated, setIsAuthenticated }) {
         onClose={() => setIsSectorHeatmapOpen(false)}
         watchlistData={watchlistData}
         onSectorSelect={(sector) => {
-          setPositionTrackerSettings(prev => ({ ...prev, sectorFilter: sector }));
+          handlePtFilterChange({ sectorFilter: sector });
           setIsSectorHeatmapOpen(false);
         }}
         onSymbolSelect={(symData) => {
@@ -2850,16 +2965,6 @@ function AppContent({ isAuthenticated, setIsAuthenticated }) {
           setIsSectorHeatmapOpen(false);
         }}
       />
-      <OrderEntryModal
-        isOpen={isOrderModalOpen}
-        onClose={() => setIsOrderModalOpen(false)}
-        symbol={currentSymbol}
-        exchange={currentExchange}
-        lastPrice={activeChart?.ltp}
-        action={orderAction}
-        tradingMode={tradingMode}
-        theme={theme}
-      />
       <OptionChainModal
         isOpen={isOptionChainOpen}
         onClose={() => {
@@ -2868,32 +2973,6 @@ function AppContent({ isAuthenticated, setIsAuthenticated }) {
         }}
         onSelectOption={handleOptionSelect}
         initialSymbol={optionChainInitialSymbol}
-      />
-      <TradingPanel
-        isOpen={isTradingPanelOpen}
-        onToggle={() => setIsTradingPanelOpen(prev => !prev)}
-        tradingMode={tradingMode}
-        onSymbolSelect={(symData) => {
-          const symbol = typeof symData === 'string' ? symData : symData.symbol;
-          const exchange = typeof symData === 'string' ? 'NSE' : (symData.exchange || 'NSE');
-          setCharts(prev => prev.map(chart =>
-            chart.id === activeChartId ? { ...chart, symbol, exchange, strategyConfig: null } : chart
-          ));
-        }}
-        isAuthenticated={isAuthenticated}
-        watchlistData={watchlistData}
-      />
-      <QuickOrderPopup
-        isOpen={quickOrderState.isOpen}
-        onClose={() => setQuickOrderState(prev => ({ ...prev, isOpen: false }))}
-        price={quickOrderState.price}
-        position={quickOrderState.position}
-        symbol={currentSymbol}
-        exchange={currentExchange}
-        tradingMode={tradingMode}
-        onOrderPlaced={() => {
-          // Optionally refresh positions or show toast
-        }}
       />
     </>
   );

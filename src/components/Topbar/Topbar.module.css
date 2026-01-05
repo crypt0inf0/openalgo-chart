@@ -122,41 +122,6 @@
     }
 }
 
-/* Buy/Sell Buttons */
-.buyButton {
-    background: rgba(38, 166, 154, 0.15);
-    border: 1px solid rgba(38, 166, 154, 0.4);
-    color: #26a69a;
-    font-weight: 700;
-    font-size: 13px;
-    padding: 0 10px;
-    min-width: 32px;
-    transition: all 0.2s;
-}
-
-.buyButton:hover {
-    background: #26a69a;
-    color: #ffffff;
-    border-color: #26a69a;
-}
-
-.sellButton {
-    background: rgba(239, 83, 80, 0.15);
-    border: 1px solid rgba(239, 83, 80, 0.4);
-    color: #ef5350;
-    font-weight: 700;
-    font-size: 13px;
-    padding: 0 10px;
-    min-width: 32px;
-    transition: all 0.2s;
-}
-
-.sellButton:hover {
-    background: #ef5350;
-    color: #ffffff;
-    border-color: #ef5350;
-}
-
 .button.isActive {
     color: var(--tv-color-toolbar-button-text-active);
     background-color: rgba(41, 98, 255, 0.06);

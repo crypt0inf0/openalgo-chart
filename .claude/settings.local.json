@@ -30,7 +30,8 @@
       "Bash(gh auth:*)",
       "WebFetch(domain:raw.githubusercontent.com)",
       "Bash(git rm:*)",
-      "WebFetch(domain:in.tradingview.com)"
+      "WebFetch(domain:in.tradingview.com)",
+      "Bash(nc:*)"
     ]
   }
 }

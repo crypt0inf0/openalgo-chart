@@ -94,10 +94,27 @@ export const getLoginUrl = () => {
 
 /**
  * Get WebSocket URL from localStorage settings or use default
+ * Auto-detects protocol (ws/wss) based on page protocol
+ * Uses Vite proxy in development for localhost
  */
 const getWebSocketUrl = () => {
     const wsHost = localStorage.getItem('oa_ws_url') || DEFAULT_WS_HOST;
-    return `ws://${wsHost}`;
+
+    // Check if we're in local development with default WebSocket host
+    const isDefaultWsHost = wsHost === DEFAULT_WS_HOST || wsHost === '127.0.0.1:8765' || wsHost === 'localhost:8765';
+    const isLocalDev = typeof window !== 'undefined' &&
+        (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+
+    // Use Vite proxy in development for localhost
+    if (isDefaultWsHost && isLocalDev) {
+        const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
+        return `${protocol}://${window.location.host}/ws`;
+    }
+
+    // For custom hosts, auto-detect protocol based on page protocol
+    const isSecure = typeof window !== 'undefined' && window.location.protocol === 'https:';
+    const protocol = isSecure ? 'wss' : 'ws';
+    return `${protocol}://${wsHost}`;
 };
 
 /**
@@ -206,6 +223,13 @@ const createManagedWebSocket = (urlBuilder, options) => {
         authenticated = false;
         setConnectionStatus(reconnectAttempts > 0 ? ConnectionState.RECONNECTING : ConnectionState.CONNECTING);
 
+        // Warn if API key is missing
+        if (!apiKey) {
+            console.warn('[WebSocket] No API key found! Set your API key in Settings or run: localStorage.setItem("oa_apikey", "YOUR_KEY")');
+        }
+
+        console.log('[WebSocket] Connecting to:', url);
+
         try {
             socket = new WebSocket(url);
         } catch (error) {
@@ -215,7 +239,7 @@ const createManagedWebSocket = (urlBuilder, options) => {
         }
 
         socket.onopen = () => {
-            logger.debug('[WebSocket] Connected, authenticating...');
+            console.log('[WebSocket] Connected, authenticating...');
             reconnectAttempts = 0;
 
             // Send authentication message
@@ -245,7 +269,7 @@ const createManagedWebSocket = (urlBuilder, options) => {
                 if ((message.type === 'auth' && message.status === 'success') ||
                     message.type === 'authenticated' ||
                     message.status === 'authenticated') {
-                    logger.debug('[WebSocket] Authenticated successfully, broker:', message.broker);
+                    console.log('[WebSocket] ✓ Authenticated successfully, broker:', message.broker || 'unknown');
                     authenticated = true;
                     setConnectionStatus(ConnectionState.CONNECTED);
                     sendSubscriptions();
@@ -254,7 +278,8 @@ const createManagedWebSocket = (urlBuilder, options) => {
 
                 // Handle auth error
                 if (message.type === 'error' || (message.type === 'auth' && message.status !== 'success')) {
-                    console.error('[WebSocket] Error:', message.message || message.code);
+                    console.error('[WebSocket] ✗ Authentication failed:', message.message || message.code || 'Unknown error');
+                    setConnectionStatus(ConnectionState.DISCONNECTED);
                     return;
                 }
 
@@ -267,24 +292,28 @@ const createManagedWebSocket = (urlBuilder, options) => {
             }
         };
 
-        socket.onerror = (error) => {
-            console.error('[WebSocket] Error:', error);
+        socket.onerror = () => {
+            console.error('[WebSocket] ✗ Connection error - check if OpenAlgo WebSocket server is running on port 8765');
         };
 
         socket.onclose = (event) => {
             authenticated = false;
             if (manualClose) {
+                console.log('[WebSocket] Connection closed');
                 setConnectionStatus(ConnectionState.DISCONNECTED);
                 return;
             }
 
+            console.warn('[WebSocket] Connection closed unexpectedly, code:', event.code, 'reason:', event.reason || 'none');
+
             if (!event.wasClean && reconnectAttempts < maxAttempts) {
                 const delay = Math.min(1000 * 2 ** reconnectAttempts, 10000);
-                logger.debug(`[WebSocket] Reconnecting in ${delay}ms (attempt ${reconnectAttempts + 1}/${maxAttempts})`);
+                console.log(`[WebSocket] Reconnecting in ${delay}ms (attempt ${reconnectAttempts + 1}/${maxAttempts})`);
                 setConnectionStatus(ConnectionState.RECONNECTING);
                 reconnectAttempts += 1;
                 setTimeout(connect, delay);
             } else {
+                console.error('[WebSocket] ✗ Max reconnection attempts reached or clean close');
                 setConnectionStatus(ConnectionState.DISCONNECTED);
             }
         };
