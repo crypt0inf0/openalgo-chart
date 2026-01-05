@@ -28,7 +28,9 @@ const SYNC_KEYS = [
     'tv_layout_templates',   // Layout templates
     'tv_favorite_drawing_tools', // Favorite drawing tools
     'tv_floating_toolbar_pos', // Floating toolbar position
-    'tv_recent_commands'     // Recent commands
+    'tv_recent_commands',    // Recent commands
+    'oa_session_break_visible', // Session break visibility setting
+    'oa_timer_visible'       // Timer visibility setting
 ];
 
 /**

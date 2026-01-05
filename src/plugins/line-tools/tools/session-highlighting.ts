@@ -13,9 +13,9 @@ import {
 } from 'lightweight-charts';
 import { PluginBase } from '../../plugin-base';
 
-interface SessionHighlightingRendererData {
+interface SessionLineRendererData {
     x: Coordinate | number;
-    color: string;
+    isSessionStart: boolean;
 }
 
 class SessionHighlightingPaneRenderer implements IPrimitivePaneRenderer {
@@ -24,29 +24,37 @@ class SessionHighlightingPaneRenderer implements IPrimitivePaneRenderer {
         this._viewData = data;
     }
     draw(target: CanvasRenderingTarget2D) {
-        const points: SessionHighlightingRendererData[] = this._viewData.data;
+        const points: SessionLineRendererData[] = this._viewData.data;
         target.useBitmapCoordinateSpace(scope => {
             const ctx = scope.context;
-            const yTop = 0;
             const height = scope.bitmapSize.height;
-            const halfWidth =
-                (scope.horizontalPixelRatio * this._viewData.barWidth) / 2;
-            const cutOff = -1 * (halfWidth + 1);
             const maxX = scope.bitmapSize.width;
+
+            // Draw dashed vertical lines at session starts
+            ctx.strokeStyle = this._viewData.options.lineColor;
+            ctx.lineWidth = this._viewData.options.lineWidth * scope.horizontalPixelRatio;
+            ctx.setLineDash([5 * scope.verticalPixelRatio, 3 * scope.verticalPixelRatio]);
+
             points.forEach(point => {
-                const xScaled = point.x * scope.horizontalPixelRatio;
-                if (xScaled < cutOff) return;
-                ctx.fillStyle = point.color || 'rgba(0, 0, 0, 0)';
-                const x1 = Math.max(0, Math.round(xScaled - halfWidth));
-                const x2 = Math.min(maxX, Math.round(xScaled + halfWidth));
-                ctx.fillRect(x1, yTop, x2 - x1, height);
+                if (!point.isSessionStart) return;
+
+                const xScaled = Math.round(point.x * scope.horizontalPixelRatio);
+                if (xScaled < 0 || xScaled > maxX) return;
+
+                ctx.beginPath();
+                ctx.moveTo(xScaled, 0);
+                ctx.lineTo(xScaled, height);
+                ctx.stroke();
             });
+
+            // Reset line dash
+            ctx.setLineDash([]);
         });
     }
 }
 
 interface SessionHighlightingViewData {
-    data: SessionHighlightingRendererData[];
+    data: SessionLineRendererData[];
     options: Required<SessionHighlightingOptions>;
     barWidth: number;
 }
@@ -65,17 +73,34 @@ class SessionHighlightingPaneView implements IPrimitivePaneView {
     }
 
     update() {
-        const timeScale = this._source.chart.timeScale();
-        this._data.data = this._source._backgroundColors.map(d => {
-            return {
-                x: timeScale.timeToCoordinate(d.time) ?? -100,
-                color: d.color,
-            };
-        });
-        if (this._data.data.length > 1) {
-            this._data.barWidth = this._data.data[1].x - this._data.data[0].x;
-        } else {
-            this._data.barWidth = 6;
+        try {
+            // Defensive check: ensure source and chart are available
+            if (!this._source || !this._source._sessionMarkers) {
+                return;
+            }
+
+            // Check if chart is accessible (plugin might be detached)
+            let timeScale;
+            try {
+                timeScale = this._source.chart.timeScale();
+            } catch (e) {
+                // Chart might be disposed or plugin not attached
+                return;
+            }
+
+            if (!timeScale) {
+                return;
+            }
+
+            this._data.data = this._source._sessionMarkers.map(d => {
+                return {
+                    x: timeScale.timeToCoordinate(d.time) ?? -100,
+                    isSessionStart: d.isSessionStart,
+                };
+            });
+            this._data.options = this._source._options;
+        } catch (error) {
+            console.warn('[SessionHighlighting] Error in update:', error);
         }
     }
 
@@ -88,34 +113,48 @@ class SessionHighlightingPaneView implements IPrimitivePaneView {
     }
 }
 
-export interface SessionHighlightingOptions { }
-
-const defaults: Required<SessionHighlightingOptions> = {};
-
-interface BackgroundData {
-    time: Time;
-    color: string;
+export interface SessionHighlightingOptions {
+    lineColor?: string;
+    lineWidth?: number;
 }
 
-export type SessionHighlighter = (date: Time) => string;
+const defaults: Required<SessionHighlightingOptions> = {
+    lineColor: '#363A45',
+    lineWidth: 1,
+};
+
+interface SessionMarkerData {
+    time: Time;
+    isSessionStart: boolean;
+}
+
+// Session start times map: date string (YYYY-MM-DD) -> epoch timestamp in seconds
+export type SessionStartTimesMap = Map<string, number>;
 
 export class SessionHighlighting
     extends PluginBase
     implements ISeriesPrimitive<Time> {
     _paneViews: SessionHighlightingPaneView[];
     _seriesData: SeriesDataItemTypeMap[SeriesType][] = [];
-    _backgroundColors: BackgroundData[] = [];
+    _sessionMarkers: SessionMarkerData[] = [];
     _options: Required<SessionHighlightingOptions>;
-    _highlighter: SessionHighlighter;
+    _sessionStartTimes: SessionStartTimesMap | null = null;
 
     constructor(
-        highlighter: SessionHighlighter,
         options: SessionHighlightingOptions = {}
     ) {
         super();
-        this._highlighter = highlighter;
         this._options = { ...defaults, ...options };
         this._paneViews = [new SessionHighlightingPaneView(this)];
+    }
+
+    /**
+     * Set session start times from API data
+     * @param sessionStartTimes Map of date (YYYY-MM-DD) to session start epoch (seconds)
+     */
+    setSessionStartTimes(sessionStartTimes: SessionStartTimesMap): void {
+        this._sessionStartTimes = sessionStartTimes;
+        this.dataUpdated('full');
     }
 
     updateAllViews() {
@@ -132,14 +171,47 @@ export class SessionHighlighting
     }
 
     dataUpdated(_scope: DataChangedScope) {
-        // plugin base has fired a data changed event
-        // TODO: only update the last value if the scope is 'update'
-        this._backgroundColors = this.series.data().map(dataPoint => {
+        // Get series data with safety check
+        let data;
+        try {
+            data = this.series.data();
+        } catch (e) {
+            console.warn('[SessionHighlighting] Cannot get series data:', e);
+            return;
+        }
+
+        // Early return if no data
+        if (!data || data.length === 0) {
+            console.log('[SessionHighlighting] No data available, skipping dataUpdated');
+            return;
+        }
+
+        console.log('[SessionHighlighting] dataUpdated called with', data.length, 'candles, sessionStartTimes:', this._sessionStartTimes?.size || 0);
+
+        // Detect session starts by date changes between consecutive candles
+        // This works regardless of whether we have API session data
+        let prevDateStr: string | null = null;
+
+        this._sessionMarkers = data.map(dataPoint => {
+            const time = dataPoint.time as number;
+            const date = new Date(time * 1000);
+            const dateStr = date.toISOString().split('T')[0]; // YYYY-MM-DD format
+
+            // Mark as session start when date changes from previous candle
+            const isSessionStart = prevDateStr !== null && prevDateStr !== dateStr;
+            prevDateStr = dateStr;
+
             return {
                 time: dataPoint.time,
-                color: this._highlighter(dataPoint.time),
+                isSessionStart: isSessionStart,
             };
         });
+
+        // Count how many session starts we detected
+        const sessionStartCount = this._sessionMarkers.filter(m => m.isSessionStart).length;
+        console.log('[SessionHighlighting] Detected', sessionStartCount, 'session starts');
+
+        this.updateAllViews();
         this.requestUpdate();
     }
 }

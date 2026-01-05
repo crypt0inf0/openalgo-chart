@@ -207,12 +207,14 @@ const ChartComponent = forwardRef(({
     const exchangeRef = useRef(exchange);
     const intervalRef = useRef(interval);
     const indicatorsRef = useRef(indicators);
+    const isSessionBreakVisibleRef = useRef(isSessionBreakVisible);
 
     // Keep refs in sync with props
     useEffect(() => { symbolRef.current = symbol; }, [symbol]);
     useEffect(() => { exchangeRef.current = exchange; }, [exchange]);
     useEffect(() => { intervalRef.current = interval; }, [interval]);
     useEffect(() => { indicatorsRef.current = indicators; }, [indicators]);
+    useEffect(() => { isSessionBreakVisibleRef.current = isSessionBreakVisible; }, [isSessionBreakVisible]);
 
     // Track previous symbol for alert persistence
     const prevSymbolRef = useRef({ symbol: null, exchange: null });
@@ -813,35 +815,81 @@ const ChartComponent = forwardRef(({
         if (!lineToolManagerRef.current) return;
         const manager = lineToolManagerRef.current;
 
-        // Always disable first (clear any existing session highlighting)
-        if (typeof manager.disableSessionHighlighting === 'function') {
-            manager.disableSessionHighlighting();
-        }
+        // Track if this effect run is still valid (not superseded by a newer run)
+        let cancelled = false;
 
-        // Then enable if requested
+        // Only enable if requested - don't disable/re-enable on every run
         if (isSessionBreakVisible) {
             if (typeof manager.enableSessionHighlighting === 'function') {
-                // Session highlighter function - defines colors for different times
-                const sessionHighlighter = (time) => {
-                    // Convert time to date for session detection
-                    const date = new Date(time * 1000);
-                    const hours = date.getHours();
+                manager.enableSessionHighlighting();
 
-                    // Indian market session: 9:15 AM to 3:30 PM IST
-                    // Color session start (9:15 AM) with a light color
-                    if (hours === 9) {
-                        return 'rgba(41, 98, 255, 0.15)'; // Light blue for market open
+                // Fetch session boundaries from API for accurate market timing
+                const fetchSessionData = async () => {
+                    try {
+                        // Import dynamically to avoid circular deps
+                        const { getSessionBoundaries } = await import('../../services/marketService.js');
+
+                        // Check if cancelled before proceeding
+                        if (cancelled) return;
+
+                        // Get unique dates from chart data
+                        const data = dataRef.current;
+                        if (!data || data.length === 0) return;
+
+                        const uniqueDates = new Set();
+                        data.forEach(candle => {
+                            const date = new Date(candle.time * 1000);
+                            const dateStr = date.toISOString().split('T')[0]; // YYYY-MM-DD
+                            uniqueDates.add(dateStr);
+                        });
+
+                        // Fetch session boundaries for each unique date
+                        const sessionStartTimes = new Map();
+                        const currentExchange = exchangeRef.current || 'NSE';
+
+                        for (const dateStr of uniqueDates) {
+                            // Check if cancelled during the loop
+                            if (cancelled) return;
+
+                            try {
+                                const boundaries = await getSessionBoundaries(dateStr, currentExchange);
+                                if (boundaries && boundaries.start_time) {
+                                    // Convert from milliseconds to seconds
+                                    const startTimeSeconds = Math.floor(boundaries.start_time / 1000);
+                                    sessionStartTimes.set(dateStr, startTimeSeconds);
+                                }
+                            } catch (err) {
+                                // Silently ignore individual date failures
+                            }
+                        }
+
+                        // Check if cancelled before setting data
+                        if (cancelled) return;
+
+                        // Pass session data to the plugin
+                        if (sessionStartTimes.size > 0 && typeof manager.setSessionStartTimes === 'function') {
+                            manager.setSessionStartTimes(sessionStartTimes);
+                        }
+                    } catch (err) {
+                        console.warn('[ChartComponent] Could not fetch session data, using fallback detection:', err);
                     }
-                    // Color session end (3:30 PM = 15:30)
-                    if (hours === 15) {
-                        return 'rgba(255, 82, 82, 0.15)'; // Light red for market close
-                    }
-                    return ''; // No highlighting for other times
                 };
-                manager.enableSessionHighlighting(sessionHighlighter);
+
+                fetchSessionData();
             }
         }
-    }, [isSessionBreakVisible]);
+
+        // Cleanup function: disable session highlighting when toggling off or unmounting
+        return () => {
+            cancelled = true;
+            // IMPORTANT: Use lineToolManagerRef.current (not the captured manager) to avoid stale closure
+            // When symbols change, a new manager is created, but cleanup still has the old manager in its closure
+            const currentManager = lineToolManagerRef.current;
+            if (currentManager && typeof currentManager.disableSessionHighlighting === 'function') {
+                currentManager.disableSessionHighlighting();
+            }
+        };
+    }, [isSessionBreakVisible, exchange]);
 
     // Handle zoom clicks on chart (both zoom-in and zoom-out)
     useEffect(() => {
@@ -1285,6 +1333,12 @@ const ChartComponent = forwardRef(({
             series.attachPrimitive(manager);
             lineToolManagerRef.current = manager;
 
+            // Enable session highlighting if the setting is active
+            // This ensures session breaks appear immediately when switching symbols
+            if (isSessionBreakVisibleRef.current && typeof manager.enableSessionHighlighting === 'function') {
+                console.log('[ChartComponent] Enabling session highlighting on new manager');
+                manager.enableSessionHighlighting();
+            }
 
             // Ensure alerts primitive (if present) knows the current symbol
             try {

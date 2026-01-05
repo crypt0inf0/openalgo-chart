@@ -28,7 +28,7 @@ import { ElliottCorrectionWave } from './tools/elliott-correction-wave';
 import { DateRange } from './tools/date-range';
 import { FibExtension } from './tools/fib-extension';
 import { FloatingToolbar } from './floating-toolbar';
-import { SessionHighlighting, SessionHighlighter } from './tools/session-highlighting';
+import { SessionHighlighting } from './tools/session-highlighting';
 import { UserPriceAlerts } from './tools/user-price-alerts/user-price-alerts';
 import { AlertNotification } from './tools/user-price-alerts/alert-notification';
 import { ChartControls } from './chart-controls';
@@ -526,29 +526,45 @@ export class LineToolManager extends PluginBase {
             tool instanceof ParallelChannel;
     }
 
-    public enableSessionHighlighting(highlighter: SessionHighlighter): void {
+    public enableSessionHighlighting(): void {
+        console.log('[LineToolManager] enableSessionHighlighting called');
         // Check if session highlighting is already active
         const existingIndex = this._tools.findIndex(t => t instanceof SessionHighlighting);
 
         if (existingIndex !== -1) {
-            // Toggle OFF: Remove existing session highlighting
-            const existingTool = this._tools[existingIndex];
-            this.series.detachPrimitive(existingTool);
-            this._tools.splice(existingIndex, 1);
-        } else {
-            // Toggle ON: Add session highlighting
-            const sessionHighlighting = new SessionHighlighting(highlighter);
-            this.series.attachPrimitive(sessionHighlighting);
-            this._tools.push(sessionHighlighting);
+            // Session highlighting already active, do nothing
+            console.log('[LineToolManager] Session highlighting already exists, skipping');
+            return;
         }
+
+        // Add session highlighting
+        const sessionHighlighting = new SessionHighlighting();
+        this.series.attachPrimitive(sessionHighlighting);
+        this._tools.push(sessionHighlighting);
+        console.log('[LineToolManager] Session highlighting created and attached, tools count:', this._tools.length);
     }
 
     public disableSessionHighlighting(): void {
+        console.log('[LineToolManager] disableSessionHighlighting called');
         const existingIndex = this._tools.findIndex(t => t instanceof SessionHighlighting);
         if (existingIndex !== -1) {
             const existingTool = this._tools[existingIndex];
             this.series.detachPrimitive(existingTool);
             this._tools.splice(existingIndex, 1);
+            console.log('[LineToolManager] Session highlighting removed, tools count:', this._tools.length);
+        } else {
+            console.log('[LineToolManager] No session highlighting to remove');
+        }
+    }
+
+    /**
+     * Set session start times for the session highlighting plugin
+     * @param sessionStartTimes Map of date (YYYY-MM-DD) to session start epoch (seconds)
+     */
+    public setSessionStartTimes(sessionStartTimes: Map<string, number>): void {
+        const sessionTool = this._tools.find(t => t instanceof SessionHighlighting) as SessionHighlighting | undefined;
+        if (sessionTool) {
+            sessionTool.setSessionStartTimes(sessionStartTimes);
         }
     }
 
