@@ -30,12 +30,7 @@ import { calculateFirstCandle } from '../../utils/indicators/firstCandle';
 import { TPOProfilePrimitive } from '../../plugins/tpo-profile/TPOProfilePrimitive';
 import { OIProfilePrimitive } from '../../plugins/oi-profile';
 import { fetchOIProfile } from '../../services/oiProfileService';
-// Order Flow imports
-import { FootprintPrimitive } from '../../plugins/footprint-chart';
-import { VolumeProfilePrimitive } from '../../plugins/volume-profile';
-import { DeltaPrimitive, CumulativeDeltaPrimitive } from '../../plugins/delta-profile';
-import { BarStatsPrimitive } from '../../plugins/bar-stats';
-import { PowerTradesPrimitive } from '../../plugins/power-trades';
+
 import { calculateHeikinAshi } from '../../utils/chartUtils';
 import { calculateRenko } from '../../utils/renkoUtils';
 import { intervalToSeconds } from '../../utils/timeframes';
@@ -124,6 +119,7 @@ const ChartComponent = forwardRef(({
     chartAppearance = {},
     strategyConfig = null, // { strategyType, legs: [{ id, symbol, direction, quantity }], exchange, displayName }
     onOpenOptionChain, // Callback to open option chain for current symbol
+    onPriceClick, // Callback for chart-click order placement (price, position)
 }, ref) => {
     const chartContainerRef = useRef();
     const [isLoading, setIsLoading] = useState(true);
@@ -161,13 +157,7 @@ const ChartComponent = forwardRef(({
     const priceScaleTimerRef = useRef(null); // Ref for the candle countdown timer
     const tpoProfileRef = useRef(null); // Ref for TPO Profile primitive
     const oiProfileRef = useRef(null); // Ref for OI Profile primitive
-    // Order Flow primitive refs
-    const footprintRef = useRef(null);
-    const volumeProfileRef = useRef(null);
-    const deltaRef = useRef(null);
-    const cumulativeDeltaRef = useRef(null);
-    const barStatsRef = useRef(null);
-    const powerTradesRef = useRef(null);
+
     const firstCandleSeriesRef = useRef([]); // Array of line series for all days' high/low (original FRC)
     // First Red Candle (FRC) indicator refs (hook-based approach)
     const frcHighSeriesRef = useRef(null);
@@ -929,6 +919,44 @@ const ChartComponent = forwardRef(({
             }
         }
     }, [isSessionBreakVisible]);
+
+    // Handle double-click on chart for quick order placement
+    useEffect(() => {
+        if (!onPriceClick || !chartContainerRef.current || !chartRef.current) return;
+
+        const handleDoubleClick = (e) => {
+            // Only handle double-clicks on the main chart area (not price scale)
+            const rect = chartContainerRef.current.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+
+            // Get the chart width (excluding price scale which is about 60px on right)
+            const chartWidth = rect.width - 60;
+
+            // Only trigger if click is in the main chart area
+            if (x > 0 && x < chartWidth && mainSeriesRef.current) {
+                try {
+                    // Convert Y coordinate to price using the series
+                    const price = mainSeriesRef.current.coordinateToPrice(y);
+
+                    if (price !== null && !isNaN(price)) {
+                        onPriceClick(price, { x: e.clientX, y: e.clientY });
+                    }
+                } catch (err) {
+                    console.warn('Failed to get price at click position:', err);
+                }
+            }
+        };
+
+        chartContainerRef.current.addEventListener('dblclick', handleDoubleClick);
+
+        return () => {
+            if (chartContainerRef.current) {
+                chartContainerRef.current.removeEventListener('dblclick', handleDoubleClick);
+            }
+        };
+    }, [onPriceClick]);
+
 
     // Handle zoom clicks on chart (both zoom-in and zoom-out)
     useEffect(() => {
@@ -2563,172 +2591,6 @@ const ChartComponent = forwardRef(({
             }
         }
 
-        // ========== ORDER FLOW INDICATORS ==========
-
-        // Footprint Chart
-        const footprintConfig = indicatorsConfig.footprint;
-        if (footprintConfig?.enabled && mainSeriesRef.current) {
-            if (!footprintRef.current) {
-                footprintRef.current = new FootprintPrimitive({
-                    preset: footprintConfig.preset || 'delta_profile',
-                    cellWidth: footprintConfig.cellWidth || 60,
-                    priceStep: footprintConfig.priceStep || 1,
-                    showImbalances: footprintConfig.showImbalances ?? true,
-                    imbalanceRatio: footprintConfig.imbalanceRatio || 3,
-                    showPOC: footprintConfig.showPOC ?? true,
-                    showDelta: footprintConfig.showDelta ?? true,
-                    opacity: footprintConfig.opacity || 0.8,
-                });
-                mainSeriesRef.current.attachPrimitive(footprintRef.current);
-            }
-            // Generate footprint data from candles (simplified - real implementation needs tick data)
-            const footprintData = data.map(candle => ({
-                time: candle.time,
-                open: candle.open,
-                high: candle.high,
-                low: candle.low,
-                close: candle.close,
-                levels: [{
-                    price: (candle.high + candle.low) / 2,
-                    bidVolume: candle.volume * (candle.close < candle.open ? 0.6 : 0.4),
-                    askVolume: candle.volume * (candle.close >= candle.open ? 0.6 : 0.4),
-                }],
-                delta: candle.volume * (candle.close >= candle.open ? 0.2 : -0.2),
-                totalVolume: candle.volume,
-            }));
-            footprintRef.current.setData(footprintData);
-        } else if (footprintRef.current && mainSeriesRef.current) {
-            try {
-                mainSeriesRef.current.detachPrimitive(footprintRef.current);
-            } catch (e) { console.warn('Error detaching footprint:', e); }
-            footprintRef.current = null;
-        }
-
-        // Volume Profile
-        const volumeProfileConfig = indicatorsConfig.volumeProfile;
-        if (volumeProfileConfig?.enabled && mainSeriesRef.current) {
-            if (!volumeProfileRef.current) {
-                volumeProfileRef.current = new VolumeProfilePrimitive({
-                    profileType: volumeProfileConfig.profileType || 'session',
-                    displayMode: volumeProfileConfig.displayMode || 'total',
-                    position: volumeProfileConfig.position || 'right',
-                    width: volumeProfileConfig.width || 150,
-                    showPOC: volumeProfileConfig.showPOC ?? true,
-                    extendPOC: volumeProfileConfig.extendPOC ?? true,
-                    showValueArea: volumeProfileConfig.showValueArea ?? true,
-                    valueAreaPercent: volumeProfileConfig.valueAreaPercent || 70,
-                    opacity: volumeProfileConfig.opacity || 0.8,
-                });
-                mainSeriesRef.current.attachPrimitive(volumeProfileRef.current);
-            }
-            // Build volume profile from data
-            const levels = [];
-            const tickSize = 1;
-            data.forEach(candle => {
-                const price = Math.round((candle.high + candle.low + candle.close) / 3 / tickSize) * tickSize;
-                const existing = levels.find(l => l.price === price);
-                if (existing) {
-                    existing.buyVolume += candle.volume * 0.5;
-                    existing.sellVolume += candle.volume * 0.5;
-                } else {
-                    levels.push({ price, buyVolume: candle.volume * 0.5, sellVolume: candle.volume * 0.5 });
-                }
-            });
-            // Calculate POC
-            const poc = levels.reduce((max, l) => (l.buyVolume + l.sellVolume) > (max.buyVolume + max.sellVolume) ? l : max, levels[0])?.price;
-            volumeProfileRef.current.setData({ levels, poc, tickSize });
-        } else if (volumeProfileRef.current && mainSeriesRef.current) {
-            try {
-                mainSeriesRef.current.detachPrimitive(volumeProfileRef.current);
-            } catch (e) { console.warn('Error detaching volume profile:', e); }
-            volumeProfileRef.current = null;
-        }
-
-        // Delta Analysis
-        const deltaConfig = indicatorsConfig.delta;
-        if (deltaConfig?.enabled && mainSeriesRef.current) {
-            if (!deltaRef.current) {
-                deltaRef.current = new DeltaPrimitive({
-                    panelHeight: deltaConfig.panelHeight || 80,
-                    buyColor: deltaConfig.buyColor || '#26A69A',
-                    sellColor: deltaConfig.sellColor || '#EF5350',
-                });
-                mainSeriesRef.current.attachPrimitive(deltaRef.current);
-            }
-            // Calculate delta from candles
-            const deltaData = data.map(candle => ({
-                time: candle.time,
-                value: candle.volume * (candle.close >= candle.open ? 0.2 : -0.2),
-            }));
-            deltaRef.current.setData(deltaData);
-        } else if (deltaRef.current && mainSeriesRef.current) {
-            try {
-                mainSeriesRef.current.detachPrimitive(deltaRef.current);
-            } catch (e) { console.warn('Error detaching delta:', e); }
-            deltaRef.current = null;
-        }
-
-        // Bar Statistics
-        const barStatsConfig = indicatorsConfig.barStats;
-        if (barStatsConfig?.enabled && mainSeriesRef.current) {
-            if (!barStatsRef.current) {
-                barStatsRef.current = new BarStatsPrimitive({
-                    showPanel: barStatsConfig.showPanel ?? true,
-                    panelHeight: barStatsConfig.panelHeight || 120,
-                    showVolume: barStatsConfig.showVolume ?? true,
-                    showDelta: barStatsConfig.showDelta ?? true,
-                    showDeltaPercent: barStatsConfig.showDeltaPercent ?? true,
-                    showPOC: barStatsConfig.showPOC ?? true,
-                    showVWAP: barStatsConfig.showVWAP ?? true,
-                });
-                mainSeriesRef.current.attachPrimitive(barStatsRef.current);
-            }
-            // Calculate bar stats
-            const barStats = data.map(candle => ({
-                time: candle.time,
-                totalVolume: candle.volume || 0,
-                delta: candle.volume * (candle.close >= candle.open ? 0.2 : -0.2),
-                deltaPercent: candle.close >= candle.open ? 20 : -20,
-                poc: (candle.high + candle.low) / 2,
-                vwap: (candle.high + candle.low + candle.close) / 3,
-            }));
-            barStatsRef.current.setData(barStats);
-        } else if (barStatsRef.current && mainSeriesRef.current) {
-            try {
-                mainSeriesRef.current.detachPrimitive(barStatsRef.current);
-            } catch (e) { console.warn('Error detaching bar stats:', e); }
-            barStatsRef.current = null;
-        }
-
-        // Power Trades
-        const powerTradesConfig = indicatorsConfig.powerTrades;
-        if (powerTradesConfig?.enabled && mainSeriesRef.current) {
-            if (!powerTradesRef.current) {
-                powerTradesRef.current = new PowerTradesPrimitive({
-                    volumeThreshold: powerTradesConfig.volumeThreshold || 100,
-                    timeWindowMs: powerTradesConfig.timeWindowMs || 5000,
-                    showBubbles: powerTradesConfig.showBubbles ?? true,
-                    showLabels: powerTradesConfig.showLabels ?? true,
-                });
-                mainSeriesRef.current.attachPrimitive(powerTradesRef.current);
-            }
-            // Detect power trades from high volume candles
-            const avgVolume = data.reduce((sum, c) => sum + (c.volume || 0), 0) / data.length;
-            const powerTrades = data
-                .filter(c => c.volume > avgVolume * 2)
-                .map(c => ({
-                    time: c.time,
-                    price: c.close,
-                    volume: c.volume,
-                    side: c.close >= c.open ? 'buy' : 'sell',
-                }));
-            powerTradesRef.current.setData(powerTrades);
-        } else if (powerTradesRef.current && mainSeriesRef.current) {
-            try {
-                mainSeriesRef.current.detachPrimitive(powerTradesRef.current);
-            } catch (e) { console.warn('Error detaching power trades:', e); }
-            powerTradesRef.current = null;
-        }
 
         // ========== FIRST CANDLE INDICATOR (5-min only - Lines + Markers for ALL days) ==========
         const firstCandleConfig = indicatorsConfig.firstCandle;
@@ -3134,13 +2996,13 @@ const ChartComponent = forwardRef(({
         if (frcHighSeriesRef.current && mainSeriesRef.current) {
             try {
                 mainSeriesRef.current.removePriceLine(frcHighSeriesRef.current);
-            } catch (e) {}
+            } catch (e) { }
             frcHighSeriesRef.current = null;
         }
         if (frcLowSeriesRef.current && mainSeriesRef.current) {
             try {
                 mainSeriesRef.current.removePriceLine(frcLowSeriesRef.current);
-            } catch (e) {}
+            } catch (e) { }
             frcLowSeriesRef.current = null;
         }
 

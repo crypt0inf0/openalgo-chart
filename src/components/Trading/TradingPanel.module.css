@@ -1,0 +1,609 @@
+/* Collapsed Bar - Floating Summary */
+.collapsedBar {
+    position: fixed;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    align-items: center;
+    gap: 24px;
+    background: linear-gradient(180deg, #252a37 0%, #1e222d 100%);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 24px;
+    padding: 8px 20px;
+    cursor: pointer;
+    z-index: 100;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+    backdrop-filter: blur(12px);
+    transition: all 0.25s ease;
+}
+
+.collapsedBar:hover {
+    transform: translateX(-50%) translateY(-2px);
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+    border-color: rgba(255, 255, 255, 0.12);
+}
+
+.expandBtn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: #b2b5be;
+    font-size: 13px;
+    font-weight: 500;
+}
+
+.pnlCards {
+    display: flex;
+    gap: 16px;
+}
+
+.pnlCard {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 2px;
+}
+
+.pnlCard .pnlLabel {
+    font-size: 10px;
+    color: #787b86;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.pnlCard .pnlValue {
+    font-size: 14px;
+    font-weight: 600;
+}
+
+/* Main Panel */
+.panel {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: linear-gradient(180deg, #252a37 0%, #1e222d 100%);
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    z-index: 100;
+    display: flex;
+    flex-direction: column;
+    animation: slideUp 0.3s ease;
+    box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.3);
+}
+
+.panel.light {
+    background: linear-gradient(180deg, #f8f9fa 0%, #ffffff 100%);
+    border-top-color: #e0e3eb;
+}
+
+@keyframes slideUp {
+    from {
+        transform: translateY(100%);
+        opacity: 0;
+    }
+
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
+
+/* Resize Handle */
+.resizeHandle {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 4px;
+    cursor: ns-resize;
+    background: transparent;
+    transition: background 0.2s;
+}
+
+.resizeHandle:hover,
+.resizeHandle:active {
+    background: linear-gradient(90deg, transparent, #2962ff, transparent);
+}
+
+/* Header */
+.header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0 16px;
+    height: 44px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    flex-shrink: 0;
+    background: rgba(0, 0, 0, 0.1);
+}
+
+.headerLeft {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+
+.headerRight {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+
+/* Tabs */
+.tabs {
+    display: flex;
+    gap: 4px;
+}
+
+.tab {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 14px;
+    font-size: 12px;
+    font-weight: 500;
+    color: #787b86;
+    background: transparent;
+    border: none;
+    border-bottom: 2px solid transparent;
+    cursor: pointer;
+    transition: all 0.2s;
+    white-space: nowrap;
+}
+
+.tab:hover {
+    color: #b2b5be;
+    background: rgba(255, 255, 255, 0.03);
+}
+
+.tab.active {
+    color: #2962ff;
+    border-bottom-color: #2962ff;
+}
+
+.tabBadge {
+    background: rgba(41, 98, 255, 0.2);
+    color: #2962ff;
+    font-size: 10px;
+    font-weight: 600;
+    padding: 2px 6px;
+    border-radius: 10px;
+    min-width: 18px;
+    text-align: center;
+}
+
+/* P&L Summary in Header */
+.pnlSummary {
+    display: flex;
+    gap: 20px;
+}
+
+.pnlItem {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 1px;
+}
+
+.pnlItem .pnlLabel {
+    font-size: 9px;
+    color: #787b86;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.pnlItem .pnlValue {
+    font-size: 13px;
+    font-weight: 600;
+}
+
+/* Header Actions */
+.headerActions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.iconBtn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 6px 10px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    color: #787b86;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 11px;
+    font-weight: 500;
+    transition: all 0.2s;
+    gap: 4px;
+}
+
+.iconBtn:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: #d1d4dc;
+}
+
+.exitAllBtn {
+    color: #e64b4b;
+    border-color: rgba(230, 75, 75, 0.3);
+}
+
+.exitAllBtn:hover {
+    background: rgba(230, 75, 75, 0.15);
+    border-color: #e64b4b;
+}
+
+.spinning {
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    from {
+        transform: rotate(0deg);
+    }
+
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+/* Mode Bar */
+.modeBar {
+    font-size: 10px;
+    font-weight: 600;
+    text-align: center;
+    padding: 4px;
+    letter-spacing: 0.5px;
+}
+
+.modeBar.live {
+    background: linear-gradient(90deg, rgba(230, 75, 75, 0.2), rgba(230, 75, 75, 0.1));
+    color: #e64b4b;
+}
+
+.modeBar.sandbox {
+    background: linear-gradient(90deg, rgba(41, 98, 255, 0.2), rgba(41, 98, 255, 0.1));
+    color: #5b9cf6;
+}
+
+/* Content */
+.content {
+    flex: 1;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+
+/* Orders Container with Sub-tabs */
+.ordersContainer {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+}
+
+.subTabs {
+    display: flex;
+    gap: 2px;
+    padding: 8px 16px;
+    background: rgba(0, 0, 0, 0.1);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.subTab {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    font-size: 11px;
+    font-weight: 500;
+    color: #787b86;
+    background: transparent;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+.subTab:hover {
+    color: #b2b5be;
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.subTab.active {
+    color: #d1d4dc;
+    background: rgba(255, 255, 255, 0.08);
+}
+
+.subTabCount {
+    font-size: 10px;
+    color: #787b86;
+    background: rgba(255, 255, 255, 0.05);
+    padding: 1px 5px;
+    border-radius: 8px;
+}
+
+/* Funds Grid */
+.fundsContainer {
+    padding: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+}
+
+.fundsGrid {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 16px;
+    max-width: 1000px;
+    width: 100%;
+}
+
+.fundCard {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 16px 20px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 8px;
+}
+
+.fundLabel {
+    font-size: 11px;
+    color: #787b86;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.fundValue {
+    font-size: 18px;
+    font-weight: 600;
+    color: #d1d4dc;
+}
+
+.fundValue.highlight {
+    color: #279b88;
+}
+
+/* Table */
+.tableWrapper {
+    flex: 1;
+    overflow-y: auto;
+}
+
+.table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+}
+
+.table th {
+    position: sticky;
+    top: 0;
+    background: rgba(0, 0, 0, 0.3);
+    text-align: left;
+    padding: 10px 12px;
+    font-weight: 500;
+    color: #787b86;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    white-space: nowrap;
+}
+
+.table td {
+    padding: 10px 12px;
+    color: #d1d4dc;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+    white-space: nowrap;
+}
+
+.dataRow {
+    cursor: pointer;
+    transition: background 0.15s;
+}
+
+.dataRow:hover {
+    background: rgba(255, 255, 255, 0.04);
+}
+
+/* Profit/Loss Row Backgrounds */
+.profitRow {
+    background: rgba(39, 155, 136, 0.04);
+}
+
+.profitRow:hover {
+    background: rgba(39, 155, 136, 0.08);
+}
+
+.lossRow {
+    background: rgba(230, 75, 75, 0.04);
+}
+
+.lossRow:hover {
+    background: rgba(230, 75, 75, 0.08);
+}
+
+/* Symbol Cell */
+.symbolCell {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.symbol {
+    font-weight: 600;
+    color: #fff;
+}
+
+.ltp {
+    font-weight: 500;
+}
+
+/* Side Badge */
+.sideBadge {
+    font-size: 10px;
+    font-weight: 600;
+    padding: 3px 8px;
+    border-radius: 4px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.sideBadge.long {
+    background: rgba(39, 155, 136, 0.2);
+    color: #279b88;
+}
+
+.sideBadge.short {
+    background: rgba(230, 75, 75, 0.2);
+    color: #e64b4b;
+}
+
+/* Status Badge */
+.statusBadge {
+    font-size: 10px;
+    font-weight: 600;
+    padding: 3px 8px;
+    border-radius: 4px;
+    text-transform: uppercase;
+}
+
+.statusBadge.complete,
+.statusBadge.executed,
+.statusBadge.filled {
+    background: rgba(39, 155, 136, 0.2);
+    color: #279b88;
+}
+
+.statusBadge.pending,
+.statusBadge.open {
+    background: rgba(255, 167, 38, 0.2);
+    color: #ffa726;
+}
+
+.statusBadge.rejected,
+.statusBadge.cancelled {
+    background: rgba(230, 75, 75, 0.2);
+    color: #e64b4b;
+}
+
+/* Quantity */
+.qty {
+    font-weight: 500;
+}
+
+/* P&L */
+.pnl {
+    font-weight: 600;
+}
+
+.profit {
+    color: #279b88;
+}
+
+.loss {
+    color: #e64b4b;
+}
+
+/* Actions Column */
+.actions {
+    display: flex;
+    gap: 4px;
+}
+
+.actionBtn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    color: #787b86;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+.actionBtn:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: #d1d4dc;
+}
+
+.actionBtn.danger {
+    color: #e64b4b;
+}
+
+.actionBtn.danger:hover {
+    background: rgba(230, 75, 75, 0.15);
+    border-color: rgba(230, 75, 75, 0.3);
+}
+
+/* Empty/Error States */
+.empty,
+.loading,
+.error,
+.notConnected {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    color: #787b86;
+    font-size: 13px;
+}
+
+.error {
+    color: #e64b4b;
+}
+
+/* Light Theme Overrides */
+.panel.light .header {
+    background: rgba(0, 0, 0, 0.02);
+    border-bottom-color: #e0e3eb;
+}
+
+.panel.light .tab {
+    color: #787b86;
+}
+
+.panel.light .tab:hover {
+    color: #131722;
+    background: rgba(0, 0, 0, 0.03);
+}
+
+.panel.light .tab.active {
+    color: #2962ff;
+}
+
+.panel.light .table th {
+    background: #f0f3fa;
+    color: #787b86;
+    border-bottom-color: #e0e3eb;
+}
+
+.panel.light .table td {
+    color: #131722;
+    border-bottom-color: #e0e3eb;
+}
+
+.panel.light .symbol {
+    color: #131722;
+}
+
+.panel.light .dataRow:hover {
+    background: rgba(0, 0, 0, 0.03);
+}
+
+.panel.light .profitRow {
+    background: rgba(39, 155, 136, 0.06);
+}
+
+.panel.light .lossRow {
+    background: rgba(230, 75, 75, 0.06);
+}

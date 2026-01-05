@@ -30,10 +30,10 @@ import { playAlertSound } from './utils/soundManager';
 import { useIsMobile, useCommandPalette, useGlobalShortcuts } from './hooks';
 import { useCloudWorkspaceSync } from './hooks/useCloudWorkspaceSync';
 import IndicatorSettingsModal from './components/IndicatorSettings/IndicatorSettingsModal';
-import OrderFlowSettingsPanel, { DEFAULT_ORDER_FLOW_SETTINGS } from './components/OrderFlow/OrderFlowSettingsPanel';
+
 import PositionTracker from './components/PositionTracker';
 import { SectorHeatmapModal } from './components/SectorHeatmap';
-import { IntradayBoost } from './components/IntradayBoost';
+import { OrderEntryModal, TradingPanel, QuickOrderPopup } from './components/Trading';
 const VALID_INTERVAL_UNITS = new Set(['s', 'm', 'h', 'd', 'w', 'M']);
 const DEFAULT_FAVORITE_INTERVALS = []; // No default favorites
 
@@ -1661,11 +1661,10 @@ function AppContent({ isAuthenticated, setIsAuthenticated }) {
   const [isSessionBreakVisible, setIsSessionBreakVisible] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isIndicatorSettingsOpen, setIsIndicatorSettingsOpen] = useState(false);
-  const [isOrderFlowSettingsOpen, setIsOrderFlowSettingsOpen] = useState(false);
-  const [orderFlowSettings, setOrderFlowSettings] = useState(() => {
-    const saved = localStorage.getItem('oa_orderflow_settings');
-    return saved ? JSON.parse(saved) : DEFAULT_ORDER_FLOW_SETTINGS;
+  const [tradingMode, setTradingMode] = useState(() => {
+    return localStorage.getItem('oa_trading_mode') || 'sandbox';
   });
+
   const [websocketUrl, setWebsocketUrl] = useState(() => {
     return localStorage.getItem('oa_ws_url') || '127.0.0.1:8765';
   });
@@ -1675,6 +1674,43 @@ function AppContent({ isAuthenticated, setIsAuthenticated }) {
   const [hostUrl, setHostUrl] = useState(() => {
     return localStorage.getItem('oa_host_url') || 'http://127.0.0.1:5000';
   });
+
+  const handleTradingModeChange = (mode) => {
+    setTradingMode(mode);
+    localStorage.setItem('oa_trading_mode', mode);
+  };
+
+  // Order Entry Modal state
+  const [isOrderModalOpen, setIsOrderModalOpen] = useState(false);
+  const [orderAction, setOrderAction] = useState('BUY');
+
+  const handleBuyClick = () => {
+    setOrderAction('BUY');
+    setIsOrderModalOpen(true);
+  };
+
+  const handleSellClick = () => {
+    setOrderAction('SELL');
+    setIsOrderModalOpen(true);
+  };
+
+  // Trading Panel state
+  const [isTradingPanelOpen, setIsTradingPanelOpen] = useState(false);
+
+  // Quick Order Popup state (for chart-click trading)
+  const [quickOrderState, setQuickOrderState] = useState({
+    isOpen: false,
+    price: null,
+    position: null,
+  });
+
+  const handleChartPriceClick = useCallback((price, position) => {
+    setQuickOrderState({
+      isOpen: true,
+      price,
+      position,
+    });
+  }, []);
 
   const toggleDrawingToolbar = () => {
     setShowDrawingToolbar(prev => !prev);
@@ -2521,9 +2557,13 @@ function AppContent({ isAuthenticated, setIsAuthenticated }) {
             onStraddleClick={() => setIsStraddlePickerOpen(true)}
             strategyConfig={activeChart?.strategyConfig}
             onIndicatorSettingsClick={() => setIsIndicatorSettingsOpen(true)}
-            onOrderFlowSettingsClick={() => setIsOrderFlowSettingsOpen(true)}
+
             onOptionsClick={() => setIsOptionChainOpen(true)}
             onHeatmapClick={() => setIsSectorHeatmapOpen(true)}
+            tradingMode={tradingMode}
+            onTradingModeChange={handleTradingModeChange}
+            onBuyClick={handleBuyClick}
+            onSellClick={handleSellClick}
           />
         }
         leftToolbar={
@@ -2655,17 +2695,6 @@ function AppContent({ isAuthenticated, setIsAuthenticated }) {
               }}
               isAuthenticated={isAuthenticated}
             />
-          ) : activeRightPanel === 'boost' ? (
-            <IntradayBoost
-              isAuthenticated={isAuthenticated}
-              onSymbolSelect={(symData) => {
-                const symbol = typeof symData === 'string' ? symData : symData.symbol;
-                const exchange = typeof symData === 'string' ? 'NSE' : (symData.exchange || 'NSE');
-                setCharts(prev => prev.map(chart =>
-                  chart.id === activeChartId ? { ...chart, symbol: symbol, exchange: exchange, strategyConfig: null } : chart
-                ));
-              }}
-            />
           ) : null
         }
         rightToolbar={
@@ -2704,6 +2733,7 @@ function AppContent({ isAuthenticated, setIsAuthenticated }) {
             onIndicatorVisibilityToggle={handleIndicatorVisibilityToggle}
             chartAppearance={chartAppearance}
             onOpenOptionChain={handleOpenOptionChainForSymbol}
+            onPriceClick={handleChartPriceClick}
           />
         }
       />
@@ -2774,16 +2804,7 @@ function AppContent({ isAuthenticated, setIsAuthenticated }) {
         indicators={activeChart.indicators}
         onIndicatorSettingsChange={updateIndicatorSettings}
       />
-      <OrderFlowSettingsPanel
-        isOpen={isOrderFlowSettingsOpen}
-        onClose={() => setIsOrderFlowSettingsOpen(false)}
-        theme={theme}
-        settings={orderFlowSettings}
-        onSettingsChange={(newSettings) => {
-          setOrderFlowSettings(newSettings);
-          localStorage.setItem('oa_orderflow_settings', JSON.stringify(newSettings));
-        }}
-      />
+
       <LayoutTemplateDialog
         isOpen={isTemplateDialogOpen}
         onClose={() => setIsTemplateDialogOpen(false)}
@@ -2829,6 +2850,16 @@ function AppContent({ isAuthenticated, setIsAuthenticated }) {
           setIsSectorHeatmapOpen(false);
         }}
       />
+      <OrderEntryModal
+        isOpen={isOrderModalOpen}
+        onClose={() => setIsOrderModalOpen(false)}
+        symbol={currentSymbol}
+        exchange={currentExchange}
+        lastPrice={activeChart?.ltp}
+        action={orderAction}
+        tradingMode={tradingMode}
+        theme={theme}
+      />
       <OptionChainModal
         isOpen={isOptionChainOpen}
         onClose={() => {
@@ -2837,6 +2868,32 @@ function AppContent({ isAuthenticated, setIsAuthenticated }) {
         }}
         onSelectOption={handleOptionSelect}
         initialSymbol={optionChainInitialSymbol}
+      />
+      <TradingPanel
+        isOpen={isTradingPanelOpen}
+        onToggle={() => setIsTradingPanelOpen(prev => !prev)}
+        tradingMode={tradingMode}
+        onSymbolSelect={(symData) => {
+          const symbol = typeof symData === 'string' ? symData : symData.symbol;
+          const exchange = typeof symData === 'string' ? 'NSE' : (symData.exchange || 'NSE');
+          setCharts(prev => prev.map(chart =>
+            chart.id === activeChartId ? { ...chart, symbol, exchange, strategyConfig: null } : chart
+          ));
+        }}
+        isAuthenticated={isAuthenticated}
+        watchlistData={watchlistData}
+      />
+      <QuickOrderPopup
+        isOpen={quickOrderState.isOpen}
+        onClose={() => setQuickOrderState(prev => ({ ...prev, isOpen: false }))}
+        price={quickOrderState.price}
+        position={quickOrderState.position}
+        symbol={currentSymbol}
+        exchange={currentExchange}
+        tradingMode={tradingMode}
+        onOrderPlaced={() => {
+          // Optionally refresh positions or show toast
+        }}
       />
     </>
   );

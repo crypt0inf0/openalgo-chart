@@ -1,0 +1,183 @@
+.popup {
+    position: fixed;
+    background: var(--tv-color-popup-background, #1e222d);
+    border: 1px solid var(--tv-color-border, #363a45);
+    border-radius: 8px;
+    padding: 12px;
+    width: 200px;
+    z-index: 10001;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+    animation: popIn 0.15s ease;
+}
+
+@keyframes popIn {
+    from {
+        opacity: 0;
+        transform: scale(0.95);
+    }
+
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+/* Header */
+.header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+}
+
+.symbol {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--tv-color-text-primary, #d1d4dc);
+}
+
+.closeBtn {
+    background: none;
+    border: none;
+    color: var(--tv-color-text-secondary, #787b86);
+    cursor: pointer;
+    padding: 2px;
+    display: flex;
+    border-radius: 3px;
+}
+
+.closeBtn:hover {
+    background: var(--tv-color-input-background, #2a2e39);
+}
+
+/* Price Row */
+.priceRow {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--tv-color-border, #363a45);
+    margin-bottom: 8px;
+}
+
+.priceLabel {
+    font-size: 11px;
+    color: var(--tv-color-text-secondary, #787b86);
+}
+
+.priceValue {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--tv-color-text-primary, #d1d4dc);
+}
+
+/* Quantity Row */
+.qtyRow {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 8px;
+}
+
+.qtyBtn {
+    width: 28px;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    background: var(--tv-color-input-background, #2a2e39);
+    border: 1px solid var(--tv-color-border, #363a45);
+    color: var(--tv-color-text-primary, #d1d4dc);
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.qtyBtn:hover {
+    background: var(--tv-color-border, #363a45);
+}
+
+.qtyInput {
+    flex: 1;
+    padding: 6px 8px;
+    font-size: 14px;
+    text-align: center;
+    background: var(--tv-color-input-background, #2a2e39);
+    border: 1px solid var(--tv-color-border, #363a45);
+    color: var(--tv-color-text-primary, #d1d4dc);
+    border-radius: 4px;
+}
+
+.qtyInput:focus {
+    outline: none;
+    border-color: var(--tv-color-brand, #2962ff);
+}
+
+/* Mode Indicator */
+.modeIndicator {
+    font-size: 9px;
+    font-weight: 600;
+    text-align: center;
+    padding: 3px;
+    border-radius: 3px;
+    margin-bottom: 8px;
+    letter-spacing: 0.5px;
+}
+
+.modeIndicator.live {
+    background: rgba(239, 83, 80, 0.15);
+    color: #ef5350;
+}
+
+.modeIndicator.sandbox {
+    background: rgba(66, 165, 245, 0.15);
+    color: #42a5f5;
+}
+
+/* Error */
+.error {
+    font-size: 11px;
+    color: #ef5350;
+    margin-bottom: 8px;
+    text-align: center;
+}
+
+/* Action Buttons */
+.actions {
+    display: flex;
+    gap: 6px;
+}
+
+.actionBtn {
+    flex: 1;
+    padding: 8px;
+    font-size: 12px;
+    font-weight: 600;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+.actionBtn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.buyBtn {
+    background: #26a69a;
+    color: white;
+}
+
+.buyBtn:hover:not(:disabled) {
+    background: #2bbd8e;
+}
+
+.sellBtn {
+    background: #ef5350;
+    color: white;
+}
+
+.sellBtn:hover:not(:disabled) {
+    background: #f44336;
+}

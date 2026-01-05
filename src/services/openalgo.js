@@ -78,7 +78,7 @@ const shouldUseProxy = () => {
  * Returns relative path for proxy when in dev mode with default host
  * Returns full URL when using custom host
  */
-const getApiBase = () => {
+export const getApiBase = () => {
     if (shouldUseProxy()) {
         return '/api/v1';  // Use Vite proxy
     }
