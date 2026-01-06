@@ -1,13 +1,19 @@
 import { AlertCondition } from '../line-tool-alert-manager';
+import { AlertNotificationSettings } from './state';
+import { processAlertWebhook } from '../../../../services/webhookService';
 
 export interface AlertNotificationData {
     alertId: string;
     symbol: string;
+    exchange?: string;
     price: string; // Formatted price string
+    numericPrice?: number; // Actual numeric price for webhook
+    closePrice?: number; // Close price that triggered the alert
     timestamp: number;
     direction: 'up' | 'down';
     condition: AlertCondition;
     onEdit?: (data: AlertNotificationData) => void;
+    notificationSettings?: AlertNotificationSettings;
 }
 
 import { LineToolManager } from '../../line-tool-manager';
@@ -151,27 +157,172 @@ export class AlertNotification {
 
     public show(data: AlertNotificationData): void {
         if (!this._container) return;
-        
-        // Update position before showing
-        this._updatePosition();
 
-        // If notification already exists for this alert, dismiss it first
-        if (this._notifications.has(data.alertId)) {
-            this.dismiss(data.alertId);
+        const settings = data.notificationSettings;
+
+        // Check if toast notification is enabled (default: true)
+        const showToast = settings?.showToast !== false;
+
+        // Check if sound is enabled (default: true)
+        const playSound = settings?.playSound !== false;
+
+        // Check if webhook is enabled
+        const sendWebhook = settings?.webhookEnabled === true;
+
+        // Show toast notification if enabled
+        if (showToast) {
+            // Update position before showing
+            this._updatePosition();
+
+            // If notification already exists for this alert, dismiss it first
+            if (this._notifications.has(data.alertId)) {
+                this.dismiss(data.alertId);
+            }
+
+            const notification = this._createNotification(data);
+            this._container.appendChild(notification);
+            this._notifications.set(data.alertId, notification);
+
+            // Auto-dismiss after 60 seconds (RC-5)
+            const timeoutId = window.setTimeout(() => {
+                this._dismissTimeouts.delete(data.alertId);
+                this.dismiss(data.alertId);
+            }, 60000);
+            this._dismissTimeouts.set(data.alertId, timeoutId);
         }
 
-        const notification = this._createNotification(data);
-        this._container.appendChild(notification);
-        this._notifications.set(data.alertId, notification);
+        // Play sound if enabled
+        if (playSound) {
+            this._playAlarm();
+        }
 
-        // Auto-dismiss after 60 seconds (RC-5)
-        const timeoutId = window.setTimeout(() => {
-            this._dismissTimeouts.delete(data.alertId);
-            this.dismiss(data.alertId);
+        // Send webhook if enabled
+        if (sendWebhook && settings) {
+            this._sendWebhook(data, settings);
+        }
+    }
+
+    private async _sendWebhook(data: AlertNotificationData, settings: AlertNotificationSettings): Promise<void> {
+        try {
+            const result = await processAlertWebhook(
+                {
+                    symbol: data.symbol,
+                    exchange: data.exchange || 'NSE',
+                    price: data.numericPrice || parseFloat(data.price) || 0,
+                    direction: data.direction,
+                    condition: data.condition,
+                    close: data.closePrice || data.numericPrice || parseFloat(data.price) || 0,
+                },
+                {
+                    enabled: settings.webhookEnabled,
+                    mode: settings.webhookMode || 'openalgo',
+                    url: settings.webhookUrl,
+                    message: settings.message,
+                    // Always provide openalgoSettings when mode is openalgo (or default)
+                    openalgoSettings: (settings.webhookMode || 'openalgo') === 'openalgo' ? {
+                        action: settings.openalgoAction || 'BUY',
+                        product: settings.openalgoProduct || 'MIS',
+                        quantity: settings.openalgoQuantity || 1,
+                        pricetype: settings.openalgoPricetype || 'MARKET',
+                    } : undefined,
+                }
+            );
+
+            if (!result.success) {
+                console.error('[AlertNotification] Webhook failed:', result.message);
+                // Show error toast notification
+                this._showWebhookResultToast(false, result.message);
+            } else {
+                console.log('[AlertNotification] Webhook sent:', result.message);
+                // Show success toast notification
+                this._showWebhookResultToast(true, result.message);
+            }
+        } catch (error) {
+            const errorMsg = error instanceof Error ? error.message : String(error);
+            console.error('[AlertNotification] Webhook error:', errorMsg);
+            this._showWebhookResultToast(false, errorMsg);
+        }
+    }
+
+    private _showWebhookResultToast(success: boolean, message: string): void {
+        // Create a toast for webhook result
+        const toast = document.createElement('div');
+        toast.style.cssText = `
+            position: fixed;
+            top: 50px;
+            right: 50px;
+            padding: 12px 40px 12px 16px;
+            border-radius: 8px;
+            color: white;
+            font-size: 14px;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            z-index: 10001;
+            max-width: 400px;
+            word-wrap: break-word;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            animation: slideIn 0.3s ease;
+            background: ${success ? 'linear-gradient(135deg, #10B981, #059669)' : 'linear-gradient(135deg, #EF4444, #DC2626)'};
+        `;
+
+        // Content span
+        const content = document.createElement('span');
+        content.textContent = success ? `✓ ${message}` : `✗ ${message}`;
+        toast.appendChild(content);
+
+        // Close button
+        const closeBtn = document.createElement('button');
+        closeBtn.textContent = '×';
+        closeBtn.style.cssText = `
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            background: transparent;
+            border: none;
+            color: white;
+            font-size: 20px;
+            cursor: pointer;
+            padding: 0 4px;
+            line-height: 1;
+            opacity: 0.8;
+        `;
+        closeBtn.onmouseover = () => closeBtn.style.opacity = '1';
+        closeBtn.onmouseout = () => closeBtn.style.opacity = '0.8';
+        closeBtn.onclick = () => {
+            toast.style.opacity = '0';
+            toast.style.transition = 'opacity 0.3s';
+            setTimeout(() => toast.remove(), 300);
+        };
+        toast.appendChild(closeBtn);
+
+        // Add animation keyframes if not already added
+        if (!document.getElementById('webhook-toast-style')) {
+            const style = document.createElement('style');
+            style.id = 'webhook-toast-style';
+            style.textContent = `
+                @keyframes slideIn {
+                    from { opacity: 0; transform: translateX(20px); }
+                    to { opacity: 1; transform: translateX(0); }
+                }
+            `;
+            document.head.appendChild(style);
+        }
+
+        document.body.appendChild(toast);
+
+        // Auto-dismiss after 60 seconds
+        const timeoutId = setTimeout(() => {
+            toast.style.opacity = '0';
+            toast.style.transition = 'opacity 0.3s';
+            setTimeout(() => toast.remove(), 300);
         }, 60000);
-        this._dismissTimeouts.set(data.alertId, timeoutId);
 
-        this._playAlarm();
+        // Clear timeout if manually closed
+        closeBtn.onclick = () => {
+            clearTimeout(timeoutId);
+            toast.style.opacity = '0';
+            toast.style.transition = 'opacity 0.3s';
+            setTimeout(() => toast.remove(), 300);
+        };
     }
 
     private _playAlarm(): void {
@@ -214,7 +365,7 @@ export class AlertNotification {
 
     private _updatePosition(): void {
         if (!this._container || !this._manager) return;
-        
+
         const chartRect = this._manager.getChartRect();
         if (chartRect) {
             // 30px from left, 15px from bottom (relative to chart)
@@ -242,7 +393,7 @@ export class AlertNotification {
             clearTimeout(timeoutId);
             this._dismissTimeouts.delete(alertId);
         }
-        
+
         const notification = this._notifications.get(alertId);
         if (notification) {
             notification.classList.add('dismissing');
@@ -261,7 +412,7 @@ export class AlertNotification {
             clearTimeout(timeoutId);
         });
         this._dismissTimeouts.clear();
-        
+
         this._notifications.forEach((_, alertId) => {
             this.dismiss(alertId);
         });

@@ -1,6 +1,40 @@
 import { Delegate } from '../../../../helpers/delegate';
 import { LineTool, AlertCondition } from '../line-tool-alert-manager';
 
+/**
+ * Notification settings for an alert.
+ * Controls how the user is notified when an alert triggers.
+ */
+export interface AlertNotificationSettings {
+	showToast: boolean;        // Show popup notification (default: true)
+	playSound: boolean;        // Play alarm sound (default: true)
+	webhookEnabled: boolean;   // Enable webhook (default: false)
+	webhookUrl?: string;       // Custom webhook URL
+	webhookMode?: 'openalgo' | 'custom'; // Webhook type
+	// OpenAlgo specific settings
+	openalgoAction?: 'BUY' | 'SELL';
+	openalgoProduct?: 'MIS' | 'CNC' | 'NRML';
+	openalgoQuantity?: number;
+	openalgoPricetype?: 'MARKET' | 'LIMIT';
+	// Custom message template
+	message?: string; // Template with {{variables}}
+}
+
+/**
+ * Default notification settings for new alerts.
+ */
+export const DEFAULT_NOTIFICATION_SETTINGS: AlertNotificationSettings = {
+	showToast: true,
+	playSound: true,
+	webhookEnabled: false,
+	webhookMode: 'openalgo',
+	openalgoAction: 'BUY',
+	openalgoProduct: 'MIS',
+	openalgoQuantity: 1,
+	openalgoPricetype: 'MARKET',
+	message: '{{symbol}} {{condition}} {{price}}'
+};
+
 export interface UserAlertInfo {
 	id: string;
 	price: number;
@@ -12,6 +46,11 @@ export interface UserAlertInfo {
 	 * Once a true crossing happens, this is set to 'unknown' to enable further triggers.
 	 */
 	initialPricePosition?: 'above' | 'below' | 'unknown';
+	// Notification settings
+	notifications?: AlertNotificationSettings;
+	// Symbol context for webhook
+	symbol?: string;
+	exchange?: string;
 }
 
 /**
@@ -24,6 +63,10 @@ export interface SerializableAlert {
 	condition: AlertCondition;
 	type: 'price' | 'tool';
 	createdAt: number;
+	// Notification settings
+	notifications?: AlertNotificationSettings;
+	symbol?: string;
+	exchange?: string;
 }
 
 export class UserAlertsState {
@@ -93,11 +136,14 @@ export class UserAlertsState {
 		this._alertsChanged.fire();
 	}
 
-	updateAlert(id: string, newPrice: number, condition: AlertCondition) {
+	updateAlert(id: string, newPrice: number, condition: AlertCondition, notifications?: AlertNotificationSettings) {
 		const alert = this._alerts.get(id);
 		if (!alert) return;
 		alert.price = newPrice;
 		alert.condition = condition;
+		if (notifications) {
+			alert.notifications = notifications;
+		}
 		this._alertChanged.fire(alert);
 		this._alertsChanged.fire();
 	}
@@ -136,6 +182,9 @@ export class UserAlertsState {
 					condition: alert.condition || 'crossing',
 					type: 'price',
 					createdAt: Date.now(),
+					notifications: alert.notifications,
+					symbol: alert.symbol,
+					exchange: alert.exchange,
 				});
 			}
 		});
@@ -161,6 +210,9 @@ export class UserAlertsState {
 				price: alertData.price,
 				condition: alertData.condition || 'crossing',
 				type: 'price',
+				notifications: alertData.notifications,
+				symbol: alertData.symbol,
+				exchange: alertData.exchange,
 			};
 			this._alerts.set(alertData.id, userAlert);
 		}

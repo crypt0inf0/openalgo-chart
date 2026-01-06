@@ -21,7 +21,7 @@ import {
 import { AlertRendererData, IRendererData } from './irenderer-data';
 import { MouseHandlers, MousePosition } from './mouse';
 import { UserAlertPricePaneView } from './pane-view';
-import { UserAlertInfo, UserAlertsState } from './state';
+import { UserAlertInfo, UserAlertsState, AlertNotificationSettings, DEFAULT_NOTIFICATION_SETTINGS } from './state';
 import { AlertEditDialog } from './alert-edit-dialog';
 import { Delegate } from '../../../../helpers/delegate';
 import { LineToolAlertManager, LineTool, AlertCondition } from '../line-tool-alert-manager';
@@ -37,6 +37,11 @@ export interface AlertCrossing {
 	direction: 'up' | 'down';
 	condition: AlertCondition;
 	timestamp: number;
+	// New fields for webhook support
+	notifications?: AlertNotificationSettings;
+	symbol?: string;
+	exchange?: string;
+	closePrice?: number;
 }
 
 export class UserPriceAlerts
@@ -53,6 +58,7 @@ export class UserPriceAlerts
 	private _currentCursor: string | null = null;
 
 	private _symbolName: string = '';
+	private _exchange: string = 'NSE';
 	private _dragState: { alertId: string; startY: number } | null = null;
 	private _hasDragged: boolean = false;
 	private _onAlertTriggered: Delegate<AlertCrossing> = new Delegate();
@@ -267,8 +273,11 @@ export class UserPriceAlerts
 		};
 	}
 
-	setSymbolName(name: string) {
+	setSymbolName(name: string, exchange?: string) {
 		this._symbolName = name;
+		if (exchange) {
+			this._exchange = exchange;
+		}
 	}
 
 	public openEditDialog(alertId: string, initialData?: { price: number, condition: AlertCondition }) {
@@ -278,24 +287,41 @@ export class UserPriceAlerts
 			alertId: alert.id,
 			price: alert.price,
 			condition: alert.condition || 'crossing',
-			symbol: this._symbolName,
-			isTrendline: alert.type === 'tool' // Rename isTrendline to isTool later if needed, but for now keep it or check tool type
+			symbol: alert.symbol || this._symbolName,
+			exchange: alert.exchange || this._exchange,
+			isTrendline: alert.type === 'tool',
+			notifications: alert.notifications || { ...DEFAULT_NOTIFICATION_SETTINGS },
 		} : (initialData ? {
 			alertId: alertId,
 			price: initialData.price,
 			condition: initialData.condition,
 			symbol: this._symbolName,
-			isTrendline: false
+			exchange: this._exchange,
+			isTrendline: false,
+			notifications: { ...DEFAULT_NOTIFICATION_SETTINGS },
 		} : null);
 
 		if (!data) return;
 
 		this._editDialog.show(data, (result) => {
 			if (alert) {
-				this.updateAlert(result.alertId, result.price, result.condition);
+				this.updateAlert(result.alertId, result.price, result.condition, result.notifications);
+				// Also update symbol/exchange if needed
+				const updatedAlert = this._alerts.get(result.alertId);
+				if (updatedAlert) {
+					updatedAlert.symbol = result.symbol;
+					updatedAlert.exchange = result.exchange;
+				}
 			} else {
-				// Alert was deleted (one-shot), create a new one
-				this.addAlertWithCondition(result.price, result.condition);
+				// Create a new alert with notification settings
+				const newId = this.addAlertWithCondition(result.price, result.condition);
+				const newAlert = this._alerts.get(newId);
+				if (newAlert) {
+					newAlert.notifications = result.notifications;
+					newAlert.symbol = result.symbol;
+					newAlert.exchange = result.exchange;
+					this._alertsChanged.fire();
+				}
 			}
 		});
 	}
@@ -455,7 +481,12 @@ export class UserPriceAlerts
 					crossingPrice: close,
 					direction: close > alert.price ? 'up' : 'down',
 					condition: alert.condition || 'crossing',
-					timestamp: Date.now()
+					timestamp: Date.now(),
+					// Include notification settings and context for webhook
+					notifications: alert.notifications,
+					symbol: alert.symbol || this._symbolName,
+					exchange: alert.exchange || this._exchange,
+					closePrice: close,
 				};
 				this._onAlertTriggered.fire(crossing);
 				triggeredAlertIds.push(alert.id);

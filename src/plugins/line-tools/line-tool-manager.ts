@@ -215,11 +215,15 @@ export class LineToolManager extends PluginBase {
         this._alertSubscription = this._userPriceAlerts!.alertTriggered().subscribe((crossing) => {
             this._alertNotifications?.show({
                 alertId: crossing.alertId,
-                symbol: this._symbolName || 'Unknown',
+                symbol: crossing.symbol || this._symbolName || 'Unknown',
+                exchange: crossing.exchange,
                 price: this.series.priceFormatter().format(crossing.alertPrice),
+                numericPrice: crossing.alertPrice,
+                closePrice: crossing.closePrice,
                 timestamp: crossing.timestamp,
                 direction: crossing.direction,
                 condition: crossing.condition,
+                notificationSettings: crossing.notifications,
                 onEdit: (data) => {
                     this._userPriceAlerts?.openEditDialog(data.alertId, {
                         price: parseFloat(data.price),
@@ -578,13 +582,14 @@ export class LineToolManager extends PluginBase {
     }
 
     /**
-     * Set the symbol name for alerts
+     * Set the symbol name and exchange for alerts
      * @param name The symbol name (e.g., 'BTCUSD', 'AAPL')
+     * @param exchange The exchange code (e.g., 'NSE', 'NFO')
      */
-    public setSymbolName(name: string): void {
+    public setSymbolName(name: string, exchange?: string): void {
         this._symbolName = name;
-        // Also update the UserPriceAlerts with the symbol name
-        this._userPriceAlerts?.setSymbolName(name);
+        // Also update the UserPriceAlerts with the symbol name and exchange
+        this._userPriceAlerts?.setSymbolName(name, exchange);
     }
 
     /**

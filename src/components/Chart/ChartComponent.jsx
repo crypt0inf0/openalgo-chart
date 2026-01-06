@@ -376,7 +376,7 @@ const ChartComponent = forwardRef(({
                 if (!userAlerts || !alert || alert.price == null) return;
 
                 if (typeof userAlerts.setSymbolName === 'function') {
-                    userAlerts.setSymbolName(symbol);
+                    userAlerts.setSymbolName(symbol, exchange);
                 }
 
                 const priceNum = Number(alert.price);
@@ -1345,7 +1345,7 @@ const ChartComponent = forwardRef(({
                 // Set symbol on the manager itself for alert notifications
                 // This will also propagate to UserPriceAlerts internally
                 if (typeof manager.setSymbolName === 'function') {
-                    manager.setSymbolName(symbol);
+                    manager.setSymbolName(symbol, exchange);
                 }
 
                 const userAlerts = manager._userPriceAlerts;
