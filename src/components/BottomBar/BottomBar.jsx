@@ -14,8 +14,6 @@ const BottomBar = ({
     onToggleAutoScale,
     onResetZoom,
     isToolbarVisible = true,
-    showOILines = false,
-    onToggleOILines,
     isAccountPanelOpen = false,
     onToggleAccountPanel,
 }) => {
@@ -157,13 +155,6 @@ const BottomBar = ({
                     Acc
                 </div>
                 <div className={styles.separator} />
-                <div
-                    className={classNames(styles.item, styles.actionItem, { [styles.active]: showOILines })}
-                    onClick={onToggleOILines}
-                    title="Toggle OI Lines (Max Call OI, Max Put OI, Max Pain)"
-                >
-                    OI
-                </div>
                 <div
                     className={classNames(styles.item, styles.actionItem, { [styles.active]: isLogScale })}
                     onClick={onToggleLogScale}
