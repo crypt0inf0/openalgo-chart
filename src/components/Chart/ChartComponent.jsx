@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState, useImperativeHandle, forwardRef, useCallback } from 'react';
+import React, { useEffect, useRef, useState, useImperativeHandle, forwardRef, useCallback, useMemo } from 'react';
 import {
     createChart,
     CandlestickSeries,
@@ -3696,6 +3696,16 @@ const ChartComponent = forwardRef(({
         };
     }, [isSelectingReplayPoint, updateReplayData]);
 
+    // Create stable hash of TPO settings for dependency tracking
+    const tpoSettingsHash = useMemo(() => {
+        const tpoIndicators = (indicators || []).filter(ind => ind.type === 'tpo');
+        if (tpoIndicators.length === 0) return null;
+        return JSON.stringify({
+            visible: tpoIndicators[0].visible,
+            settings: tpoIndicators[0].settings
+        });
+    }, [indicators]);
+
     // Handle TPO Indicator
     useEffect(() => {
         if (!chartRef.current || !mainSeriesRef.current || !dataRef.current) return;
@@ -3737,7 +3747,7 @@ const ChartComponent = forwardRef(({
                     interval: interval
                 });
 
-                console.log('[TPO] Calculated profiles:', profiles.length);
+                console.log('[TPO] Calculated profiles:', profiles.length, 'Settings:', tpoInd.settings);
 
                 const tpoPrimitive = new TPOProfilePrimitive({
                     visible: isVisible,
@@ -3758,7 +3768,7 @@ const ChartComponent = forwardRef(({
                 console.error('[TPO] Error rendering TPO:', error);
             }
         }
-    }, [indicators, interval, symbol, exchange, JSON.stringify(indicators)]);
+    }, [interval, symbol, exchange, tpoSettingsHash]);
 
 
 
