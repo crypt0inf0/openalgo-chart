@@ -2169,8 +2169,12 @@ function AppContent({ isAuthenticated, setIsAuthenticated }) {
     if (activeRef) {
       const price = activeRef.getCurrentPrice();
       if (price !== null) {
-        setAlertPrice(price);
-        setIsAlertOpen(true);
+        if (typeof activeRef.createAlert === 'function') {
+          activeRef.createAlert(price);
+        } else {
+          setAlertPrice(price);
+          setIsAlertOpen(true);
+        }
       } else {
         showToast('No price data available', 'error');
       }

@@ -550,6 +550,13 @@ const ChartComponent = forwardRef(({
             if (manager && typeof manager.editAlertById === 'function') {
                 manager.editAlertById(alertId);
             }
+        },
+        createAlert: (price) => {
+            const manager = lineToolManagerRef.current;
+            const userAlerts = manager && manager._userPriceAlerts;
+            if (userAlerts && typeof userAlerts.openEditDialog === 'function') {
+                userAlerts.openEditDialog('new', { price: Number(price), condition: 'crossing' });
+            }
         }
     }));
 
