@@ -152,7 +152,7 @@ const BottomBar = ({
                     onClick={onToggleAccountPanel}
                     title="Toggle Account Manager Panel"
                 >
-                    Acc
+                    Account
                 </div>
                 <div className={styles.separator} />
                 <div
