@@ -1,33 +1,77 @@
-import React, { useMemo, useState } from 'react';
-import { X } from 'lucide-react';
+import React, { useMemo, useState, useRef, useEffect, useCallback } from 'react';
+import { X, Grid3X3, LayoutGrid, BarChart3, TrendingUp, TrendingDown } from 'lucide-react';
 import styles from './SectorHeatmapModal.module.css';
 import { SECTORS, getSector } from '../PositionTracker/sectorMapping';
 
 const HEATMAP_MODES = [
-  { id: 'sector', label: 'Sector' },
-  { id: 'treemap', label: 'Treemap' },
-  { id: 'grid', label: 'Grid' },
+  { id: 'treemap', label: 'Treemap', icon: LayoutGrid },
+  { id: 'grid', label: 'Grid', icon: Grid3X3 },
+  { id: 'sector', label: 'Sectors', icon: BarChart3 },
 ];
 
 const SectorHeatmapModal = ({ isOpen, onClose, watchlistData, onSectorSelect, onSymbolSelect }) => {
-  const [activeMode, setActiveMode] = useState('sector');
+  const [activeMode, setActiveMode] = useState('treemap');
+  const [hoveredStock, setHoveredStock] = useState(null);
+  const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
+  const resizeObserverRef = useRef(null);
+  const treemapRef = useRef(null);
 
-  // Calculate intraday change from open (same as Position Flow)
+  // Memoized callback ref for treemap container - prevents infinite loops
+  const setTreemapRef = useCallback((node) => {
+    // Cleanup previous observer
+    if (resizeObserverRef.current) {
+      resizeObserverRef.current.disconnect();
+      resizeObserverRef.current = null;
+    }
+
+    treemapRef.current = node;
+
+    if (node) {
+      // Measure immediately, but only update if changed
+      const rect = node.getBoundingClientRect();
+      setContainerSize(prev => {
+        if (prev.width === rect.width && prev.height === rect.height) return prev;
+        return { width: rect.width, height: rect.height };
+      });
+
+      // Setup resize observer for future changes
+      resizeObserverRef.current = new ResizeObserver(entries => {
+        for (let entry of entries) {
+          setContainerSize(prev => {
+            if (prev.width === entry.contentRect.width && prev.height === entry.contentRect.height) return prev;
+            return {
+              width: entry.contentRect.width,
+              height: entry.contentRect.height
+            };
+          });
+        }
+      });
+      resizeObserverRef.current.observe(node);
+    }
+  }, []);
+
+  // Cleanup resize observer on unmount
+  useEffect(() => {
+    return () => {
+      if (resizeObserverRef.current) {
+        resizeObserverRef.current.disconnect();
+      }
+    };
+  }, []);
+
+  // Calculate intraday change from open
   const calculateIntradayChange = (item) => {
     const ltp = parseFloat(item.last) || 0;
     const openPrice = parseFloat(item.open) || 0;
-    // Use opening price for intraday % change calculation
     if (openPrice > 0 && ltp > 0) {
       return ((ltp - openPrice) / openPrice) * 100;
     }
-    // Fallback to chgP (based on prev_close) if open not available
     return parseFloat(item.chgP) || 0;
   };
 
-  // Process stock data with all needed fields
+  // Process stock data
   const stockData = useMemo(() => {
     if (!watchlistData || watchlistData.length === 0) return [];
-
     return watchlistData.map(item => ({
       symbol: item.symbol,
       exchange: item.exchange || 'NSE',
@@ -35,30 +79,30 @@ const SectorHeatmapModal = ({ isOpen, onClose, watchlistData, onSectorSelect, on
       change: calculateIntradayChange(item),
       volume: parseFloat(item.volume) || 0,
       sector: getSector(item.symbol),
+      marketCap: parseFloat(item.marketCap) || parseFloat(item.volume) || 1000000, // Use volume as proxy if no market cap
     }));
   }, [watchlistData]);
 
   // Calculate sector-wise performance
   const sectorData = useMemo(() => {
     if (stockData.length === 0) return [];
-
     const sectorGroups = {};
 
     stockData.forEach(item => {
       const sector = item.sector;
-
       if (!sectorGroups[sector]) {
         sectorGroups[sector] = {
           sector,
           stocks: [],
           totalChange: 0,
           totalVolume: 0,
+          totalMarketCap: 0,
         };
       }
-
       sectorGroups[sector].stocks.push(item);
       sectorGroups[sector].totalChange += item.change;
       sectorGroups[sector].totalVolume += item.volume;
+      sectorGroups[sector].totalMarketCap += item.marketCap;
     });
 
     return Object.values(sectorGroups)
@@ -67,46 +111,54 @@ const SectorHeatmapModal = ({ isOpen, onClose, watchlistData, onSectorSelect, on
         stockCount: group.stocks.length,
         avgChange: group.stocks.length > 0 ? group.totalChange / group.stocks.length : 0,
         totalVolume: group.totalVolume,
-        stocks: group.stocks,
+        totalMarketCap: group.totalMarketCap,
+        stocks: group.stocks.sort((a, b) => b.marketCap - a.marketCap), // Sort stocks by market cap
       }))
       .filter(s => s.stockCount > 0)
-      .sort((a, b) => b.avgChange - a.avgChange);
+      .sort((a, b) => b.totalMarketCap - a.totalMarketCap); // Sort sectors by total market cap
   }, [stockData]);
 
-  // Volume-sorted stocks
-  const volumeSortedStocks = useMemo(() => {
-    const hasVolume = stockData.some(s => s.volume > 0);
-    if (hasVolume) {
-      return [...stockData]
-        .filter(s => s.volume > 0)
-        .sort((a, b) => b.volume - a.volume);
-    }
-    // Fallback: sort by absolute change when no volume data available
-    return [...stockData].sort((a, b) => Math.abs(b.change) - Math.abs(a.change));
+  // Calculate market stats
+  const marketStats = useMemo(() => {
+    if (stockData.length === 0) return { gainers: 0, losers: 0, unchanged: 0, avgChange: 0 };
+    const gainers = stockData.filter(s => s.change > 0.1).length;
+    const losers = stockData.filter(s => s.change < -0.1).length;
+    const unchanged = stockData.length - gainers - losers;
+    const avgChange = stockData.reduce((sum, s) => sum + s.change, 0) / stockData.length;
+    return { gainers, losers, unchanged, avgChange };
   }, [stockData]);
 
-  // Get color based on change value
-  const getChangeColor = (change) => {
-    if (change > 2) return '#089981';
-    if (change > 1) return '#26a69a';
-    if (change > 0.3) return '#4db6ac';
-    if (change > 0) return '#80cbc4';
-    if (change > -0.3) return '#ff9800';
-    if (change > -1) return '#ef5350';
-    if (change > -2) return '#e53935';
-    return '#f23645';
-  };
+  // Enhanced color palette - professional TradingView style (works well on both themes)
+  const getChangeColor = (change, isBackground = false) => {
+    const absChange = Math.abs(change);
 
-  // Get background color with opacity for grid/treemap
-  const getBackgroundColor = (change) => {
-    const intensity = Math.min(Math.abs(change) / 3, 1);
     if (change >= 0) {
-      return `rgba(8, 153, 129, ${0.2 + intensity * 0.6})`;
+      // Green gradient - vibrant colors that work on both light and dark
+      if (absChange > 4) return '#00C853';
+      if (absChange > 3) return '#00B248';
+      if (absChange > 2) return '#00A63E';
+      if (absChange > 1.5) return '#009A38';
+      if (absChange > 1) return '#089981';
+      if (absChange > 0.5) return '#0D9668';
+      if (absChange > 0.2) return '#26A69A';
+      return '#3D8B80'; // Near zero positive
+    } else {
+      // Red gradient - vibrant colors
+      if (absChange > 4) return '#FF1744';
+      if (absChange > 3) return '#F5153D';
+      if (absChange > 2) return '#E91235';
+      if (absChange > 1.5) return '#D8102F';
+      if (absChange > 1) return '#C62828';
+      if (absChange > 0.5) return '#B71C1C';
+      if (absChange > 0.2) return '#A52727';
+      return '#8B3030'; // Near zero negative
     }
-    return `rgba(242, 54, 69, ${0.2 + intensity * 0.6})`;
   };
 
-  // Calculate bar width percentage
+  // Text is always white with shadow for readability
+  const getTextColor = () => '#FFFFFF';
+
+  // Get bar width percentage
   const getBarWidth = (change, maxChange) => {
     return Math.min((Math.abs(change) / Math.max(maxChange, 1)) * 100, 100);
   };
@@ -119,123 +171,269 @@ const SectorHeatmapModal = ({ isOpen, onClose, watchlistData, onSectorSelect, on
     return vol.toString();
   };
 
+  // Format price
+  const formatPrice = (price) => {
+    if (price >= 1000) return price.toFixed(0);
+    if (price >= 100) return price.toFixed(1);
+    return price.toFixed(2);
+  };
+
   const handleRowClick = (sector) => {
-    if (onSectorSelect) {
-      onSectorSelect(sector);
-    }
+    if (onSectorSelect) onSectorSelect(sector);
     onClose();
   };
 
-  const handleStockClick = (stock) => {
-    if (onSymbolSelect) {
-      onSymbolSelect({ symbol: stock.symbol, exchange: stock.exchange });
-    }
+  const handleStockClick = (stock, e) => {
+    e?.stopPropagation();
+    if (onSymbolSelect) onSymbolSelect({ symbol: stock.symbol, exchange: stock.exchange });
     onClose();
   };
 
-  // Render Sector View (Table)
-  const renderSectorView = () => {
-    const maxChange = Math.max(...sectorData.map(s => Math.abs(s.avgChange)), 1);
+  // Squarified Treemap Algorithm
+  const calculateTreemapLayout = (items, x, y, width, height) => {
+    if (items.length === 0 || width <= 0 || height <= 0) return [];
 
-    return (
-      <table className={styles.table}>
-        <thead>
-          <tr>
-            <th className={styles.colSector}>Sector</th>
-            <th className={styles.colStocks}>Stocks</th>
-            <th className={styles.colChange}>Avg Chg</th>
-            <th className={styles.colBar}>Performance</th>
-          </tr>
-        </thead>
-        <tbody>
-          {sectorData.map(item => (
-            <tr
-              key={item.sector}
-              className={styles.row}
-              onClick={() => handleRowClick(item.sector)}
-            >
-              <td className={styles.sectorName}>{item.sector}</td>
-              <td className={styles.stockCount}>{item.stockCount}</td>
-              <td className={styles.changeValue} style={{ color: getChangeColor(item.avgChange) }}>
-                {item.avgChange >= 0 ? '+' : ''}{item.avgChange.toFixed(2)}%
-              </td>
-              <td className={styles.barCell}>
-                <div className={styles.barContainer}>
-                  <div
-                    className={styles.bar}
-                    style={{
-                      width: `${getBarWidth(item.avgChange, maxChange)}%`,
-                      backgroundColor: getChangeColor(item.avgChange),
-                    }}
-                  />
-                </div>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    );
+    const totalValue = items.reduce((sum, item) => sum + item.value, 0);
+    if (totalValue <= 0) return [];
+
+    const result = [];
+    let remaining = [...items];
+    let currentX = x;
+    let currentY = y;
+    let currentWidth = width;
+    let currentHeight = height;
+
+    while (remaining.length > 0) {
+      const isHorizontal = currentWidth >= currentHeight;
+      const mainSide = isHorizontal ? currentHeight : currentWidth;
+
+      // Find the best row using squarified algorithm
+      let row = [remaining[0]];
+      let rowValue = remaining[0].value;
+      let worstRatio = Infinity;
+
+      for (let i = 1; i < remaining.length; i++) {
+        const testRow = [...row, remaining[i]];
+        const testValue = rowValue + remaining[i].value;
+        const rowWidth = (testValue / totalValue) * (isHorizontal ? currentWidth : currentHeight);
+
+        // Calculate worst aspect ratio in current test row
+        let testWorst = 0;
+        testRow.forEach(item => {
+          const itemHeight = (item.value / testValue) * mainSide;
+          const ratio = Math.max(rowWidth / itemHeight, itemHeight / rowWidth);
+          testWorst = Math.max(testWorst, ratio);
+        });
+
+        if (testWorst <= worstRatio) {
+          row = testRow;
+          rowValue = testValue;
+          worstRatio = testWorst;
+        } else {
+          break;
+        }
+      }
+
+      // Layout the row
+      const rowFraction = rowValue / totalValue;
+      const rowSize = isHorizontal
+        ? rowFraction * currentWidth
+        : rowFraction * currentHeight;
+
+      let offset = 0;
+      row.forEach(item => {
+        const itemFraction = item.value / rowValue;
+        const itemSize = itemFraction * mainSide;
+
+        if (isHorizontal) {
+          result.push({
+            ...item,
+            x: currentX,
+            y: currentY + offset,
+            width: rowSize,
+            height: itemSize,
+          });
+        } else {
+          result.push({
+            ...item,
+            x: currentX + offset,
+            y: currentY,
+            width: itemSize,
+            height: rowSize,
+          });
+        }
+        offset += itemSize;
+      });
+
+      // Update remaining and area
+      remaining = remaining.slice(row.length);
+      if (isHorizontal) {
+        currentX += rowSize;
+        currentWidth -= rowSize;
+      } else {
+        currentY += rowSize;
+        currentHeight -= rowSize;
+      }
+    }
+
+    return result;
   };
 
-  // Render Treemap View
-  const renderTreemapView = () => {
-    // Calculate total volume for proportional sizing
-    const totalVolume = stockData.reduce((sum, s) => sum + s.volume, 0);
+  // Prepare treemap data with nested layout - EQUAL SIZED tiles for readability
+  const treemapLayout = useMemo(() => {
+    if (containerSize.width === 0 || containerSize.height === 0) return [];
+
+    // Use stock COUNT for sector sizing (proportional representation)
     const totalStocks = stockData.length;
-
-    // Group by sector for treemap
-    const treemapData = sectorData.map(sector => ({
-      ...sector,
-      // Size based on total volume of sector, fallback to stock count if no volume
-      size: totalVolume > 0
-        ? (sector.totalVolume / totalVolume) * 100
-        : (sector.stockCount / totalStocks) * 100,
+    const sectorItems = sectorData.map(s => ({
+      ...s,
+      value: s.stockCount, // Size by stock count, not market cap
     }));
 
+    const sectorLayout = calculateTreemapLayout(
+      sectorItems,
+      0, 0,
+      containerSize.width,
+      containerSize.height
+    );
+
+    // Calculate stock layouts within each sector - EQUAL SIZE for all stocks
+    return sectorLayout.map(sector => {
+      // All stocks get equal value = equal sized tiles
+      const stockItems = sector.stocks.map(stock => ({
+        ...stock,
+        value: 1, // Equal size for all stocks
+      }));
+
+      const padding = 2;
+      const headerHeight = 22;
+      const stockLayout = calculateTreemapLayout(
+        stockItems,
+        padding,
+        headerHeight,
+        Math.max(sector.width - padding * 2, 0),
+        Math.max(sector.height - headerHeight - padding, 0)
+      );
+
+      return {
+        ...sector,
+        stockLayout,
+      };
+    });
+  }, [sectorData, stockData.length, containerSize]);
+
+  // Render Professional Treemap View
+  const renderTreemapView = () => {
     return (
-      <div className={styles.treemapContainer}>
-        {treemapData.map(sector => (
-          <div
-            key={sector.sector}
-            className={styles.treemapSector}
-            style={{
-              flex: `${sector.stockCount} 1 ${Math.max(sector.stockCount * 25, 100)}px`,
-              backgroundColor: getBackgroundColor(sector.avgChange),
-            }}
-            onClick={() => handleRowClick(sector.sector)}
-          >
-            <div className={styles.treemapSectorHeader}>
-              <span className={styles.treemapSectorName}>{sector.sector}</span>
-              <span
-                className={styles.treemapSectorChange}
-                style={{ color: getChangeColor(sector.avgChange) }}
+      <div className={styles.treemapWrapper}>
+        <div className={styles.treemapContainer} ref={setTreemapRef}>
+          {treemapLayout.map(sector => (
+            <div
+              key={sector.sector}
+              className={styles.treemapSector}
+              style={{
+                left: sector.x,
+                top: sector.y,
+                width: sector.width,
+                height: sector.height,
+                borderColor: getChangeColor(sector.avgChange, false),
+              }}
+              onClick={() => handleRowClick(sector.sector)}
+            >
+              <div
+                className={styles.treemapSectorHeader}
+                style={{ backgroundColor: 'rgba(0,0,0,0.4)' }}
               >
-                {sector.avgChange >= 0 ? '+' : ''}{sector.avgChange.toFixed(2)}%
-              </span>
-            </div>
-            <div className={styles.treemapStocks}>
-              {sector.stocks.map(stock => (
+                <span className={styles.treemapSectorName}>{sector.sector}</span>
+                <span
+                  className={styles.treemapSectorChange}
+                  style={{ color: getChangeColor(sector.avgChange, false) }}
+                >
+                  {sector.avgChange >= 0 ? '+' : ''}{sector.avgChange.toFixed(2)}%
+                </span>
+              </div>
+
+              {sector.stockLayout.map(stock => (
                 <div
                   key={stock.symbol}
                   className={styles.treemapStock}
-                  style={{ backgroundColor: getBackgroundColor(stock.change) }}
-                  onClick={(e) => { e.stopPropagation(); handleStockClick(stock); }}
-                  title={`${stock.symbol}: ${stock.change >= 0 ? '+' : ''}${stock.change.toFixed(2)}%`}
+                  style={{
+                    left: stock.x,
+                    top: stock.y,
+                    width: stock.width,
+                    height: stock.height,
+                    backgroundColor: getChangeColor(stock.change, true),
+                  }}
+                  onClick={(e) => handleStockClick(stock, e)}
+                  onMouseEnter={() => setHoveredStock(stock)}
+                  onMouseLeave={() => setHoveredStock(null)}
                 >
-                  <span className={styles.treemapSymbol}>{stock.symbol}</span>
-                  <span className={styles.treemapChange}>
-                    {stock.change >= 0 ? '+' : ''}{stock.change.toFixed(1)}%
-                  </span>
+                  <div className={styles.treemapStockContent}>
+                    {/* Always show symbol if tile is visible */}
+                    <span
+                      className={styles.treemapSymbol}
+                      style={{
+                        fontSize: Math.max(Math.min(stock.width / 5.5, 16), 10),
+                        color: getTextColor()
+                      }}
+                    >
+                      {stock.symbol}
+                    </span>
+                    {/* Show % change if height allows */}
+                    {stock.height > 35 && (
+                      <span
+                        className={styles.treemapChange}
+                        style={{
+                          fontSize: Math.max(Math.min(stock.width / 6, 14), 9),
+                          color: getTextColor()
+                        }}
+                      >
+                        {stock.change >= 0 ? '+' : ''}{stock.change.toFixed(2)}%
+                      </span>
+                    )}
+                    {/* Show price only if enough space */}
+                    {stock.height > 55 && stock.width > 55 && (
+                      <span
+                        className={styles.treemapLtp}
+                        style={{ color: 'rgba(255,255,255,0.85)' }}
+                      >
+                        ₹{formatPrice(stock.ltp)}
+                      </span>
+                    )}
+                  </div>
                 </div>
               ))}
             </div>
+          ))}
+        </div>
+
+        {/* Hover tooltip */}
+        {hoveredStock && (
+          <div className={styles.tooltip}>
+            <div className={styles.tooltipHeader}>
+              <span className={styles.tooltipSymbol}>{hoveredStock.symbol}</span>
+              <span
+                className={styles.tooltipChange}
+                style={{ color: getChangeColor(hoveredStock.change, false) }}
+              >
+                {hoveredStock.change >= 0 ? '+' : ''}{hoveredStock.change.toFixed(2)}%
+              </span>
+            </div>
+            <div className={styles.tooltipRow}>
+              <span>LTP</span>
+              <span>₹{formatPrice(hoveredStock.ltp)}</span>
+            </div>
+            <div className={styles.tooltipRow}>
+              <span>Sector</span>
+              <span>{hoveredStock.sector}</span>
+            </div>
           </div>
-        ))}
+        )}
       </div>
     );
   };
 
-  // Render Grid View
+  // Render Grid View (enhanced)
   const renderGridView = () => {
     const sortedStocks = [...stockData].sort((a, b) => b.change - a.change);
 
@@ -245,64 +443,68 @@ const SectorHeatmapModal = ({ isOpen, onClose, watchlistData, onSectorSelect, on
           <div
             key={`${stock.symbol}-${stock.exchange}`}
             className={styles.gridItem}
-            style={{ backgroundColor: getBackgroundColor(stock.change) }}
+            style={{ backgroundColor: getChangeColor(stock.change, true) }}
             onClick={() => handleStockClick(stock)}
-            title={`${stock.symbol} (${stock.sector})`}
           >
-            <span className={styles.gridSymbol}>{stock.symbol}</span>
-            <span className={styles.gridChange}>
+            <span className={styles.gridSymbol} style={{ color: getTextColor(stock.change) }}>
+              {stock.symbol}
+            </span>
+            <span className={styles.gridChange} style={{ color: getTextColor(stock.change) }}>
               {stock.change >= 0 ? '+' : ''}{stock.change.toFixed(2)}%
             </span>
-            <span className={styles.gridLtp}>{stock.ltp.toFixed(2)}</span>
+            <span className={styles.gridLtp}>₹{formatPrice(stock.ltp)}</span>
           </div>
         ))}
       </div>
     );
   };
 
-  // Render Volume View
-  const renderVolumeView = () => {
-    const maxVolume = Math.max(...volumeSortedStocks.map(s => s.volume), 1);
+  // Render Sector View (enhanced table)
+  const renderSectorView = () => {
+    const maxChange = Math.max(...sectorData.map(s => Math.abs(s.avgChange)), 1);
 
     return (
-      <table className={styles.table}>
-        <thead>
-          <tr>
-            <th className={styles.colSymbol}>Symbol</th>
-            <th className={styles.colSectorSmall}>Sector</th>
-            <th className={styles.colVolume}>Volume</th>
-            <th className={styles.colChange}>% Chg</th>
-            <th className={styles.colBar}>Activity</th>
-          </tr>
-        </thead>
-        <tbody>
-          {volumeSortedStocks.slice(0, 30).map(stock => (
-            <tr
-              key={`${stock.symbol}-${stock.exchange}`}
-              className={styles.row}
-              onClick={() => handleStockClick(stock)}
-            >
-              <td className={styles.symbolName}>{stock.symbol}</td>
-              <td className={styles.sectorSmall}>{stock.sector}</td>
-              <td className={styles.volumeValue}>{formatVolume(stock.volume)}</td>
-              <td className={styles.changeValue} style={{ color: getChangeColor(stock.change) }}>
-                {stock.change >= 0 ? '+' : ''}{stock.change.toFixed(2)}%
-              </td>
-              <td className={styles.barCell}>
-                <div className={styles.barContainer}>
-                  <div
-                    className={styles.bar}
-                    style={{
-                      width: `${(stock.volume / maxVolume) * 100}%`,
-                      backgroundColor: getChangeColor(stock.change),
-                    }}
-                  />
-                </div>
-              </td>
+      <div className={styles.tableWrapper}>
+        <table className={styles.table}>
+          <thead>
+            <tr>
+              <th className={styles.colSector}>Sector</th>
+              <th className={styles.colStocks}>Stocks</th>
+              <th className={styles.colChange}>Avg Change</th>
+              <th className={styles.colBar}>Performance</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {sectorData.map(item => (
+              <tr
+                key={item.sector}
+                className={styles.row}
+                onClick={() => handleRowClick(item.sector)}
+              >
+                <td className={styles.sectorName}>
+                  <div className={styles.sectorIndicator} style={{ backgroundColor: getChangeColor(item.avgChange, true) }} />
+                  {item.sector}
+                </td>
+                <td className={styles.stockCount}>{item.stockCount}</td>
+                <td className={styles.changeValue} style={{ color: getChangeColor(item.avgChange, false) }}>
+                  {item.avgChange >= 0 ? '+' : ''}{item.avgChange.toFixed(2)}%
+                </td>
+                <td className={styles.barCell}>
+                  <div className={styles.barContainer}>
+                    <div
+                      className={styles.bar}
+                      style={{
+                        width: `${getBarWidth(item.avgChange, maxChange)}%`,
+                        backgroundColor: getChangeColor(item.avgChange, true),
+                      }}
+                    />
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     );
   };
 
@@ -311,6 +513,7 @@ const SectorHeatmapModal = ({ isOpen, onClose, watchlistData, onSectorSelect, on
     if (stockData.length === 0) {
       return (
         <div className={styles.emptyState}>
+          <Grid3X3 size={48} strokeWidth={1} />
           <p>No data available</p>
           <p className={styles.emptyHint}>Add stocks to your watchlist to see heatmap</p>
         </div>
@@ -318,32 +521,10 @@ const SectorHeatmapModal = ({ isOpen, onClose, watchlistData, onSectorSelect, on
     }
 
     switch (activeMode) {
-      case 'sector':
-        return renderSectorView();
-      case 'treemap':
-        return renderTreemapView();
-      case 'grid':
-        return renderGridView();
-      case 'volume':
-        return renderVolumeView();
-      default:
-        return renderSectorView();
-    }
-  };
-
-  // Get footer hint based on mode
-  const getFooterHint = () => {
-    switch (activeMode) {
-      case 'sector':
-        return 'Click on a sector to filter Position Flow';
-      case 'treemap':
-        return 'Click sector header to filter, or stock to view chart';
-      case 'grid':
-        return 'Click on a stock to view its chart';
-      case 'volume':
-        return 'Showing top 30 stocks by volume. Click to view chart';
-      default:
-        return '';
+      case 'treemap': return renderTreemapView();
+      case 'grid': return renderGridView();
+      case 'sector': return renderSectorView();
+      default: return renderTreemapView();
     }
   };
 
@@ -352,8 +533,29 @@ const SectorHeatmapModal = ({ isOpen, onClose, watchlistData, onSectorSelect, on
   return (
     <div className={styles.overlay} onClick={onClose}>
       <div className={styles.modal} onClick={e => e.stopPropagation()}>
+        {/* Header */}
         <div className={styles.header}>
-          <h2 className={styles.title}>Market Heatmap</h2>
+          <div className={styles.headerLeft}>
+            <h2 className={styles.title}>Market Heatmap</h2>
+            <div className={styles.marketStats}>
+              <div className={styles.statItem}>
+                <TrendingUp size={14} className={styles.statIconGreen} />
+                <span className={styles.statValue}>{marketStats.gainers}</span>
+              </div>
+              <div className={styles.statItem}>
+                <TrendingDown size={14} className={styles.statIconRed} />
+                <span className={styles.statValue}>{marketStats.losers}</span>
+              </div>
+              <div className={`${styles.statItem} ${styles.statAvg}`}>
+                <span
+                  className={styles.statAvgValue}
+                  style={{ color: getChangeColor(marketStats.avgChange, false) }}
+                >
+                  {marketStats.avgChange >= 0 ? '+' : ''}{marketStats.avgChange.toFixed(2)}%
+                </span>
+              </div>
+            </div>
+          </div>
           <button className={styles.closeButton} onClick={onClose}>
             <X size={20} />
           </button>
@@ -361,23 +563,43 @@ const SectorHeatmapModal = ({ isOpen, onClose, watchlistData, onSectorSelect, on
 
         {/* Mode Tabs */}
         <div className={styles.modeTabs}>
-          {HEATMAP_MODES.map(mode => (
-            <button
-              key={mode.id}
-              className={`${styles.modeTab} ${activeMode === mode.id ? styles.modeTabActive : ''}`}
-              onClick={() => setActiveMode(mode.id)}
-            >
-              {mode.label}
-            </button>
-          ))}
+          {HEATMAP_MODES.map(mode => {
+            const IconComponent = mode.icon;
+            return (
+              <button
+                key={mode.id}
+                className={`${styles.modeTab} ${activeMode === mode.id ? styles.modeTabActive : ''}`}
+                onClick={() => setActiveMode(mode.id)}
+              >
+                <IconComponent size={16} />
+                <span>{mode.label}</span>
+              </button>
+            );
+          })}
         </div>
 
+        {/* Content */}
         <div className={styles.content}>
           {renderContent()}
         </div>
 
+        {/* Color Legend */}
         <div className={styles.footer}>
-          <span className={styles.hint}>{getFooterHint()}</span>
+          <div className={styles.legend}>
+            <div className={styles.legendItem}>
+              <div className={styles.legendColor} style={{ background: 'linear-gradient(to right, #5C0618, #8B0A24, #B80F30, #D01238)' }} />
+              <span>-4%</span>
+            </div>
+            <div className={styles.legendItem}>
+              <div className={styles.legendColor} style={{ backgroundColor: '#3D1A1A' }} />
+              <span>0%</span>
+            </div>
+            <div className={styles.legendItem}>
+              <div className={styles.legendColor} style={{ background: 'linear-gradient(to right, #006B2C, #008235, #009A3E, #00B248)' }} />
+              <span>+4%</span>
+            </div>
+          </div>
+          <span className={styles.hint}>Click on stocks to view chart</span>
         </div>
       </div>
     </div>

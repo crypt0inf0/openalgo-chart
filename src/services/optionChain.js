@@ -3,13 +3,19 @@
  * Handles option chain fetching using OpenAlgo Option Chain API
  */
 
-import { getOptionChain as fetchOptionChainAPI, getOptionGreeks, getKlines, searchSymbols } from './openalgo';
+import { getOptionChain as fetchOptionChainAPI, getOptionGreeks, getMultiOptionGreeks, getKlines, searchSymbols, getExpiry, fetchExpiryDates } from './openalgo';
 
 // ==================== OPTION CHAIN CACHE ====================
 // Cache to reduce API calls and avoid Upstox rate limits (30 req/min)
 const optionChainCache = new Map();
 const CACHE_TTL_MS = 300000; // 5 minutes cache (increased from 60s to avoid rate limits)
+const MAX_OPTION_CHAIN_CACHE_SIZE = 50; // Max entries to prevent memory leaks
 const STORAGE_KEY = 'optionChainCache';
+
+// Negative cache for symbols that don't support F&O (prevents repeated failed API calls)
+const noFOSymbolsCache = new Set();
+const NO_FO_STORAGE_KEY = 'noFOSymbolsCache';
+const NO_FO_CACHE_DURATION_MS = 24 * 60 * 60 * 1000; // 24 hours
 
 // Rate limit protection: Track last API call time to prevent rapid repeated calls
 let lastApiCallTime = 0;
@@ -17,6 +23,56 @@ const MIN_API_INTERVAL_MS = 5000; // Minimum 5 seconds between API calls
 
 // Generate cache key from underlying and expiry
 const getCacheKey = (underlying, expiry) => `${underlying}_${expiry || 'default'}`;
+
+// Load negative cache from localStorage
+const loadNoFOCacheFromStorage = () => {
+    try {
+        const stored = localStorage.getItem(NO_FO_STORAGE_KEY);
+        if (stored) {
+            const parsed = JSON.parse(stored);
+            // Only load entries that haven't expired
+            const now = Date.now();
+            Object.entries(parsed).forEach(([symbol, timestamp]) => {
+                if (now - timestamp < NO_FO_CACHE_DURATION_MS) {
+                    noFOSymbolsCache.add(symbol);
+                }
+            });
+            console.log('[OptionChain] Loaded', noFOSymbolsCache.size, 'non-F&O symbols from cache');
+        }
+    } catch (e) {
+        console.warn('[OptionChain] Failed to load no-F&O cache:', e.message);
+    }
+};
+
+// Save negative cache to localStorage with timestamps
+const saveNoFOCacheToStorage = () => {
+    try {
+        const now = Date.now();
+        const obj = {};
+        noFOSymbolsCache.forEach(symbol => {
+            obj[symbol] = now;
+        });
+        localStorage.setItem(NO_FO_STORAGE_KEY, JSON.stringify(obj));
+    } catch (e) {
+        console.warn('[OptionChain] Failed to save no-F&O cache:', e.message);
+    }
+};
+
+// Check if symbol is known to not support F&O
+const isNonFOSymbol = (symbol) => noFOSymbolsCache.has(symbol?.toUpperCase());
+
+// Mark a symbol as not supporting F&O
+const markAsNonFOSymbol = (symbol) => {
+    const upperSymbol = symbol?.toUpperCase();
+    if (upperSymbol) {
+        noFOSymbolsCache.add(upperSymbol);
+        saveNoFOCacheToStorage();
+        console.log('[OptionChain] Marked as non-F&O symbol:', upperSymbol);
+    }
+};
+
+// Load negative cache on module init
+loadNoFOCacheFromStorage();
 
 // Check if cache entry is still valid
 const isCacheValid = (cacheEntry) => {
@@ -52,6 +108,24 @@ const saveCacheToStorage = () => {
 
 // Load cache from storage on module init
 loadCacheFromStorage();
+
+/**
+ * Evict oldest entries from cache to prevent unbounded growth
+ * Uses LRU-like eviction based on timestamp
+ * @param {Map} cache - The cache Map to evict from
+ * @param {number} maxSize - Maximum allowed entries
+ */
+const evictOldestEntries = (cache, maxSize) => {
+    if (cache.size <= maxSize) return;
+
+    // Sort by timestamp and remove oldest entries
+    const entries = Array.from(cache.entries())
+        .sort((a, b) => a[1].timestamp - b[1].timestamp);
+
+    const toRemove = entries.slice(0, cache.size - maxSize);
+    toRemove.forEach(([key]) => cache.delete(key));
+    console.log('[OptionChain] Evicted', toRemove.length, 'old cache entries');
+};
 
 /**
  * Clear option chain cache
@@ -197,6 +271,14 @@ export const formatExpiryTab = (expiryStr, index) => {
  * @returns {Promise<Object>} Option chain data with LTP, OI, etc.
  */
 export const getOptionChain = async (underlying, exchange = 'NFO', expiryDate = null, strikeCount = 15, forceRefresh = false) => {
+    // Check if symbol is known to not support F&O (negative cache)
+    if (isNonFOSymbol(underlying)) {
+        console.log('[OptionChain] Symbol known to not support F&O:', underlying);
+        const error = new Error(`${underlying} does not support F&O trading`);
+        error.code = 'NO_FO_SUPPORT';
+        throw error;
+    }
+
     const cacheKey = getCacheKey(underlying, expiryDate);
     const cached = optionChainCache.get(cacheKey);
 
@@ -223,19 +305,23 @@ export const getOptionChain = async (underlying, exchange = 'NFO', expiryDate = 
     }
 
     try {
-        // Find the underlying config to get correct index exchange
+        // Find the underlying config to get correct index exchange (for underlying price lookup)
         // For known indices (NIFTY, BANKNIFTY), use their indexExchange (NSE_INDEX/BSE_INDEX)
         // For stocks (not in UNDERLYINGS), use 'NSE' or 'BSE' directly
         const underlyingConfig = UNDERLYINGS.find(u => u.symbol === underlying);
         const indexExchange = underlyingConfig?.indexExchange || (exchange === 'BFO' ? 'BSE' : 'NSE');
 
-        console.log('[OptionChain] Fetching fresh chain:', { underlying, indexExchange, expiryDate, strikeCount });
+        // The option chain API expects the F&O exchange (NFO/BFO), not the underlying exchange
+        // The 'exchange' parameter passed to this function should already be NFO or BFO
+        const optionExchange = exchange; // NFO or BFO
+
+        console.log('[OptionChain] Fetching fresh chain:', { underlying, optionExchange, indexExchange, expiryDate, strikeCount });
 
         // Update last API call time
         lastApiCallTime = Date.now();
 
-        // Call OpenAlgo Option Chain API
-        const result = await fetchOptionChainAPI(underlying, indexExchange, expiryDate, strikeCount);
+        // Call OpenAlgo Option Chain API with the F&O exchange (NFO/BFO)
+        const result = await fetchOptionChainAPI(underlying, optionExchange, expiryDate, strikeCount);
 
         if (!result) {
             console.error('[OptionChain] API returned null');
@@ -315,6 +401,8 @@ export const getOptionChain = async (underlying, exchange = 'NFO', expiryDate = 
 
         // Store in cache only if we have valid data
         if (chain.length > 0) {
+            // Evict oldest entries if cache is at capacity
+            evictOldestEntries(optionChainCache, MAX_OPTION_CHAIN_CACHE_SIZE - 1);
             optionChainCache.set(cacheKey, {
                 data: processedData,
                 timestamp: Date.now()
@@ -326,6 +414,12 @@ export const getOptionChain = async (underlying, exchange = 'NFO', expiryDate = 
         return processedData;
     } catch (error) {
         console.error('[OptionChain] Error fetching option chain:', error);
+
+        // If symbol doesn't support F&O, add to negative cache and re-throw
+        if (error.code === 'NO_FO_SUPPORT') {
+            markAsNonFOSymbol(underlying);
+            throw error; // Re-throw so caller knows this is a non-F&O symbol
+        }
 
         // On error, return stale cache if available (better than nothing)
         if (cached) {
@@ -346,44 +440,165 @@ export const getOptionChain = async (underlying, exchange = 'NFO', expiryDate = 
     }
 };
 
+// ==================== EXPIRY CACHE ====================
+// Cache expiry dates to reduce API calls (similar to option chain cache)
+const expiryCache = new Map();
+const EXPIRY_CACHE_TTL_MS = 300000; // 5 minutes cache
+const MAX_EXPIRY_CACHE_SIZE = 30; // Max entries to prevent memory leaks
+const EXPIRY_STORAGE_KEY = 'expiryCache';
+
+// Generate expiry cache key
+const getExpiryCacheKey = (underlying, exchange, instrumenttype) =>
+    `${underlying}_${exchange}_${instrumenttype}`;
+
+// Check if expiry cache entry is still valid
+const isExpiryCacheValid = (cacheEntry) => {
+    if (!cacheEntry) return false;
+    return Date.now() - cacheEntry.timestamp < EXPIRY_CACHE_TTL_MS;
+};
+
+// Load expiry cache from localStorage on init
+const loadExpiryCacheFromStorage = () => {
+    try {
+        const stored = localStorage.getItem(EXPIRY_STORAGE_KEY);
+        if (stored) {
+            const parsed = JSON.parse(stored);
+            Object.entries(parsed).forEach(([key, value]) => {
+                expiryCache.set(key, value);
+            });
+            console.log('[OptionChain] Loaded', expiryCache.size, 'expiry cache entries from storage');
+        }
+    } catch (e) {
+        console.warn('[OptionChain] Failed to load expiry cache from storage:', e.message);
+    }
+};
+
+// Save expiry cache to localStorage
+const saveExpiryCacheToStorage = () => {
+    try {
+        const obj = Object.fromEntries(expiryCache);
+        localStorage.setItem(EXPIRY_STORAGE_KEY, JSON.stringify(obj));
+    } catch (e) {
+        console.warn('[OptionChain] Failed to save expiry cache to storage:', e.message);
+    }
+};
+
+// Load expiry cache on module init
+loadExpiryCacheFromStorage();
+
 /**
- * Get available expiries for an underlying by searching symbols
- * (Fallback when Option Chain API doesn't provide expiry list)
- * @param {string} underlying - Underlying symbol
+ * Get available expiries for an underlying using the dedicated Expiry API
+ * Uses caching to reduce API calls with fallback to symbol parsing
+ * @param {string} underlying - Underlying symbol (e.g., NIFTY, BANKNIFTY, RELIANCE, GOLD)
+ * @param {string} exchange - Exchange for the options (NFO, BFO, MCX) - defaults based on underlying
+ * @param {string} instrumenttype - Type: 'futures' or 'options' (default: 'options')
  * @returns {Promise<Array>} Array of expiry dates in DDMMMYY format
  */
-export const getAvailableExpiries = async (underlying) => {
+export const getAvailableExpiries = async (underlying, exchange = null, instrumenttype = 'options') => {
     try {
-        const allOptions = await searchSymbols(underlying);
-
-        // Parse symbols to extract unique expiries
-        const expirySet = new Set();
-
-        for (const opt of allOptions) {
-            if (!opt.symbol?.endsWith('CE') && !opt.symbol?.endsWith('PE')) continue;
-
-            // Parse symbol: UNDERLYING + DD + MMM + YY + STRIKE + TYPE
-            const withoutType = opt.symbol.slice(0, -2);
-            const match = withoutType.match(/^([A-Z]+)(\d{2})([A-Z]{3})(\d{2})(\d+)$/);
-
-            if (match && match[1] === underlying) {
-                const [, , dayStr, monthStr, yearStr] = match;
-                const expiryStr = `${dayStr}${monthStr}${yearStr}`;
-                expirySet.add(expiryStr);
+        // Determine the correct exchange for F&O based on the underlying
+        // NSE underlyings (NIFTY, BANKNIFTY, FINNIFTY, MIDCPNIFTY, stocks) -> NFO
+        // BSE underlyings (SENSEX, BANKEX) -> BFO  
+        // MCX underlyings (GOLD, SILVER, CRUDE) -> MCX
+        let foExchange = exchange;
+        if (!foExchange) {
+            const underlyingConfig = UNDERLYINGS.find(u => u.symbol === underlying);
+            if (underlyingConfig) {
+                foExchange = underlyingConfig.exchange; // NFO or BFO
+            } else {
+                // Default to NFO for unknown/stock underlyings
+                foExchange = 'NFO';
             }
         }
 
-        // Sort expiries chronologically
-        const expiries = Array.from(expirySet).sort((a, b) => {
-            const dateA = parseExpiryDate(a);
-            const dateB = parseExpiryDate(b);
-            return dateA - dateB;
+        // Check cache first
+        const cacheKey = getExpiryCacheKey(underlying, foExchange, instrumenttype);
+        const cached = expiryCache.get(cacheKey);
+
+        if (isExpiryCacheValid(cached)) {
+            console.log('[OptionChain] Using cached expiries for:', cacheKey, '(age:', Math.round((Date.now() - cached.timestamp) / 1000), 's)');
+            return cached.data;
+        }
+
+        console.log('[OptionChain] Fetching expiries for', underlying, 'on', foExchange);
+
+        // Try the dedicated expiry API first (fetchExpiryDates)
+        let expiryDates = await fetchExpiryDates(underlying, foExchange, instrumenttype);
+
+        // Fallback to getExpiry if fetchExpiryDates returns empty
+        if (!expiryDates || expiryDates.length === 0) {
+            console.log('[OptionChain] fetchExpiryDates returned empty, trying getExpiry for', underlying);
+            expiryDates = await getExpiry(underlying, foExchange, instrumenttype);
+        }
+
+        // Final fallback: Parse symbols to extract unique expiries
+        if (!expiryDates || expiryDates.length === 0) {
+            console.log('[OptionChain] Expiry APIs returned empty, falling back to symbol parsing for', underlying);
+            return await getExpiriesFromSymbolSearch(underlying);
+        }
+
+        // Convert from API format (DD-MMM-YY like "10-JUL-25") to our internal format (DDMMMYY like "10JUL25")
+        const expiries = expiryDates.map(dateStr => {
+            // Remove hyphens: "10-JUL-25" -> "10JUL25"
+            return dateStr.replace(/-/g, '');
         });
 
-        console.log('[OptionChain] Available expiries for', underlying, ':', expiries);
+        // Cache the result with LRU eviction
+        evictOldestEntries(expiryCache, MAX_EXPIRY_CACHE_SIZE - 1);
+        expiryCache.set(cacheKey, {
+            data: expiries,
+            timestamp: Date.now()
+        });
+        saveExpiryCacheToStorage();
+        console.log('[OptionChain] Cached expiries for:', cacheKey);
+
         return expiries;
     } catch (error) {
         console.error('[OptionChain] Error getting expiries:', error);
+        // Try fallback to symbol search
+        try {
+            return await getExpiriesFromSymbolSearch(underlying);
+        } catch (fallbackError) {
+            console.error('[OptionChain] Fallback symbol search also failed:', fallbackError);
+            return [];
+        }
+    }
+};
+
+/**
+ * Fallback: Get expiries by parsing option symbols
+ * @param {string} underlying - Underlying symbol
+ * @returns {Promise<Array>} Array of expiry dates in DDMMMYY format
+ */
+const getExpiriesFromSymbolSearch = async (underlying) => {
+    try {
+        // Search for option symbols to extract expiry dates
+        const symbols = await searchSymbols(underlying);
+        if (!symbols || symbols.length === 0) {
+            return [];
+        }
+
+        // Extract unique expiry dates from symbol names
+        const expirySet = new Set();
+        const expiryPattern = /(\d{2}[A-Z]{3}\d{2})/; // Pattern like "02JAN25"
+
+        symbols.forEach(sym => {
+            const match = sym.symbol?.match(expiryPattern);
+            if (match) {
+                expirySet.add(match[1]);
+            }
+        });
+
+        const expiries = Array.from(expirySet).sort((a, b) => {
+            const dateA = parseExpiryDate(a);
+            const dateB = parseExpiryDate(b);
+            return (dateA?.getTime() || 0) - (dateB?.getTime() || 0);
+        });
+
+        console.log('[OptionChain] Expiries from symbol search for', underlying, ':', expiries);
+        return expiries;
+    } catch (error) {
+        console.error('[OptionChain] Error in symbol search fallback:', error);
         return [];
     }
 };
@@ -396,6 +611,17 @@ export const getAvailableExpiries = async (underlying) => {
  */
 export const fetchOptionGreeks = async (symbol, exchange = 'NFO') => {
     return await getOptionGreeks(symbol, exchange);
+};
+
+/**
+ * Get option greeks for multiple symbols in a single batch request
+ * Much faster than individual calls - processes up to 50 symbols at once
+ * @param {Array<{symbol: string, exchange: string}>} symbols - Array of option symbols
+ * @param {Object} options - Optional parameters (interest_rate, expiry_time)
+ * @returns {Promise<Object>} Response with data array and summary
+ */
+export const fetchMultiOptionGreeks = async (symbols, options = {}) => {
+    return await getMultiOptionGreeks(symbols, options);
 };
 
 /**

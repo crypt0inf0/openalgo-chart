@@ -28,5 +28,8 @@ export { calculateVWAP } from './vwap';
 // Market Profile
 export { calculateTPO, tpoToRenderData, getTPOStats } from './tpo';
 
-// Strategy Indicators
+// First Candle Strategy
 export { calculateFirstCandle, getLatestFirstCandle } from './firstCandle';
+
+// Price Action Range Strategy
+export { calculatePriceActionRange, getLatestPriceActionRange } from './priceActionRange';

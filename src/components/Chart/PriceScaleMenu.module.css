@@ -1,0 +1,53 @@
+.menu {
+    position: fixed;
+    background-color: #ffffff;
+    border-radius: 4px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    z-index: 1000;
+    min-width: 240px;
+    padding: 4px 0;
+    font-family: -apple-system, BlinkMacSystemFont, 'Trebuchet MS', Roboto, Ubuntu, sans-serif;
+}
+
+.menuItem {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    padding: 8px 12px;
+    background: transparent;
+    border: none;
+    color: #131722;
+    font-size: 13px;
+    cursor: pointer;
+    text-align: left;
+    transition: background-color 0.1s ease;
+    gap: 12px;
+}
+
+.menuItem:hover {
+    background-color: #f0f3fa;
+}
+
+.menuItemContent {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.menuItemIcon {
+    width: 18px;
+    height: 18px;
+    color: #787B86;
+    flex-shrink: 0;
+}
+
+.menuItemText {
+    flex: 1;
+}
+
+.menuItemShortcut {
+    color: #787B86;
+    font-size: 12px;
+    margin-left: auto;
+}

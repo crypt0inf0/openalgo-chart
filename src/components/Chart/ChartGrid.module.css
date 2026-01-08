@@ -12,10 +12,15 @@
     height: 100%;
     background-color: var(--tv-color-platform-background);
     overflow: hidden;
+    border: 1px solid var(--tv-color-border, #363A45);
+    border-radius: 4px;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
 .chartWrapper.active {
-    border: 1px solid var(--tv-color-brand);
+    border: 2px solid #3f7ddb;
+    box-shadow: 0 0 0 1px rgba(74, 111, 165, 0.25);
+    background: rgba(74, 111, 165, 0.02);
     z-index: 10;
 }
 

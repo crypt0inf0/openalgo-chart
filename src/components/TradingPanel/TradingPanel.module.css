@@ -1,0 +1,331 @@
+/* Trading Panel Styles */
+.container {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    background: var(--tv-color-pane-background, #131722);
+    border-left: 1px solid var(--tv-color-border, #2A2E39);
+    height: 100%;
+    overflow: hidden;
+    font-size: 13px;
+    user-select: none;
+}
+
+/* Header */
+.header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 12px;
+    background: var(--tv-color-toolbar-background, #1E222D);
+    border-bottom: 1px solid var(--tv-color-border, #2A2E39);
+}
+
+.title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 600;
+    color: var(--tv-color-text-primary, #D1D4DC);
+}
+
+.headerActions {
+    display: flex;
+    gap: 4px;
+}
+
+.iconBtn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+    background: transparent;
+    border: none;
+    border-radius: 4px;
+    color: var(--tv-color-text-secondary, #787B86);
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.iconBtn:hover {
+    background: var(--tv-color-toolbar-button-background-hover, rgba(255, 255, 255, 0.1));
+    color: var(--tv-color-text-primary, #D1D4DC);
+}
+
+/* Symbol Info Section */
+.symbolSection {
+    padding: 16px 16px 8px;
+}
+
+.symbolInfo {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: 4px;
+}
+
+.symbolName {
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--tv-color-text-primary, #D1D4DC);
+}
+
+.exchange {
+    font-size: 10px;
+    padding: 2px 4px;
+    background: rgba(41, 98, 255, 0.15);
+    color: var(--tv-color-brand, #2962FF);
+    border-radius: 3px;
+    margin-left: 6px;
+    vertical-align: middle;
+}
+
+.priceDisplay {
+    text-align: right;
+}
+
+.ltp {
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--tv-color-text-primary, #D1D4DC);
+}
+
+.priceChange {
+    font-size: 12px;
+    font-weight: 500;
+}
+
+.positive {
+    color: #22c55e;
+}
+
+.negative {
+    color: #ef4444;
+}
+
+/* Tabs (Order / DOM placeholder) */
+.tabs {
+    display: flex;
+    border-bottom: 1px solid var(--tv-color-border, #2A2E39);
+    margin-bottom: 16px;
+    padding: 0 16px;
+}
+
+.tab {
+    padding: 10px 0;
+    margin-right: 20px;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--tv-color-text-secondary, #787B86);
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    transition: color 0.2s, border-color 0.2s;
+}
+
+.tab:hover {
+    color: var(--tv-color-text-primary, #D1D4DC);
+}
+
+.activeTab {
+    color: var(--tv-color-brand, #2962FF);
+    border-bottom-color: var(--tv-color-brand, #2962FF);
+}
+
+/* Action Toggles (Buy/Sell) */
+.actionToggles {
+    display: flex;
+    margin: 0 16px 16px;
+    background: var(--tv-color-toolbar-background, #2A2E39);
+    /* Darker background */
+    border-radius: 4px;
+    /* padding: 2px; */
+    overflow: hidden;
+}
+
+.actionBtn {
+    flex: 1;
+    padding: 8px 0;
+    border: none;
+    background: transparent;
+    color: var(--tv-color-text-secondary, #787B86);
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.actionBtn.activeBuy {
+    background: #2962FF;
+    /* Blue for consistency or Green? TV uses Blue/Red usually */
+    background: #089981;
+    /* Green for Buy */
+    color: white;
+}
+
+.actionBtn.activeSell {
+    background: #F23645;
+    /* Red for Sell */
+    color: white;
+}
+
+/* Form Container */
+.form {
+    padding: 0 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    flex: 1;
+    overflow-y: auto;
+}
+
+/* Input Groups */
+.inputGroup {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.label {
+    font-size: 11px;
+    color: var(--tv-color-text-secondary, #787B86);
+    text-transform: uppercase;
+    font-weight: 600;
+}
+
+.inputWrapper {
+    display: flex;
+    align-items: center;
+    background: var(--tv-color-toolbar-background, #2A2E39);
+    border: 1px solid transparent;
+    border-radius: 4px;
+    padding: 0 8px;
+    transition: border-color 0.2s;
+}
+
+.inputWrapper:focus-within {
+    border-color: var(--tv-color-brand, #2962FF);
+}
+
+.input {
+    flex: 1;
+    background: transparent;
+    border: none;
+    color: var(--tv-color-text-primary, #D1D4DC);
+    padding: 8px 0;
+    font-size: 13px;
+    width: 100%;
+    outline: none;
+}
+
+/* Chrome, Safari, Edge, Opera - Remove arrows from number input */
+.input::-webkit-outer-spin-button,
+.input::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
+/* Firefox */
+.input[type=number] {
+    -moz-appearance: textfield;
+}
+
+.unit {
+    color: var(--tv-color-text-secondary, #787B86);
+    font-size: 11px;
+    margin-left: 4px;
+}
+
+/* Select Dropdown styling */
+.select {
+    width: 100%;
+    background: var(--tv-color-toolbar-background, #2A2E39);
+    color: var(--tv-color-text-primary, #D1D4DC);
+    border: 1px solid transparent;
+    border-radius: 4px;
+    padding: 8px;
+    font-size: 13px;
+    outline: none;
+    cursor: pointer;
+}
+
+.select:focus {
+    border-color: var(--tv-color-brand, #2962FF);
+}
+
+/* Order Type Buttons (Market, Limit...) */
+.typeTabs {
+    display: flex;
+    gap: 4px;
+    margin-bottom: 4px;
+}
+
+.typeTab {
+    flex: 1;
+    padding: 4px;
+    font-size: 11px;
+    text-align: center;
+    cursor: pointer;
+    border-radius: 4px;
+    color: var(--tv-color-text-secondary, #787B86);
+    background: transparent;
+    border: 1px solid transparent;
+}
+
+.typeTab:hover {
+    color: var(--tv-color-text-primary, #D1D4DC);
+    background: var(--tv-color-toolbar-button-background-hover, rgba(255, 255, 255, 0.05));
+    border-color: var(--tv-color-border, #2A2E39);
+}
+
+.activeType {
+    background: rgba(41, 98, 255, 0.1);
+    color: var(--tv-color-brand, #2962FF);
+    border-color: rgba(41, 98, 255, 0.3);
+}
+
+/* Margin Info */
+.marginInfo {
+    margin-top: auto;
+    padding: 12px 16px;
+    border-top: 1px solid var(--tv-color-border, #2A2E39);
+    font-size: 11px;
+    color: var(--tv-color-text-secondary, #787B86);
+    display: flex;
+    justify-content: space-between;
+}
+
+/* Main Action Button */
+.footer {
+    padding: 16px;
+    border-top: 1px solid var(--tv-color-border, #2A2E39);
+}
+
+.submitBtn {
+    width: 100%;
+    padding: 10px;
+    border: none;
+    border-radius: 4px;
+    font-weight: 600;
+    font-size: 14px;
+    cursor: pointer;
+    transition: opacity 0.2s;
+}
+
+.submitBtn:hover {
+    opacity: 0.9;
+}
+
+.submitBtn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.btnBuy {
+    background: #089981;
+    color: white;
+}
+
+.btnSell {
+    background: #F23645;
+    color: white;
+}

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { X, TrendingUp, Loader2, RefreshCw, Check, ChevronLeft, ChevronRight, ChevronDown, Settings2, Plus, Trash2 } from 'lucide-react';
-import { getOptionChain, getAvailableExpiries, UNDERLYINGS, getDaysToExpiry, parseExpiryDate, fetchOptionGreeks, clearOptionChainCache } from '../../services/optionChain';
+import { getOptionChain, getAvailableExpiries, UNDERLYINGS, getDaysToExpiry, parseExpiryDate, fetchOptionGreeks, fetchMultiOptionGreeks, clearOptionChainCache } from '../../services/optionChain';
 import { subscribeToMultiTicker } from '../../services/openalgo';
 import { STRATEGY_TEMPLATES, applyTemplate, validateStrategy, calculateNetPremium, formatStrategyName, generateLegId } from '../../services/strategyTemplates';
 import styles from './OptionChainPicker.module.css';
@@ -57,6 +57,10 @@ const OptionChainPicker = ({ isOpen, onClose, onSelect }) => {
     });
     const oiFetchAbortRef = useRef(false);
 
+    // Request tracking refs to prevent stale responses when switching symbols
+    const expiryRequestIdRef = useRef(0);
+    const chainRequestIdRef = useRef(0);
+
     // Close dropdown on outside click
     useEffect(() => {
         const handleClickOutside = (e) => {
@@ -70,33 +74,65 @@ const OptionChainPicker = ({ isOpen, onClose, onSelect }) => {
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, [addOnsOpen]);
 
-    // Fetch available expiries when underlying changes
+    // Fetch available expiries when underlying changes with stale response protection
     const fetchExpiries = useCallback(async () => {
+        // Increment request ID and capture current value
+        const requestId = ++expiryRequestIdRef.current;
+        const currentSymbol = underlying.symbol;
+        const currentExchange = underlying.exchange;
+
+        console.log('[OptionChainPicker] Fetching expiries for', currentSymbol, 'requestId:', requestId);
         setIsLoadingExpiries(true);
+
         try {
-            const expiries = await getAvailableExpiries(underlying.symbol);
+            const expiries = await getAvailableExpiries(currentSymbol, currentExchange);
+
+            // Check if this request is still current
+            if (requestId !== expiryRequestIdRef.current) {
+                console.log('[OptionChainPicker] Discarding stale expiry response for', currentSymbol);
+                return;
+            }
+
             setAvailableExpiries(expiries);
             if (expiries.length > 0) {
                 setSelectedExpiry(expiries[0]);
                 setExpiryScrollIndex(0);
             }
         } catch (err) {
-            console.error('Failed to fetch expiries:', err);
-            setAvailableExpiries([]);
+            if (requestId === expiryRequestIdRef.current) {
+                console.error('Failed to fetch expiries:', err);
+                setAvailableExpiries([]);
+            }
         } finally {
-            setIsLoadingExpiries(false);
+            if (requestId === expiryRequestIdRef.current) {
+                setIsLoadingExpiries(false);
+            }
         }
-    }, [underlying]);
+    }, [underlying.symbol, underlying.exchange]);
 
-    // Fetch option chain when underlying or expiry changes
+    // Fetch option chain when underlying or expiry changes with stale response protection
     const fetchChain = useCallback(async (forceRefresh = false) => {
         if (!selectedExpiry) return;
 
+        // Increment request ID and capture current value
+        const requestId = ++chainRequestIdRef.current;
+        const currentSymbol = underlying.symbol;
+        const currentExchange = underlying.exchange;
+        const currentExpiry = selectedExpiry;
+
+        console.log('[OptionChainPicker] Fetching chain for', currentSymbol, currentExpiry, 'requestId:', requestId);
         setIsLoading(true);
         setError(null);
         setGreeksData({});
+
         try {
-            const chain = await getOptionChain(underlying.symbol, underlying.exchange, selectedExpiry, strikeCount, forceRefresh);
+            const chain = await getOptionChain(currentSymbol, currentExchange, currentExpiry, strikeCount, forceRefresh);
+
+            // Check if this request is still current
+            if (requestId !== chainRequestIdRef.current) {
+                console.log('[OptionChainPicker] Discarding stale chain response for', currentSymbol);
+                return;
+            }
 
             // DEBUG: Log API response structure
             console.log('[OptionChainPicker] API returned:', {
@@ -115,12 +151,12 @@ const OptionChainPicker = ({ isOpen, onClose, onSelect }) => {
             if (!chain || chain.chain?.length === 0) {
                 const reason = !chain ? 'null_response'
                     : !chain.chain ? 'missing_chain_array'
-                    : 'empty_chain_array';
+                        : 'empty_chain_array';
                 console.error('[OptionChainPicker] Empty chain:', {
                     reason,
                     chainValue: chain,
-                    underlying: underlying.symbol,
-                    expiry: selectedExpiry
+                    underlying: currentSymbol,
+                    expiry: currentExpiry
                 });
                 setError(`⚠️ No data available (${reason}). Please wait 30-60 seconds and try again.`);
                 setOptionChain(null);
@@ -130,25 +166,28 @@ const OptionChainPicker = ({ isOpen, onClose, onSelect }) => {
             setOptionChain(chain);
             setLegs([]); // Clear legs when chain changes
         } catch (err) {
-            // DEBUG: Log full error details
-            console.error('[OptionChainPicker] Fetch error:', {
-                message: err.message,
-                name: err.name,
-                underlying: underlying.symbol,
-                expiry: selectedExpiry,
-                fullError: err
-            });
+            // Only handle error if request is still current
+            if (requestId === chainRequestIdRef.current) {
+                console.error('[OptionChainPicker] Fetch error:', {
+                    message: err.message,
+                    name: err.name,
+                    underlying: currentSymbol,
+                    expiry: currentExpiry,
+                    fullError: err
+                });
 
-            // Check for rate limit errors (500 or explicit rate limit message)
-            if (err.message?.includes('500') || err.message?.includes('rate limit')) {
-                setError('⚠️ Broker rate limit hit. Please wait 30-60 seconds and try again.');
-            } else {
-                setError('Failed to fetch option chain');
+                if (err.message?.includes('500') || err.message?.includes('rate limit')) {
+                    setError('⚠️ Broker rate limit hit. Please wait 30-60 seconds and try again.');
+                } else {
+                    setError('Failed to fetch option chain');
+                }
             }
         } finally {
-            setIsLoading(false);
+            if (requestId === chainRequestIdRef.current) {
+                setIsLoading(false);
+            }
         }
-    }, [underlying, selectedExpiry, strikeCount]);
+    }, [underlying.symbol, underlying.exchange, selectedExpiry, strikeCount]);
 
     // Force refresh - clears cache and refetches
     const handleForceRefresh = useCallback(() => {
@@ -212,53 +251,53 @@ const OptionChainPicker = ({ isOpen, onClose, onSelect }) => {
         }));
     }, [availableExpiries, underlying, strikeCount]);
 
-    // Delay helper to avoid API rate limits
-    const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
-
-    // Fetch Greeks for all strikes with rate limiting
+    // Fetch Greeks for all strikes using batch API (much faster than individual calls)
     const fetchGreeks = useCallback(async (chainRows) => {
         if (!chainRows?.length) return;
 
         setIsLoadingGreeks(true);
-        const results = {};
+        console.log('[Greeks] Using batch API for', chainRows.length, 'strikes');
 
-        const limitedRows = chainRows.slice(0, Math.min(chainRows.length, 15));
-        console.log('[Greeks] Fetching Greeks for', limitedRows.length, 'strikes');
+        try {
+            // Build symbols array for batch request (CE + PE for each row)
+            const symbols = chainRows.slice(0, 25).flatMap(row => [  // Max 50 symbols (25 rows × 2)
+                row.ce?.symbol && { symbol: row.ce.symbol, exchange: underlying.exchange },
+                row.pe?.symbol && { symbol: row.pe.symbol, exchange: underlying.exchange }
+            ].filter(Boolean));
 
-        for (const row of limitedRows) {
-            if (row.ce?.symbol) {
-                try {
-                    const ceGreeks = await fetchOptionGreeks(row.ce.symbol, underlying.exchange);
-                    if (ceGreeks) {
-                        results[row.ce.symbol] = {
-                            delta: ceGreeks.greeks?.delta,
-                            iv: ceGreeks.implied_volatility
+            if (symbols.length === 0) {
+                setIsLoadingGreeks(false);
+                return;
+            }
+
+            console.log('[Greeks] Batch request for', symbols.length, 'symbols');
+
+            // Single batch API call instead of 30+ individual calls
+            const response = await fetchMultiOptionGreeks(symbols);
+
+            if (response && response.data) {
+                const results = {};
+
+                // Map response data to results object
+                response.data.forEach(item => {
+                    if (item.status === 'success' && item.symbol) {
+                        results[item.symbol] = {
+                            delta: item.greeks?.delta,
+                            iv: item.implied_volatility
                         };
                     }
-                } catch (e) {
-                    console.warn('[Greeks] CE failed:', row.ce.symbol, e.message);
-                }
-                await delay(2000);
+                });
+
+                console.log('[Greeks] Batch results:', response.summary, '- Loaded', Object.keys(results).length, 'symbols');
+                setGreeksData(results);
+            } else {
+                console.warn('[Greeks] Batch API returned empty response');
             }
-            if (row.pe?.symbol) {
-                try {
-                    const peGreeks = await fetchOptionGreeks(row.pe.symbol, underlying.exchange);
-                    if (peGreeks) {
-                        results[row.pe.symbol] = {
-                            delta: peGreeks.greeks?.delta,
-                            iv: peGreeks.implied_volatility
-                        };
-                    }
-                } catch (e) {
-                    console.warn('[Greeks] PE failed:', row.pe.symbol, e.message);
-                }
-                await delay(2000);
-            }
-            setGreeksData({ ...results });
+        } catch (error) {
+            console.error('[Greeks] Batch API error:', error);
+        } finally {
+            setIsLoadingGreeks(false);
         }
-
-        console.log('[Greeks] Results:', Object.keys(results).length, 'symbols loaded');
-        setIsLoadingGreeks(false);
     }, [underlying.exchange]);
 
     useEffect(() => {

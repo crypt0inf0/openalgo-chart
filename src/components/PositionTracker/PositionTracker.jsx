@@ -1,17 +1,29 @@
 import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import classNames from 'classnames';
-import { Plus, X, Search, Upload } from 'lucide-react';
+import { Plus, X, Search } from 'lucide-react';
 import styles from './PositionTracker.module.css';
 import PositionTrackerItem from './PositionTrackerItem';
 import PositionTrackerHeader from './PositionTrackerHeader';
-import { getSector } from './sectorMapping';
+import { SECTORS, getSector } from './sectorMapping';
 
 // Market timing constants (IST)
 const MARKET_OPEN = { hour: 9, minute: 15 };
 const MARKET_CLOSE = { hour: 15, minute: 30 };
 
-// Top N filter options
+// Top N options for gainers/losers filter
 const TOP_N_OPTIONS = [5, 10, 15, 20];
+
+// Default column widths
+const DEFAULT_COLUMN_WIDTHS = {
+  rank: 32,
+  move: 40,
+  symbol: 80,
+  ltp: 70,
+  change: 60,
+  volume: 55,
+};
+
+const MIN_COLUMN_WIDTH = 35;
 
 const getMarketStatus = () => {
   const now = new Date();
@@ -37,48 +49,31 @@ const getMarketStatus = () => {
 };
 
 const PositionTracker = ({
-  // List management props
-  lists,
-  activeListId,
-  activeList,
-  onSwitchList,
-  onCreateList,
-  onRenameList,
-  onDeleteList,
-  onCopyList,
-  onClearList,
-  // Settings props
   sourceMode,
-  onSourceModeChange,
-  // Symbol management
   customSymbols,
-  onCustomSymbolsChange,
-  // Filter props (from active list)
-  filterMode,
-  sectorFilter,
-  topNCount,
-  onFilterChange,
-  // Data props
   watchlistData,        // Live data from App.jsx (already fetched)
   isLoading,            // Loading state from App.jsx
+  onSourceModeChange,
+  onCustomSymbolsChange,
   onSymbolSelect,
   isAuthenticated,
 }) => {
   const [showAddSymbol, setShowAddSymbol] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [marketState, setMarketState] = useState(() => getMarketStatus());
-  const [showImportPanel, setShowImportPanel] = useState(false);
-  const [importText, setImportText] = useState('');
+  const [filterMode, setFilterMode] = useState('all'); // 'all' | 'gainers' | 'losers'
+  const [sectorFilter, setSectorFilter] = useState('All');
+  const [topNCount, setTopNCount] = useState(10);
+  const [focusedIndex, setFocusedIndex] = useState(-1); // Keyboard navigation
+  const [columnWidths, setColumnWidths] = useState(DEFAULT_COLUMN_WIDTHS);
+  const [resizing, setResizing] = useState(null);
   const searchInputRef = useRef(null);
-  const fileInputRef = useRef(null);
+  const listRef = useRef(null);
   const previousRanksRef = useRef(new Map());
   const openingRanksRef = useRef(new Map()); // Stores rank at market open (9:15 AM)
   const hasSetOpeningRanks = useRef(false);  // Flag to capture only once per day
-
-  // Default filter values if not provided
-  const currentFilterMode = filterMode || 'all';
-  const currentSectorFilter = sectorFilter || 'All';
-  const currentTopNCount = topNCount || 10;
+  const startXRef = useRef(0);
+  const startWidthRef = useRef(0);
 
   // Update market status every minute
   useEffect(() => {
@@ -93,6 +88,40 @@ const PositionTracker = ({
       searchInputRef.current.focus();
     }
   }, [showAddSymbol]);
+
+  // Column resize handlers
+  const handleResizeStart = useCallback((e, column) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setResizing(column);
+    startXRef.current = e.clientX;
+    startWidthRef.current = columnWidths[column];
+  }, [columnWidths]);
+
+  useEffect(() => {
+    if (!resizing) return;
+
+    const handleMouseMove = (e) => {
+      const diff = e.clientX - startXRef.current;
+      const newWidth = Math.max(MIN_COLUMN_WIDTH, startWidthRef.current + diff);
+      setColumnWidths(prev => ({
+        ...prev,
+        [resizing]: newWidth
+      }));
+    };
+
+    const handleMouseUp = () => {
+      setResizing(null);
+    };
+
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [resizing]);
 
   // Calculate % change from opening price (intraday) instead of prev_close
   const calculateIntradayChange = (item) => {
@@ -123,34 +152,21 @@ const PositionTracker = ({
         sector: getSector(item.symbol),
       }));
     } else {
-      // Custom mode - ONLY show symbols from this list's customSymbols
-      // Get live price data from watchlistData if available
-      dataToRank = (customSymbols || []).map(s => {
-        const liveData = (watchlistData || []).find(
-          item => item.symbol === s.symbol && (item.exchange || 'NSE') === (s.exchange || 'NSE')
-        );
-        if (liveData) {
-          return {
-            symbol: liveData.symbol,
-            exchange: liveData.exchange || 'NSE',
-            ltp: parseFloat(liveData.last) || 0,
-            openPrice: parseFloat(liveData.open) || 0,
-            volume: parseFloat(liveData.volume) || 0,
-            percentChange: calculateIntradayChange(liveData),
-            sector: getSector(liveData.symbol),
-          };
-        }
-        // No live data yet - show placeholder
-        return {
-          symbol: s.symbol,
-          exchange: s.exchange || 'NSE',
-          ltp: 0,
-          openPrice: 0,
-          volume: 0,
-          percentChange: 0,
-          sector: getSector(s.symbol),
-        };
-      });
+      // Custom mode - filter watchlistData to only show custom symbols
+      const customSet = new Set(
+        (customSymbols || []).map(s => `${s.symbol}-${s.exchange || 'NSE'}`)
+      );
+      dataToRank = (watchlistData || [])
+        .filter(item => customSet.has(`${item.symbol}-${item.exchange || 'NSE'}`))
+        .map(item => ({
+          symbol: item.symbol,
+          exchange: item.exchange || 'NSE',
+          ltp: parseFloat(item.last) || 0,
+          openPrice: parseFloat(item.open) || 0,
+          volume: parseFloat(item.volume) || 0,
+          percentChange: calculateIntradayChange(item),
+          sector: getSector(item.symbol),
+        }));
     }
 
     // Sort by percent change (descending - highest gainers first)
@@ -216,49 +232,35 @@ const PositionTracker = ({
     });
   }, [rankedData]);
 
-  // Compute available sectors dynamically from the current list's data
-  const availableSectors = useMemo(() => {
-    const sectorSet = new Set();
-    displayData.forEach(item => {
-      if (item.sector) {
-        sectorSet.add(item.sector);
-      }
-    });
-    // Sort sectors alphabetically, but keep "Other" at the end
-    const sectors = Array.from(sectorSet).sort((a, b) => {
-      if (a === 'Other') return 1;
-      if (b === 'Other') return -1;
-      return a.localeCompare(b);
-    });
-    return ['All', ...sectors];
-  }, [displayData]);
-
-  // Apply filters (sector + gainers/losers)
+  // Filter data based on sector and filter mode
   const filteredData = useMemo(() => {
+    // Apply sector filter first
     let data = displayData;
-
-    // Apply sector filter
-    if (currentSectorFilter !== 'All') {
-      data = data.filter(item => item.sector === currentSectorFilter);
+    if (sectorFilter !== 'All') {
+      data = data.filter(item => item.sector === sectorFilter);
     }
 
-    // Apply gainers/losers filter
-    if (currentFilterMode === 'gainers') {
+    // Then apply gainers/losers filter
+    if (filterMode === 'all') return data;
+
+    if (filterMode === 'gainers') {
+      // Filter positive % change, sort descending, take top N
       return data
         .filter(item => item.percentChange > 0)
         .sort((a, b) => b.percentChange - a.percentChange)
-        .slice(0, currentTopNCount);
+        .slice(0, topNCount);
     }
 
-    if (currentFilterMode === 'losers') {
+    if (filterMode === 'losers') {
+      // Filter negative % change, sort by most negative first, take top N
       return data
         .filter(item => item.percentChange < 0)
         .sort((a, b) => a.percentChange - b.percentChange)
-        .slice(0, currentTopNCount);
+        .slice(0, topNCount);
     }
 
     return data;
-  }, [displayData, currentFilterMode, currentSectorFilter, currentTopNCount]);
+  }, [displayData, filterMode, sectorFilter, topNCount]);
 
   const handleAddSymbol = useCallback((symbol, exchange = 'NSE') => {
     if (sourceMode !== 'custom') return;
@@ -285,79 +287,28 @@ const PositionTracker = ({
     onSymbolSelect({ symbol: item.symbol, exchange: item.exchange });
   }, [onSymbolSelect]);
 
-  // Parse symbols from text (handles comma, newline, space separated)
-  const parseSymbols = useCallback((text) => {
-    if (!text || typeof text !== 'string') return [];
+  // Keyboard navigation handler
+  const handleKeyDown = useCallback((e) => {
+    if (filteredData.length === 0) return;
 
-    // Split by newlines, commas, or multiple spaces
-    const parts = text
-      .split(/[\n,\s]+/)
-      .map(s => s.trim().toUpperCase())
-      .filter(s => s.length > 0 && /^[A-Z0-9&-]+$/.test(s)); // Valid symbol chars
-
-    // Dedupe
-    const unique = [...new Set(parts)];
-
-    return unique.map(symbol => ({ symbol, exchange: 'NSE' }));
-  }, []);
-
-  // Handle import from text
-  const handleImportText = useCallback(() => {
-    if (!importText.trim()) return;
-
-    const newSymbols = parseSymbols(importText);
-    if (newSymbols.length === 0) return;
-
-    // Merge with existing, avoiding duplicates
-    const existingSet = new Set(
-      (customSymbols || []).map(s => `${s.symbol}-${s.exchange}`)
-    );
-
-    const toAdd = newSymbols.filter(
-      s => !existingSet.has(`${s.symbol}-${s.exchange}`)
-    );
-
-    if (toAdd.length > 0) {
-      onCustomSymbolsChange([...(customSymbols || []), ...toAdd]);
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setFocusedIndex(prev => prev < 0 ? 0 : Math.min(prev + 1, filteredData.length - 1));
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setFocusedIndex(prev => prev < 0 ? 0 : Math.max(prev - 1, 0));
+    } else if (e.key === 'Enter' && focusedIndex >= 0 && focusedIndex < filteredData.length) {
+      e.preventDefault();
+      const item = filteredData[focusedIndex];
+      if (item) onSymbolSelect({ symbol: item.symbol, exchange: item.exchange });
     }
+  }, [filteredData, focusedIndex, onSymbolSelect]);
 
-    setImportText('');
-    setShowImportPanel(false);
-  }, [importText, customSymbols, onCustomSymbolsChange, parseSymbols]);
-
-  // Handle CSV file import
-  const handleFileImport = useCallback((event) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const text = e.target?.result;
-      if (typeof text !== 'string') return;
-
-      const newSymbols = parseSymbols(text);
-      if (newSymbols.length === 0) return;
-
-      // Merge with existing, avoiding duplicates
-      const existingSet = new Set(
-        (customSymbols || []).map(s => `${s.symbol}-${s.exchange}`)
-      );
-
-      const toAdd = newSymbols.filter(
-        s => !existingSet.has(`${s.symbol}-${s.exchange}`)
-      );
-
-      if (toAdd.length > 0) {
-        onCustomSymbolsChange([...(customSymbols || []), ...toAdd]);
-      }
-
-      setShowImportPanel(false);
-    };
-    reader.readAsText(file);
-
-    // Reset file input so same file can be selected again
-    event.target.value = '';
-  }, [customSymbols, onCustomSymbolsChange, parseSymbols]);
+  // Click handler that also updates focusedIndex
+  const handleItemClick = useCallback((item, index) => {
+    setFocusedIndex(index);
+    onSymbolSelect({ symbol: item.symbol, exchange: item.exchange });
+  }, [onSymbolSelect]);
 
   // Render loading skeleton
   const renderSkeleton = () => (
@@ -399,80 +350,65 @@ const PositionTracker = ({
         marketStatus={marketState.status}
         isMarketOpen={marketState.isOpen}
         symbolCount={rankedData.length}
-        // List management props
-        lists={lists}
-        activeListId={activeListId}
-        activeList={activeList}
-        onSwitchList={onSwitchList}
-        onCreateList={onCreateList}
-        onRenameList={onRenameList}
-        onDeleteList={onDeleteList}
-        onCopyList={onCopyList}
-        onClearList={onClearList}
       />
 
       {/* Filter Tabs */}
       <div className={styles.filterTabs}>
         <button
-          className={classNames(styles.filterTab, currentFilterMode === 'all' && styles.filterTabActive)}
-          onClick={() => onFilterChange?.({ filterMode: 'all' })}
+          className={`${styles.filterTab} ${filterMode === 'all' ? styles.filterTabActive : ''}`}
+          onClick={() => setFilterMode('all')}
         >
           All
         </button>
         <button
-          className={classNames(
-            styles.filterTab,
-            styles.filterTabGainers,
-            currentFilterMode === 'gainers' && styles.filterTabActive
-          )}
-          onClick={() => onFilterChange?.({ filterMode: 'gainers' })}
+          className={`${styles.filterTab} ${styles.filterTabGainers} ${filterMode === 'gainers' ? styles.filterTabActive : ''}`}
+          onClick={() => setFilterMode('gainers')}
         >
-          Top {currentTopNCount} Gainers
+          Top {topNCount} Gainers
         </button>
         <button
-          className={classNames(
-            styles.filterTab,
-            styles.filterTabLosers,
-            currentFilterMode === 'losers' && styles.filterTabActive
-          )}
-          onClick={() => onFilterChange?.({ filterMode: 'losers' })}
+          className={`${styles.filterTab} ${styles.filterTabLosers} ${filterMode === 'losers' ? styles.filterTabActive : ''}`}
+          onClick={() => setFilterMode('losers')}
         >
-          Top {currentTopNCount} Losers
+          Top {topNCount} Losers
         </button>
-        {currentFilterMode !== 'all' && (
-          <select
-            className={styles.topNSelect}
-            value={currentTopNCount}
-            onChange={(e) => onFilterChange?.({ topNCount: Number(e.target.value) })}
-          >
-            {TOP_N_OPTIONS.map(n => (
-              <option key={n} value={n}>{n}</option>
-            ))}
-          </select>
-        )}
+        <select
+          className={styles.topNSelect}
+          value={topNCount}
+          onChange={(e) => setTopNCount(Number(e.target.value))}
+        >
+          {TOP_N_OPTIONS.map(n => (
+            <option key={n} value={n}>Top {n}</option>
+          ))}
+        </select>
       </div>
 
-      {/* Sector Filter - Dynamic based on stocks in current list */}
+      {/* Sector Filter */}
       <div className={styles.sectorFilter}>
         <select
           className={styles.sectorSelect}
-          value={currentSectorFilter}
-          onChange={(e) => onFilterChange?.({ sectorFilter: e.target.value })}
+          value={sectorFilter}
+          onChange={(e) => setSectorFilter(e.target.value)}
         >
-          {availableSectors.map(sector => (
+          {SECTORS.map(sector => (
             <option key={sector} value={sector}>{sector}</option>
           ))}
         </select>
       </div>
 
       {/* Column Headers */}
-      <div className={styles.columnHeaders}>
-        <span className={styles.colRank}>#</span>
-        <span className={styles.colMove}>Move</span>
-        <span className={styles.colSymbol}>Symbol</span>
-        <span className={styles.colLtp}>LTP</span>
-        <span className={styles.colChange}>% Chg</span>
-        <span className={styles.colVolume}>Vol</span>
+      <div className={classNames(styles.columnHeaders, { [styles.isResizing]: resizing })}>
+        <span className={styles.colRank} style={{ width: columnWidths.rank, minWidth: MIN_COLUMN_WIDTH }}>#</span>
+        <div className={styles.resizeHandle} onMouseDown={(e) => handleResizeStart(e, 'rank')} />
+        <span className={styles.colMove} style={{ width: columnWidths.move, minWidth: MIN_COLUMN_WIDTH }}>Move</span>
+        <div className={styles.resizeHandle} onMouseDown={(e) => handleResizeStart(e, 'move')} />
+        <span className={styles.colSymbol} style={{ width: columnWidths.symbol, minWidth: MIN_COLUMN_WIDTH }}>Symbol</span>
+        <div className={styles.resizeHandle} onMouseDown={(e) => handleResizeStart(e, 'symbol')} />
+        <span className={styles.colLtp} style={{ width: columnWidths.ltp, minWidth: MIN_COLUMN_WIDTH }}>LTP</span>
+        <div className={styles.resizeHandle} onMouseDown={(e) => handleResizeStart(e, 'ltp')} />
+        <span className={styles.colChange} style={{ width: columnWidths.change, minWidth: MIN_COLUMN_WIDTH }}>% Chg</span>
+        <div className={styles.resizeHandle} onMouseDown={(e) => handleResizeStart(e, 'change')} />
+        <span className={styles.colVolume} style={{ width: columnWidths.volume, minWidth: MIN_COLUMN_WIDTH }}>Vol</span>
         {sourceMode === 'custom' && <span className={styles.colAction} />}
       </div>
 
@@ -490,71 +426,31 @@ const PositionTracker = ({
         ) : filteredData.length === 0 ? (
           renderEmptyState()
         ) : (
-          <div className={styles.itemList}>
-            {filteredData.map((item) => (
+          <div
+            className={styles.itemList}
+            ref={listRef}
+            tabIndex={0}
+            onKeyDown={handleKeyDown}
+          >
+            {filteredData.map((item, index) => (
               <PositionTrackerItem
                 key={`${item.symbol}-${item.exchange}`}
                 item={item}
-                onClick={() => handleRowClick(item)}
+                isFocused={index === focusedIndex}
+                onClick={() => handleItemClick(item, index)}
                 onRemove={sourceMode === 'custom' ? () => handleRemoveSymbol(item.symbol, item.exchange) : null}
                 showRemove={sourceMode === 'custom'}
+                columnWidths={columnWidths}
               />
             ))}
           </div>
         )}
       </div>
 
-      {/* Add Symbol / Import Section (Custom mode only) */}
+      {/* Add Symbol Button (Custom mode only) */}
       {sourceMode === 'custom' && isAuthenticated && (
         <div className={styles.footer}>
-          {showImportPanel ? (
-            <div className={styles.importPanel}>
-              <div className={styles.importHeader}>
-                <span>Import Symbols</span>
-                <button
-                  className={styles.closeBtn}
-                  onClick={() => {
-                    setShowImportPanel(false);
-                    setImportText('');
-                  }}
-                >
-                  <X size={14} />
-                </button>
-              </div>
-              <div className={styles.importBody}>
-                <textarea
-                  className={styles.importTextarea}
-                  placeholder="Paste symbols (one per line or comma-separated)&#10;e.g., RELIANCE, TCS, INFY"
-                  value={importText}
-                  onChange={(e) => setImportText(e.target.value)}
-                  rows={4}
-                />
-                <div className={styles.importActions}>
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept=".csv,.txt"
-                    className={styles.hiddenFileInput}
-                    onChange={handleFileImport}
-                  />
-                  <button
-                    className={styles.uploadBtn}
-                    onClick={() => fileInputRef.current?.click()}
-                  >
-                    <Upload size={14} />
-                    <span>Upload CSV</span>
-                  </button>
-                  <button
-                    className={styles.addSymbolsBtn}
-                    onClick={handleImportText}
-                    disabled={!importText.trim()}
-                  >
-                    Add Symbols
-                  </button>
-                </div>
-              </div>
-            </div>
-          ) : showAddSymbol ? (
+          {showAddSymbol ? (
             <div className={styles.addSymbolPanel}>
               <div className={styles.searchInputWrapper}>
                 <Search size={14} className={styles.searchIcon} />
@@ -587,22 +483,13 @@ const PositionTracker = ({
               <p className={styles.addHint}>Press Enter to add, Escape to cancel</p>
             </div>
           ) : (
-            <div className={styles.footerButtons}>
-              <button
-                className={styles.addButton}
-                onClick={() => setShowAddSymbol(true)}
-              >
-                <Plus size={16} />
-                <span>Add Symbol</span>
-              </button>
-              <button
-                className={styles.importButton}
-                onClick={() => setShowImportPanel(true)}
-              >
-                <Upload size={16} />
-                <span>Import</span>
-              </button>
-            </div>
+            <button
+              className={styles.addButton}
+              onClick={() => setShowAddSymbol(true)}
+            >
+              <Plus size={16} />
+              <span>Add Symbol</span>
+            </button>
           )}
         </div>
       )}

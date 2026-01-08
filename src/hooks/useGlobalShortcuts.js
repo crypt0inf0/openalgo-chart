@@ -51,7 +51,19 @@ export function useGlobalShortcuts(handlers = {}, options = {}) {
             }
         }
 
-        if (!matchedShortcut || !matchedId) return;
+        // If no defined shortcut matched, check for alphabetic keys to open search
+        if (!matchedShortcut || !matchedId) {
+            // Only handle alphabetic keys (a-z) when not typing and no dialog open
+            if (/^[a-zA-Z]$/.test(event.key) && !isTyping && !dialogOpen) {
+                const handler = handlers.openSymbolSearchWithKey;
+                if (handler) {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    handler(event.key);
+                }
+            }
+            return;
+        }
 
         // Check if shortcut is disabled
         if (disabledShortcuts.includes(matchedId)) return;

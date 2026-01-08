@@ -1,0 +1,115 @@
+.alert-notification {
+    background: #F5F8FA;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    padding: 16px;
+    min-width: 320px;
+    max-width: 400px;
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    animation: slideIn 0.3s ease-out;
+    pointer-events: auto;
+}
+
+.alert-notification.dismissing {
+    animation: slideOut 0.3s ease-out;
+}
+
+.alert-notification-icon {
+    font-size: 24px;
+    line-height: 1;
+    flex-shrink: 0;
+}
+
+.alert-notification-content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.alert-notification-header {
+    font-size: 14px;
+    font-weight: 600;
+    color: #131722;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.alert-notification-message {
+    font-size: 13px;
+    color: #131722;
+    font-weight: 500;
+}
+
+.alert-notification-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 6px;
+}
+
+.alert-notification-edit {
+    font-size: 12px;
+    color: #2962FF;
+    text-decoration: none;
+    cursor: pointer;
+}
+
+.alert-notification-edit:hover {
+    text-decoration: underline;
+}
+
+.alert-notification-timestamp {
+    font-size: 11px;
+    color: #787B86;
+}
+
+.alert-notification-close {
+    background: none;
+    border: none;
+    font-size: 24px;
+    line-height: 1;
+    color: #787B86;
+    cursor: pointer;
+    padding: 0;
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    border-radius: 4px;
+    transition: all 0.2s ease;
+}
+
+.alert-notification-close:hover {
+    background: rgba(0, 0, 0, 0.05);
+    color: #131722;
+}
+
+@keyframes slideIn {
+    from {
+        opacity: 0;
+        transform: translateX(100%);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+@keyframes slideOut {
+    from {
+        opacity: 1;
+        transform: translateX(0);
+    }
+
+    to {
+        opacity: 0;
+        transform: translateX(100%);
+    }
+}

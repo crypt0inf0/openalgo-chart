@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { fuzzySearch } from '../utils/fuzzySearch';
+import { THEMES } from '../styles/themes';
 
 const MAX_RECENT = 5;
 const RECENT_KEY = 'tv_recent_commands';
@@ -191,7 +192,21 @@ const buildCommands = (handlers) => {
             category: COMMAND_CATEGORIES.ACTION,
             keywords: ['theme', 'dark', 'light', 'mode', 'toggle'],
             action: () => handlers.toggleTheme?.(),
-        },
+        }
+    );
+
+    // Add commands for specific themes
+    Object.values(THEMES).forEach(theme => {
+        commands.push({
+            id: `action.theme.${theme.id}`,
+            title: `Switch to ${theme.name} Theme`,
+            category: COMMAND_CATEGORIES.ACTION,
+            keywords: ['theme', 'switch', theme.id, theme.name.toLowerCase()],
+            action: () => handlers.setTheme?.(theme.id),
+        });
+    });
+
+    commands.push(
         {
             id: 'action.fullscreen',
             title: 'Toggle Fullscreen',
@@ -227,6 +242,13 @@ const buildCommands = (handlers) => {
             category: COMMAND_CATEGORIES.ACTION,
             keywords: ['clear', 'delete', 'remove', 'drawings', 'all'],
             action: () => handlers.clearDrawings?.(),
+        },
+        {
+            id: 'action.reset_chart',
+            title: 'Reset Chart',
+            category: COMMAND_CATEGORIES.ACTION,
+            keywords: ['reset', 'chart', 'default', 'restore'],
+            action: () => handlers.resetChart?.(),
         },
         {
             id: 'action.shortcuts',

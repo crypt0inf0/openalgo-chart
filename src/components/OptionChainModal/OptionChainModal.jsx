@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { X, Loader2, RefreshCw, ChevronLeft, ChevronRight } from 'lucide-react';
+import { X, Loader2, RefreshCw, ChevronLeft, ChevronRight, ChevronUp, ChevronDown } from 'lucide-react';
 import { getOptionChain, getAvailableExpiries, UNDERLYINGS } from '../../services/optionChain';
-import { subscribeToMultiTicker } from '../../services/openalgo';
+import { subscribeToMultiTicker, getMultiOptionGreeks } from '../../services/openalgo';
 import styles from './OptionChainModal.module.css';
 import classNames from 'classnames';
 
@@ -19,25 +19,83 @@ const OptionChainModal = ({ isOpen, onClose, onSelectOption, initialSymbol }) =>
     const [error, setError] = useState(null);
     const [expiryScrollIndex, setExpiryScrollIndex] = useState(0);
     const [liveLTP, setLiveLTP] = useState(new Map());
+    const [focusedRow, setFocusedRow] = useState(-1); // Keyboard navigation
+    const [focusedCol, setFocusedCol] = useState('ce'); // 'ce' or 'pe'
+    const [strikeCount, setStrikeCount] = useState(15); // Dynamic strike count
+    const [isLoadingMore, setIsLoadingMore] = useState(false); // Loading state for load more
     const tableBodyRef = useRef(null);
     const wsRef = useRef(null);
+
+    // Greeks mode state
+    const [viewMode, setViewMode] = useState('ltp-oi'); // 'ltp-oi' or 'greeks'
+    const [greeksData, setGreeksData] = useState(new Map()); // symbol -> greeks object
+    const [greeksLoading, setGreeksLoading] = useState(false);
+
+    // Request tracking refs to prevent stale responses and race conditions
+    const expiryRequestIdRef = useRef(0);
+    const chainRequestIdRef = useRef(0);
+    const greeksRequestIdRef = useRef(0);
+    // Track symbols that permanently failed to fetch Greeks (after MAX_RETRY_COUNT attempts)
+    const failedGreeksSymbolsRef = useRef(new Set());
+    // Track retry counts per symbol (symbol -> attempt count)
+    const greeksRetryCountRef = useRef(new Map());
+    const MAX_GREEKS_RETRY_COUNT = 3; // Block symbol after 3 failed attempts
+    // Track if we're waiting for initialSymbol to be processed before fetching
+    const pendingInitialSymbolRef = useRef(false);
+
+    // Max strikes available (API supports up to 100)
+    const MAX_STRIKE_COUNT = 100;
+    const STRIKE_INCREMENT = 20; // Load 20 more strikes per click
 
     // Set underlying from initialSymbol when modal opens
     useEffect(() => {
         if (isOpen && initialSymbol) {
+            // Mark that we're processing initialSymbol - skip auto-fetch until done
+            pendingInitialSymbolRef.current = true;
+
+            // Increment request IDs to invalidate any pending requests
+            expiryRequestIdRef.current++;
+            chainRequestIdRef.current++;
+
             // Check if it's a known index
             const known = UNDERLYINGS.find(u => u.symbol === initialSymbol.symbol);
             if (known) {
                 setUnderlying(known);
                 setIsCustomSymbol(false);
             } else {
-                // Dynamic stock - create underlying object
-                // Stock options use 'NSE' exchange (not NSE_INDEX like indices)
+                // Dynamic stock - create underlying object with correct exchange mapping
+                // Map source exchange to F&O exchange:
+                // NSE, NSE_INDEX -> NFO
+                // BSE, BSE_INDEX -> BFO
+                // MCX -> MCX
+                // CDS -> CDS
+                const sourceExchange = initialSymbol.exchange?.toUpperCase() || 'NSE';
+                let foExchange = 'NFO';
+                let indexExchange = 'NSE';
+
+                if (sourceExchange === 'BSE' || sourceExchange === 'BSE_INDEX') {
+                    foExchange = 'BFO';
+                    indexExchange = 'BSE';
+                } else if (sourceExchange === 'MCX') {
+                    foExchange = 'MCX';
+                    indexExchange = 'MCX';
+                } else if (sourceExchange === 'CDS') {
+                    foExchange = 'CDS';
+                    indexExchange = 'CDS';
+                } else if (sourceExchange === 'BFO') {
+                    foExchange = 'BFO';
+                    indexExchange = 'BSE';
+                } else if (sourceExchange === 'NFO') {
+                    foExchange = 'NFO';
+                    indexExchange = 'NSE';
+                }
+                // Default: NSE, NSE_INDEX -> NFO, NSE
+
                 setUnderlying({
                     symbol: initialSymbol.symbol,
                     name: initialSymbol.symbol,
-                    exchange: 'NFO',
-                    indexExchange: 'NSE'
+                    exchange: foExchange,
+                    indexExchange: indexExchange
                 });
                 setIsCustomSymbol(true);
             }
@@ -46,6 +104,16 @@ const OptionChainModal = ({ isOpen, onClose, onSelectOption, initialSymbol }) =>
             setAvailableExpiries([]);
             setSelectedExpiry(null);
             setExpiryScrollIndex(0);
+            setStrikeCount(15); // Reset to default
+
+            // Mark initialization complete - allow fetches in next render cycle
+            // Use setTimeout to ensure state updates are batched first
+            setTimeout(() => {
+                pendingInitialSymbolRef.current = false;
+            }, 0);
+        } else if (isOpen && !initialSymbol) {
+            // No initialSymbol, allow immediate fetches
+            pendingInitialSymbolRef.current = false;
         }
     }, [isOpen, initialSymbol]);
 
@@ -145,46 +213,125 @@ const OptionChainModal = ({ isOpen, onClose, onSelectOption, initialSymbol }) =>
     const canScrollLeft = expiryScrollIndex > 0;
     const canScrollRight = expiryScrollIndex + 12 < totalExpiries;
 
-    // Fetch expiries
+    // Fetch expiries with request ID tracking to prevent stale responses
     const fetchExpiries = useCallback(async () => {
+        // Skip if pending initialSymbol processing
+        if (pendingInitialSymbolRef.current) {
+            console.log('[OptionChain] Skipping fetchExpiries - waiting for initialSymbol');
+            return;
+        }
+
+        // Increment request ID and capture current value
+        const requestId = ++expiryRequestIdRef.current;
+        const currentSymbol = underlying.symbol;
+        const currentExchange = underlying.exchange;
+
+        console.log('[OptionChain] Fetching expiries for', currentSymbol, 'requestId:', requestId);
         setIsLoadingExpiries(true);
+
         try {
-            const expiries = await getAvailableExpiries(underlying.symbol);
+            const expiries = await getAvailableExpiries(currentSymbol, currentExchange);
+
+            // Check if this request is still current (user hasn't switched symbols)
+            if (requestId !== expiryRequestIdRef.current) {
+                console.log('[OptionChain] Discarding stale expiry response for', currentSymbol, 'requestId:', requestId, 'current:', expiryRequestIdRef.current);
+                return;
+            }
+
             setAvailableExpiries(expiries);
             if (expiries.length > 0) {
                 setSelectedExpiry(expiries[0]);
                 setExpiryScrollIndex(0);
             }
         } catch (err) {
-            console.error('Failed to fetch expiries:', err);
-            setAvailableExpiries([]);
+            // Only handle error if request is still current
+            if (requestId === expiryRequestIdRef.current) {
+                console.error('Failed to fetch expiries:', err);
+                setAvailableExpiries([]);
+            }
         } finally {
-            setIsLoadingExpiries(false);
+            // Only update loading state if request is still current
+            if (requestId === expiryRequestIdRef.current) {
+                setIsLoadingExpiries(false);
+            }
         }
-    }, [underlying]);
+    }, [underlying.symbol, underlying.exchange]);
 
-    // Fetch chain
-    const fetchChain = useCallback(async () => {
+    // Fetch chain with request ID tracking to prevent stale responses
+    const fetchChain = useCallback(async (requestedStrikeCount = strikeCount) => {
         if (!selectedExpiry) return;
+
+        // Increment request ID and capture current value
+        const requestId = ++chainRequestIdRef.current;
+        const currentSymbol = underlying.symbol;
+        const currentExchange = underlying.exchange;
+        const currentExpiry = selectedExpiry;
+
+        console.log('[OptionChain] Fetching chain for', currentSymbol, currentExpiry, 'requestId:', requestId);
         setIsLoading(true);
         setError(null);
+
         try {
-            const chain = await getOptionChain(underlying.symbol, underlying.exchange, selectedExpiry, 15);
+            const chain = await getOptionChain(currentSymbol, currentExchange, currentExpiry, requestedStrikeCount);
+
+            // Check if this request is still current
+            if (requestId !== chainRequestIdRef.current) {
+                console.log('[OptionChain] Discarding stale chain response for', currentSymbol, 'requestId:', requestId, 'current:', chainRequestIdRef.current);
+                return;
+            }
+
             setOptionChain(chain);
         } catch (err) {
-            setError('Failed to fetch option chain');
-            console.error(err);
+            // Only handle error if request is still current
+            if (requestId === chainRequestIdRef.current) {
+                setError('Failed to fetch option chain');
+                console.error(err);
+            }
         } finally {
-            setIsLoading(false);
+            // Only update loading state if request is still current
+            if (requestId === chainRequestIdRef.current) {
+                setIsLoading(false);
+            }
         }
-    }, [underlying, selectedExpiry]);
+    }, [underlying.symbol, underlying.exchange, selectedExpiry, strikeCount]);
 
-    useEffect(() => {
-        if (isOpen) fetchExpiries();
-    }, [isOpen, fetchExpiries]);
+    // Load more strikes handler
+    const loadMoreStrikes = useCallback(async () => {
+        if (strikeCount >= MAX_STRIKE_COUNT) return;
 
+        const newStrikeCount = Math.min(strikeCount + STRIKE_INCREMENT, MAX_STRIKE_COUNT);
+        setIsLoadingMore(true);
+
+        try {
+            const chain = await getOptionChain(underlying.symbol, underlying.exchange, selectedExpiry, newStrikeCount, true); // force refresh
+            setOptionChain(chain);
+            setStrikeCount(newStrikeCount);
+        } catch (err) {
+            console.error('Failed to load more strikes:', err);
+        } finally {
+            setIsLoadingMore(false);
+        }
+    }, [underlying, selectedExpiry, strikeCount, MAX_STRIKE_COUNT, STRIKE_INCREMENT]);
+
+    // Fetch expiries when modal opens or underlying changes
+    // Using underlying.symbol as dependency instead of fetchExpiries to avoid stale closure issues
     useEffect(() => {
-        if (isOpen && selectedExpiry) fetchChain();
+        if (isOpen && underlying.symbol) {
+            // Small delay to allow initialSymbol effect to complete first
+            const timeoutId = setTimeout(() => {
+                if (!pendingInitialSymbolRef.current) {
+                    fetchExpiries();
+                }
+            }, 10);
+            return () => clearTimeout(timeoutId);
+        }
+    }, [isOpen, underlying.symbol, underlying.exchange, fetchExpiries]);
+
+    // Fetch chain when expiry is selected
+    useEffect(() => {
+        if (isOpen && selectedExpiry) {
+            fetchChain();
+        }
     }, [isOpen, selectedExpiry, fetchChain]);
 
     useEffect(() => {
@@ -240,6 +387,252 @@ const OptionChainModal = ({ isOpen, onClose, onSelectOption, initialSymbol }) =>
         };
     }, [isOpen, optionChain?.chain, underlying.exchange]);
 
+    // Batch fetch Greeks when view mode changes to 'greeks'
+    // Uses single batch API call for much faster loading
+    const fetchGreeks = useCallback(async () => {
+        if (!optionChain?.chain?.length) return;
+
+        // Increment request ID and capture current value to detect stale responses
+        const requestId = ++greeksRequestIdRef.current;
+
+        // Collect all option symbols that need Greeks (exclude permanently failed ones)
+        const symbolsToFetch = [];
+        optionChain.chain.forEach(row => {
+            if (row.ce?.symbol && !greeksData.has(row.ce.symbol) && !failedGreeksSymbolsRef.current.has(row.ce.symbol)) {
+                symbolsToFetch.push({ symbol: row.ce.symbol, exchange: underlying.exchange });
+            }
+            if (row.pe?.symbol && !greeksData.has(row.pe.symbol) && !failedGreeksSymbolsRef.current.has(row.pe.symbol)) {
+                symbolsToFetch.push({ symbol: row.pe.symbol, exchange: underlying.exchange });
+            }
+        });
+
+        if (symbolsToFetch.length === 0) return;
+
+        console.log('[OptionChain] Fetching Greeks for', symbolsToFetch.length, 'options using batch API, requestId:', requestId);
+        setGreeksLoading(true);
+
+        // Helper to increment retry count and check if should block
+        const markSymbolFailed = (symbol) => {
+            const currentCount = greeksRetryCountRef.current.get(symbol) || 0;
+            const newCount = currentCount + 1;
+            greeksRetryCountRef.current.set(symbol, newCount);
+
+            if (newCount >= MAX_GREEKS_RETRY_COUNT) {
+                failedGreeksSymbolsRef.current.add(symbol);
+                console.log(`[OptionChain] Symbol ${symbol} permanently blocked after ${newCount} failed attempts`);
+            } else {
+                console.log(`[OptionChain] Symbol ${symbol} failed attempt ${newCount}/${MAX_GREEKS_RETRY_COUNT}`);
+            }
+        };
+
+        try {
+            // Single batch API call instead of many individual calls
+            const response = await getMultiOptionGreeks(symbolsToFetch);
+
+            // Check if request is still current
+            if (requestId !== greeksRequestIdRef.current) {
+                console.log('[OptionChain] Discarding stale Greeks response, requestId:', requestId, 'current:', greeksRequestIdRef.current);
+                return;
+            }
+
+            if (response && response.data && response.data.length > 0) {
+                const newGreeksData = new Map(greeksData);
+                const symbolsInResponse = new Set();
+
+                // Map response data to greeksData and track failures
+                response.data.forEach(item => {
+                    if (item.status === 'success' && item.symbol) {
+                        newGreeksData.set(item.symbol, {
+                            iv: item.implied_volatility,
+                            greeks: item.greeks
+                        });
+                        symbolsInResponse.add(item.symbol);
+                        // Clear retry count on success
+                        greeksRetryCountRef.current.delete(item.symbol);
+                    } else if (item.symbol) {
+                        // Mark failure (with retry counting)
+                        markSymbolFailed(item.symbol);
+                        symbolsInResponse.add(item.symbol);
+                    }
+                });
+
+                // Mark any symbols that weren't in the response as failed
+                symbolsToFetch.forEach(s => {
+                    if (!symbolsInResponse.has(s.symbol) && !newGreeksData.has(s.symbol)) {
+                        markSymbolFailed(s.symbol);
+                    }
+                });
+
+                setGreeksData(newGreeksData);
+                console.log('[OptionChain] Greeks batch loaded:', response.summary, '- Total:', newGreeksData.size, ', Permanently failed:', failedGreeksSymbolsRef.current.size);
+            } else {
+                // API returned null/empty - increment retry count for all requested symbols
+                console.log('[OptionChain] Greeks batch returned empty/null, incrementing retry count for', symbolsToFetch.length, 'symbols');
+                symbolsToFetch.forEach(s => {
+                    markSymbolFailed(s.symbol);
+                });
+            }
+        } catch (error) {
+            console.error('[OptionChain] Greeks batch API error:', error);
+            // On error, increment retry count for all symbols
+            symbolsToFetch.forEach(s => {
+                markSymbolFailed(s.symbol);
+            });
+        } finally {
+            if (requestId === greeksRequestIdRef.current) {
+                setGreeksLoading(false);
+            }
+        }
+    }, [optionChain?.chain, underlying.exchange, greeksData]);
+
+    // Retry mechanism for failed Greeks - auto-retries missing symbols after delay
+    // Only retries symbols that haven't been marked as permanently failed
+    const retryFailedGreeks = useCallback(async () => {
+        if (!optionChain?.chain?.length) return;
+
+        // Find symbols still missing Greeks data (exclude permanently failed ones)
+        const missingSymbols = [];
+        optionChain.chain.forEach(row => {
+            if (row.ce?.symbol && !greeksData.has(row.ce.symbol) && !failedGreeksSymbolsRef.current.has(row.ce.symbol)) {
+                missingSymbols.push({ symbol: row.ce.symbol, exchange: underlying.exchange });
+            }
+            if (row.pe?.symbol && !greeksData.has(row.pe.symbol) && !failedGreeksSymbolsRef.current.has(row.pe.symbol)) {
+                missingSymbols.push({ symbol: row.pe.symbol, exchange: underlying.exchange });
+            }
+        });
+
+        if (missingSymbols.length === 0) {
+            console.log('[OptionChain] No more Greeks to retry (permanently failed:', failedGreeksSymbolsRef.current.size, ')');
+            return;
+        }
+
+        console.log('[OptionChain] Retrying', missingSymbols.length, 'missing Greeks...');
+        setGreeksLoading(true);
+
+        // Wait 2 seconds to avoid rate limits
+        await new Promise(r => setTimeout(r, 2000));
+
+        // Helper to increment retry count and check if should block
+        const markSymbolFailed = (symbol) => {
+            const currentCount = greeksRetryCountRef.current.get(symbol) || 0;
+            const newCount = currentCount + 1;
+            greeksRetryCountRef.current.set(symbol, newCount);
+
+            if (newCount >= MAX_GREEKS_RETRY_COUNT) {
+                failedGreeksSymbolsRef.current.add(symbol);
+                console.log(`[OptionChain] Symbol ${symbol} permanently blocked after ${newCount} failed attempts`);
+            }
+        };
+
+        const requestId = greeksRequestIdRef.current;
+        try {
+            const response = await getMultiOptionGreeks(missingSymbols);
+
+            if (requestId !== greeksRequestIdRef.current) return;
+
+            if (response && response.data && response.data.length > 0) {
+                const newGreeksData = new Map(greeksData);
+                const symbolsInResponse = new Set();
+
+                response.data.forEach(item => {
+                    if (item.status === 'success' && item.symbol) {
+                        newGreeksData.set(item.symbol, {
+                            iv: item.implied_volatility,
+                            greeks: item.greeks
+                        });
+                        symbolsInResponse.add(item.symbol);
+                        // Clear retry count on success
+                        greeksRetryCountRef.current.delete(item.symbol);
+                    } else if (item.symbol) {
+                        // Increment retry count
+                        markSymbolFailed(item.symbol);
+                        symbolsInResponse.add(item.symbol);
+                    }
+                });
+
+                // Mark any symbols not in response
+                missingSymbols.forEach(s => {
+                    if (!symbolsInResponse.has(s.symbol) && !newGreeksData.has(s.symbol)) {
+                        markSymbolFailed(s.symbol);
+                    }
+                });
+
+                setGreeksData(newGreeksData);
+                console.log('[OptionChain] Retry loaded:', response.summary, '- Permanently failed:', failedGreeksSymbolsRef.current.size);
+            } else {
+                // API returned null/empty - increment retry count
+                console.log('[OptionChain] Retry returned empty, incrementing retry count for', missingSymbols.length, 'symbols');
+                missingSymbols.forEach(s => {
+                    markSymbolFailed(s.symbol);
+                });
+            }
+        } catch (error) {
+            console.error('[OptionChain] Retry failed:', error);
+            // On error, increment retry count
+            missingSymbols.forEach(s => {
+                markSymbolFailed(s.symbol);
+            });
+        } finally {
+            if (requestId === greeksRequestIdRef.current) {
+                setGreeksLoading(false);
+            }
+        }
+    }, [optionChain?.chain, underlying.exchange, greeksData]);
+
+
+    // Trigger Greeks fetch when switching to greeks view
+    useEffect(() => {
+        if (isOpen && viewMode === 'greeks' && optionChain?.chain?.length > 0) {
+            fetchGreeks();
+        }
+    }, [isOpen, viewMode, optionChain?.chain]);
+
+    // Auto-retry missing Greeks after initial fetch completes (max 3 retries)
+    // Excludes symbols already marked as permanently failed (no trading data)
+    useEffect(() => {
+        if (!isOpen || viewMode !== 'greeks' || greeksLoading || greeksData.size === 0) return;
+
+        // Check if there are still missing Greeks (excluding permanently failed ones)
+        const hasMissing = optionChain?.chain?.some(row =>
+            (row.ce?.symbol && !greeksData.has(row.ce.symbol) && !failedGreeksSymbolsRef.current.has(row.ce.symbol)) ||
+            (row.pe?.symbol && !greeksData.has(row.pe.symbol) && !failedGreeksSymbolsRef.current.has(row.pe.symbol))
+        );
+
+        if (hasMissing) {
+            console.log('[OptionChain] Some Greeks missing (excluding failed), scheduling retry...');
+            const timeoutId = setTimeout(() => {
+                retryFailedGreeks();
+            }, 500);
+            return () => clearTimeout(timeoutId);
+        } else if (failedGreeksSymbolsRef.current.size > 0) {
+            console.log('[OptionChain] All retryable Greeks loaded. Permanently failed:', failedGreeksSymbolsRef.current.size, 'symbols');
+        }
+    }, [isOpen, viewMode, greeksLoading, greeksData.size, optionChain?.chain, retryFailedGreeks]);
+
+    // Clear Greeks cache and invalidate pending requests when expiry changes or modal closes
+    useEffect(() => {
+        if (!isOpen) {
+            // Modal closed - invalidate pending requests and reset state
+            greeksRequestIdRef.current++;
+            setGreeksData(new Map());
+            failedGreeksSymbolsRef.current = new Set(); // Clear failed symbols
+            greeksRetryCountRef.current = new Map(); // Reset retry counts
+            setViewMode('ltp-oi'); // Reset view mode for next open
+            console.log('[OptionChain] Modal closed - Greeks state reset');
+            return;
+        }
+    }, [isOpen]);
+
+    // Clear Greeks cache when expiry changes
+    useEffect(() => {
+        greeksRequestIdRef.current++; // Invalidate any pending Greeks requests
+        setGreeksData(new Map());
+        failedGreeksSymbolsRef.current = new Set(); // Clear failed symbols for new expiry
+        greeksRetryCountRef.current = new Map(); // Reset retry counts for new expiry
+    }, [selectedExpiry]);
+
+
+
     // Chain data
     const chainData = useMemo(() => optionChain?.chain || [], [optionChain]);
     const atmStrike = optionChain?.atmStrike || 0;
@@ -267,6 +660,36 @@ const OptionChainModal = ({ isOpen, onClose, onSelectOption, initialSymbol }) =>
         onSelectOption(symbol, underlying.exchange);
         onClose();
     }, [underlying.exchange, onSelectOption, onClose]);
+
+    // Keyboard navigation handler
+    const handleKeyDown = useCallback((e) => {
+        if (chainData.length === 0) return;
+
+        if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            setFocusedRow(prev => prev < 0 ? 0 : Math.min(prev + 1, chainData.length - 1));
+        } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            setFocusedRow(prev => prev < 0 ? 0 : Math.max(prev - 1, 0));
+        } else if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+            e.preventDefault();
+            setFocusedCol(prev => prev === 'ce' ? 'pe' : 'ce');
+        } else if (e.key === 'Enter' && focusedRow >= 0 && focusedRow < chainData.length) {
+            e.preventDefault();
+            const row = chainData[focusedRow];
+            const symbol = focusedCol === 'ce' ? row.ce?.symbol : row.pe?.symbol;
+            if (symbol) handleOptionClick(symbol);
+        } else if (e.key === 'Escape') {
+            onClose();
+        }
+    }, [chainData, focusedRow, focusedCol, handleOptionClick, onClose]);
+
+    // Click handler that also updates focus
+    const handleCellClick = useCallback((rowIndex, col, symbol) => {
+        setFocusedRow(rowIndex);
+        setFocusedCol(col);
+        handleOptionClick(symbol);
+    }, [handleOptionClick]);
 
     const formatOI = (oi) => {
         if (!oi && oi !== 0) return '-';
@@ -309,7 +732,7 @@ const OptionChainModal = ({ isOpen, onClose, onSelectOption, initialSymbol }) =>
         return sign + change.toFixed(2) + '%';
     };
 
-    const renderRow = (row, isITM_CE, isITM_PE) => {
+    const renderRow = (row, isITM_CE, isITM_PE, rowIndex) => {
         // Get live LTP from WebSocket or fall back to REST data
         const ceLive = liveLTP.get(row.ce?.symbol);
         const peLive = liveLTP.get(row.pe?.symbol);
@@ -319,8 +742,9 @@ const OptionChainModal = ({ isOpen, onClose, onSelectOption, initialSymbol }) =>
 
         const ceOIWidth = getOIBarWidth(row.ce?.oi);
         const peOIWidth = getOIBarWidth(row.pe?.oi);
-        const ceClickHandler = () => handleOptionClick(row.ce?.symbol);
-        const peClickHandler = () => handleOptionClick(row.pe?.symbol);
+        const isRowFocused = rowIndex === focusedRow;
+        const ceClickHandler = () => handleCellClick(rowIndex, 'ce', row.ce?.symbol);
+        const peClickHandler = () => handleCellClick(rowIndex, 'pe', row.pe?.symbol);
 
         // Calculate LTP change using live LTP if available
         const ceLtpChange = row.ce?.prevClose && ceLTP
@@ -333,10 +757,13 @@ const OptionChainModal = ({ isOpen, onClose, onSelectOption, initialSymbol }) =>
         return (
             <div key={row.strike} className={classNames(styles.row, {
                 [styles.itmCE]: isITM_CE,
-                [styles.itmPE]: isITM_PE
+                [styles.itmPE]: isITM_PE,
+                [styles.focused]: isRowFocused
             })}>
                 {/* CALLS - Combined OI + LTP */}
-                <div className={classNames(styles.cell, styles.combinedCell, styles.combinedCellLeft, styles.clickable)} onClick={ceClickHandler}>
+                <div className={classNames(styles.cell, styles.combinedCell, styles.combinedCellLeft, styles.clickable, {
+                    [styles.focusedCell]: isRowFocused && focusedCol === 'ce'
+                })} onClick={ceClickHandler}>
                     {/* OI with bar */}
                     <div className={styles.oiSection}>
                         <div className={styles.oiBarWrapperLeft}>
@@ -361,7 +788,9 @@ const OptionChainModal = ({ isOpen, onClose, onSelectOption, initialSymbol }) =>
                 </div>
 
                 {/* PUTS - Combined LTP + OI */}
-                <div className={classNames(styles.cell, styles.combinedCell, styles.combinedCellRight, styles.clickable)} onClick={peClickHandler}>
+                <div className={classNames(styles.cell, styles.combinedCell, styles.combinedCellRight, styles.clickable, {
+                    [styles.focusedCell]: isRowFocused && focusedCol === 'pe'
+                })} onClick={peClickHandler}>
                     {/* LTP with change */}
                     <div className={styles.ltpSection}>
                         <span className={styles.ltpValue}>{formatLTP(peLTP)}</span>
@@ -383,13 +812,114 @@ const OptionChainModal = ({ isOpen, onClose, onSelectOption, initialSymbol }) =>
         );
     };
 
+    // Format Greek values for display
+    const formatGreek = (value, decimals = 4) => {
+        if (value === null || value === undefined) return '-';
+        return value.toFixed(decimals);
+    };
+
+    const formatDelta = (value) => {
+        if (value === null || value === undefined) return '-';
+        return value.toFixed(2);
+    };
+
+    const formatIv = (value) => {
+        if (value === null || value === undefined) return '-';
+        return value.toFixed(1) + '%';
+    };
+
+    const formatTheta = (value) => {
+        if (value === null || value === undefined) return '-';
+        return value.toFixed(0);
+    };
+
+    const formatVega = (value) => {
+        if (value === null || value === undefined) return '-';
+        return value.toFixed(0);
+    };
+
+    const formatGamma = (value) => {
+        if (value === null || value === undefined) return '-';
+        return value.toFixed(4);
+    };
+
+    // Render Greeks row
+    const renderGreeksRow = (row, isITM_CE, isITM_PE, rowIndex) => {
+        const ceLive = liveLTP.get(row.ce?.symbol);
+        const peLive = liveLTP.get(row.pe?.symbol);
+        const ceLTP = ceLive?.ltp ?? row.ce?.ltp;
+        const peLTP = peLive?.ltp ?? row.pe?.ltp;
+
+        const ceGreeks = greeksData.get(row.ce?.symbol);
+        const peGreeks = greeksData.get(row.pe?.symbol);
+
+        const isRowFocused = rowIndex === focusedRow;
+        const ceClickHandler = () => handleCellClick(rowIndex, 'ce', row.ce?.symbol);
+        const peClickHandler = () => handleCellClick(rowIndex, 'pe', row.pe?.symbol);
+
+        return (
+            <div key={row.strike} className={classNames(styles.rowGreeks, {
+                [styles.itmCE]: isITM_CE,
+                [styles.itmPE]: isITM_PE,
+                [styles.focused]: isRowFocused
+            })}>
+                {/* CALLS - Gamma, Vega, Theta, Delta, LTP */}
+                <div className={classNames(styles.greeksCell, {
+                    [styles.focusedCell]: isRowFocused && focusedCol === 'ce'
+                })} onClick={ceClickHandler}>
+                    <span className={classNames(styles.greekValue, styles.muted)}>
+                        {formatGamma(ceGreeks?.greeks?.gamma)}
+                    </span>
+                    <span className={styles.greekValue}>
+                        {formatVega(ceGreeks?.greeks?.vega)}
+                    </span>
+                    <span className={classNames(styles.greekValue, styles.greekTheta)}>
+                        {formatTheta(ceGreeks?.greeks?.theta)}
+                    </span>
+                    <span className={classNames(styles.greekValue, styles.greekDeltaPositive)}>
+                        {formatDelta(ceGreeks?.greeks?.delta)}
+                    </span>
+                    <span className={styles.greekLtp}>{formatLTP(ceLTP)}</span>
+                </div>
+
+                {/* STRIKE with IV */}
+                <div className={styles.strikeCellGreeks}>
+                    <span>{row.strike.toLocaleString('en-IN')}</span>
+                    <span className={styles.strikeIv}>
+                        {ceGreeks?.iv ? formatIv(ceGreeks.iv) : ''}
+                    </span>
+                </div>
+
+                {/* PUTS - LTP, Delta, Theta, Vega, Gamma */}
+                <div className={classNames(styles.greeksCell, {
+                    [styles.focusedCell]: isRowFocused && focusedCol === 'pe'
+                })} onClick={peClickHandler}>
+                    <span className={styles.greekLtp}>{formatLTP(peLTP)}</span>
+                    <span className={classNames(styles.greekValue, styles.greekDeltaNegative)}>
+                        {formatDelta(peGreeks?.greeks?.delta)}
+                    </span>
+                    <span className={classNames(styles.greekValue, styles.greekTheta)}>
+                        {formatTheta(peGreeks?.greeks?.theta)}
+                    </span>
+                    <span className={styles.greekValue}>
+                        {formatVega(peGreeks?.greeks?.vega)}
+                    </span>
+                    <span className={classNames(styles.greekValue, styles.muted)}>
+                        {formatGamma(peGreeks?.greeks?.gamma)}
+                    </span>
+                </div>
+            </div>
+        );
+    };
+
     if (!isOpen) return null;
+
 
     const spotInfo = formatSpotChange();
 
     return (
         <div className={styles.overlay} onClick={onClose}>
-            <div className={styles.modal} onClick={e => e.stopPropagation()}>
+            <div className={classNames(styles.modal, { [styles.modalWide]: viewMode === 'greeks' })} onClick={e => e.stopPropagation()}>
                 {/* Header */}
                 <div className={styles.header}>
                     <div className={styles.headerLeft}>
@@ -422,6 +952,27 @@ const OptionChainModal = ({ isOpen, onClose, onSelectOption, initialSymbol }) =>
                         </button>
                     </div>
                     <div className={styles.headerRight}>
+                        {/* View Mode Toggle */}
+                        <div className={styles.viewToggle}>
+                            <button
+                                className={classNames(styles.viewToggleBtn, { [styles.viewToggleBtnActive]: viewMode === 'ltp-oi' })}
+                                onClick={() => setViewMode('ltp-oi')}
+                            >
+                                LTP & OI
+                            </button>
+                            <button
+                                className={classNames(styles.viewToggleBtn, { [styles.viewToggleBtnActive]: viewMode === 'greeks' })}
+                                onClick={() => setViewMode('greeks')}
+                            >
+                                Greeks
+                            </button>
+                        </div>
+                        {greeksLoading && (
+                            <div className={styles.greeksLoading}>
+                                <Loader2 size={14} className={styles.spin} />
+                                <span>Loading Greeks...</span>
+                            </div>
+                        )}
                         <button className={styles.closeBtn} onClick={onClose}>
                             <X size={20} />
                         </button>
@@ -464,18 +1015,38 @@ const OptionChainModal = ({ isOpen, onClose, onSelectOption, initialSymbol }) =>
                     )}
                 </div>
 
-                {/* Column Headers - 3 columns */}
-                <div className={styles.colHeaders}>
-                    <div className={styles.colHeaderCalls}>
-                        <span className={styles.colHeaderLabel}>CALLS</span>
-                        <span className={styles.colHeaderSub}>OI · LTP</span>
+                {/* Column Headers - conditional based on view mode */}
+                {viewMode === 'ltp-oi' ? (
+                    <div className={styles.colHeaders}>
+                        <div className={styles.colHeaderCalls}>
+                            <span className={styles.colHeaderLabel}>CALLS</span>
+                            <span className={styles.colHeaderSub}>OI · LTP</span>
+                        </div>
+                        <span className={styles.colHeaderStrike}>STRIKE</span>
+                        <div className={styles.colHeaderPuts}>
+                            <span className={styles.colHeaderLabel}>PUTS</span>
+                            <span className={styles.colHeaderSub}>LTP · OI</span>
+                        </div>
                     </div>
-                    <span className={styles.colHeaderStrike}>STRIKE</span>
-                    <div className={styles.colHeaderPuts}>
-                        <span className={styles.colHeaderLabel}>PUTS</span>
-                        <span className={styles.colHeaderSub}>LTP · OI</span>
+                ) : (
+                    <div className={styles.colHeadersGreeks}>
+                        <div className={styles.greeksHeaderGroup}>
+                            <span className={styles.greeksHeaderLabel}>Gamma</span>
+                            <span className={styles.greeksHeaderLabel}>Vega</span>
+                            <span className={styles.greeksHeaderLabel}>Theta</span>
+                            <span className={styles.greeksHeaderLabel}>Delta</span>
+                            <span className={styles.greeksHeaderLabel}>LTP</span>
+                        </div>
+                        <span className={styles.colHeaderStrike}>STRIKE<br /><small>IV</small></span>
+                        <div className={styles.greeksHeaderGroup}>
+                            <span className={styles.greeksHeaderLabel}>LTP</span>
+                            <span className={styles.greeksHeaderLabel}>Delta</span>
+                            <span className={styles.greeksHeaderLabel}>Theta</span>
+                            <span className={styles.greeksHeaderLabel}>Vega</span>
+                            <span className={styles.greeksHeaderLabel}>Gamma</span>
+                        </div>
                     </div>
-                </div>
+                )}
 
                 {/* Table */}
                 <div className={styles.tableContainer}>
@@ -495,8 +1066,33 @@ const OptionChainModal = ({ isOpen, onClose, onSelectOption, initialSymbol }) =>
                             <span>Select an expiry to load option chain</span>
                         </div>
                     ) : (
-                        <div className={styles.tableBody} ref={tableBodyRef}>
-                            {aboveATM.map(row => renderRow(row, row.strike < atmStrike, false))}
+                        <div
+                            className={styles.tableBody}
+                            ref={tableBodyRef}
+                            tabIndex={0}
+                            onKeyDown={handleKeyDown}
+                        >
+                            {/* Load more strikes button - TOP */}
+                            {strikeCount < MAX_STRIKE_COUNT && (
+                                <button
+                                    className={styles.loadMoreBtn}
+                                    onClick={loadMoreStrikes}
+                                    disabled={isLoadingMore}
+                                >
+                                    {isLoadingMore ? (
+                                        <Loader2 size={14} className={styles.spin} />
+                                    ) : (
+                                        <ChevronUp size={14} />
+                                    )}
+                                    <span>Load more strikes</span>
+                                </button>
+                            )}
+
+                            {aboveATM.map((row, idx) =>
+                                viewMode === 'greeks'
+                                    ? renderGreeksRow(row, row.strike < atmStrike, false, idx)
+                                    : renderRow(row, row.strike < atmStrike, false, idx)
+                            )}
 
                             {optionChain && (
                                 <div className={styles.spotBar} data-spot-bar="true">
@@ -512,7 +1108,28 @@ const OptionChainModal = ({ isOpen, onClose, onSelectOption, initialSymbol }) =>
                                 </div>
                             )}
 
-                            {belowATM.map(row => renderRow(row, false, row.strike > atmStrike))}
+                            {belowATM.map((row, idx) =>
+                                viewMode === 'greeks'
+                                    ? renderGreeksRow(row, false, row.strike > atmStrike, aboveATM.length + idx)
+                                    : renderRow(row, false, row.strike > atmStrike, aboveATM.length + idx)
+                            )}
+
+
+                            {/* Load more strikes button - BOTTOM */}
+                            {strikeCount < MAX_STRIKE_COUNT && (
+                                <button
+                                    className={styles.loadMoreBtn}
+                                    onClick={loadMoreStrikes}
+                                    disabled={isLoadingMore}
+                                >
+                                    {isLoadingMore ? (
+                                        <Loader2 size={14} className={styles.spin} />
+                                    ) : (
+                                        <ChevronDown size={14} />
+                                    )}
+                                    <span>Load more strikes</span>
+                                </button>
+                            )}
                         </div>
                     )}
                 </div>
@@ -521,4 +1138,4 @@ const OptionChainModal = ({ isOpen, onClose, onSelectOption, initialSymbol }) =>
     );
 };
 
-export default OptionChainModal;
+export default React.memo(OptionChainModal);

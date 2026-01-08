@@ -22,6 +22,12 @@
     border-left: 2px solid var(--tv-color-brand, #2962FF);
 }
 
+.item.focused {
+    background-color: var(--tv-color-toolbar-button-background-hover, #2A2E39);
+    outline: 1px solid var(--tv-color-brand, #2962FF);
+    outline-offset: -1px;
+}
+
 .item.dragging {
     opacity: 0.5;
     background-color: var(--tv-color-toolbar-button-background-hover, #2A2E39);

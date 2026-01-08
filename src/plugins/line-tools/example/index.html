@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Line Tools Plugin Example</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #f5f7fa;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        .app-container {
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+        }
+
+        .toolbar {
+            background: white;
+            border-bottom: 1px solid #e0e0e0;
+            padding: 12px 16px;
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            align-items: center;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+        }
+
+        .tool-btn {
+            padding: 8px 16px;
+            background: #f5f5f5;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 13px;
+            font-weight: 500;
+            color: #333;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            white-space: nowrap;
+        }
+
+        .tool-btn:hover {
+            background: #e8e8e8;
+            border-color: #2962FF;
+            color: #2962FF;
+        }
+
+        .tool-btn.active {
+            background: #2962FF;
+            border-color: #2962FF;
+            color: white;
+        }
+
+        .tool-btn.none-btn {
+            background: #666;
+            color: white;
+            border-color: #666;
+        }
+
+        .tool-btn.none-btn:hover {
+            background: #555;
+        }
+
+        .tool-btn.none-btn.active {
+            background: #333;
+        }
+
+        .divider {
+            width: 1px;
+            height: 24px;
+            background: #e0e0e0;
+            margin: 0 4px;
+        }
+
+        .tool-btn.clear-btn {
+            background: #ff4444;
+            color: white;
+            border-color: #ff4444;
+            margin-left: auto;
+        }
+
+        .tool-btn.clear-btn:hover {
+            background: #cc0000;
+            border-color: #cc0000;
+            color: white;
+        }
+
+        .tool-btn.hide-btn {
+            background: #7c4dff;
+            color: white;
+            border-color: #7c4dff;
+        }
+
+        .tool-btn.hide-btn:hover {
+            background: #651fff;
+            border-color: #651fff;
+            color: white;
+        }
+
+        .tool-btn.hide-btn.hidden-state {
+            background: #00c853;
+            border-color: #00c853;
+        }
+
+        .tool-btn.hide-btn.hidden-state:hover {
+            background: #00a844;
+            border-color: #00a844;
+        }
+
+        .tool-btn.lock-btn {
+            background: #ff9800;
+            color: white;
+            border-color: #ff9800;
+        }
+
+        .tool-btn.lock-btn:hover {
+            background: #f57c00;
+            border-color: #f57c00;
+            color: white;
+        }
+
+        .tool-btn.lock-btn.locked-state {
+            background: #4caf50;
+            border-color: #4caf50;
+        }
+
+        .tool-btn.lock-btn.locked-state:hover {
+            background: #43a047;
+            border-color: #43a047;
+        }
+
+        .tool-btn.timer-btn {
+            background: #00bcd4;
+            color: white;
+            border-color: #00bcd4;
+        }
+
+        .tool-btn.timer-btn:hover {
+            background: #00acc1;
+            border-color: #00acc1;
+            color: white;
+        }
+
+        .tool-btn.timer-btn.timer-active {
+            background: #009688;
+            border-color: #009688;
+        }
+
+        .tool-btn.timer-btn.timer-active:hover {
+            background: #00897b;
+            border-color: #00897b;
+        }
+
+        .tool-btn.session-btn {
+            background: #ff9800;
+            color: white;
+            border-color: #ff9800;
+        }
+
+        .tool-btn.session-btn:hover {
+            background: #f57c00;
+            border-color: #f57c00;
+            color: white;
+        }
+
+        .tool-btn.session-btn.session-active {
+            background: #4caf50;
+            border-color: #4caf50;
+        }
+
+        .tool-btn.session-btn.session-active:hover {
+            background: #43a047;
+            border-color: #43a047;
+        }
+
+        .chart-area {
+            flex: 1;
+            padding: 16px;
+            overflow: hidden;
+        }
+
+        #container {
+            width: 100%;
+            height: 100%;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="app-container">
+        <div class="toolbar">
+            <button id="btn-none" class="tool-btn none-btn active">None</button>
+
+            <div class="divider"></div>
+
+            <button id="btn-trend-line" class="tool-btn">Trend Line</button>
+            <button id="btn-arrow" class="tool-btn">Arrow</button>
+            <button id="btn-ray" class="tool-btn">Ray</button>
+            <button id="btn-extended-line" class="tool-btn">Extended Line</button>
+            <button id="btn-horizontal-ray" class="tool-btn">Horizontal Ray</button>
+            <button id="btn-horizontal-line" class="tool-btn">Horizontal Line</button>
+            <button id="btn-vertical-line" class="tool-btn">Vertical Line</button>
+            <button id="btn-cross-line" class="tool-btn">Cross Line</button>
+
+            <div class="divider"></div>
+
+            <button id="btn-rectangle" class="tool-btn">Rectangle</button>
+            <button id="btn-price-range" class="tool-btn">Price Range</button>
+            <button id="btn-circle" class="tool-btn">Circle</button>
+            <button id="btn-triangle" class="tool-btn">Triangle</button>
+
+            <div class="divider"></div>
+
+            <button id="btn-parallel-channel" class="tool-btn">Parallel Channel</button>
+            <button id="btn-fib-retracement" class="tool-btn">Fib Retracement</button>
+            <button id="btn-long-position" class="tool-btn">Long Position</button>
+            <button id="btn-short-position" class="tool-btn">Short Position</button>
+            <button id="btn-elliott-impulse-wave" class="tool-btn">Elliott Impulse Wave</button>
+            <button id="btn-elliott-correction-wave" class="tool-btn">Elliott Correction Wave</button>
+            <button id="btn-date-range" class="tool-btn">Date Range</button>
+            <button id="btn-fib-extension" class="tool-btn">Fib Extension</button>
+            <button id="btn-date-price-range" class="tool-btn">Date and Price Range</button>
+            <button id="btn-measure" class="tool-btn">Measure</button>
+            <button id="btn-head-and-shoulders" class="tool-btn">Head & Shoulders</button>
+
+            <div class="divider"></div>
+
+            <button id="btn-brush" class="tool-btn">Brush</button>
+            <button id="btn-highlighter" class="tool-btn">Highlighter</button>
+            <button id="btn-path" class="tool-btn">Path</button>
+
+            <div class="divider"></div>
+
+            <button id="btn-text" class="tool-btn">Text</button>
+            <button id="btn-callout" class="tool-btn">Callout</button>
+            <button id="btn-user-price-alerts" class="tool-btn">User Price Alerts</button>
+            <button id="btn-price-label" class="tool-btn">Price Label</button>
+
+            <button id="btn-eraser" class="tool-btn">Eraser</button>
+            <button id="btn-hide-toggle" class="tool-btn hide-btn">Hide All</button>
+            <button id="btn-lock-toggle" class="tool-btn lock-btn">Lock All</button>
+            <button id="btn-timer-toggle" class="tool-btn timer-btn">Show Timer</button>
+            <button id="btn-session" class="tool-btn session-btn">Session Breaks</button>
+            <button id="btn-clear" class="tool-btn clear-btn">Clear All</button>
+        </div>
+
+        <div class="chart-area">
+            <div id="container"></div>
+        </div>
+    </div>
+
+    <script type="module" src="./example.ts"></script>
+</body>
+
+</html>

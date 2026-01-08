@@ -65,6 +65,7 @@
 .list {
     display: flex;
     flex-direction: column;
+    outline: none;
 }
 
 .emptyState {
@@ -179,127 +180,10 @@
     color: var(--tv-color-text-primary);
 }
 
-/* Tab count badge */
-.tabCount {
-    background-color: var(--tv-color-text-secondary);
-    color: var(--tv-color-pane-background);
-    font-size: 10px;
-    padding: 2px 6px;
-    border-radius: 10px;
-    margin-left: 6px;
-}
-
-/* Toolbar with search and filter */
-.toolbar {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 8px 12px;
-    border-bottom: 1px solid var(--tv-color-border);
-    background-color: var(--tv-color-pane-background);
-}
-
-.searchBox {
-    flex: 1;
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    background-color: var(--tv-color-input-background, #2a2e39);
-    border: 1px solid var(--tv-color-border);
-    border-radius: 4px;
-    padding: 4px 8px;
-}
-
-.searchBox svg {
-    color: var(--tv-color-text-secondary);
-    flex-shrink: 0;
-}
-
-.searchInput {
-    flex: 1;
-    background: transparent;
-    border: none;
-    outline: none;
-    font-size: 12px;
-    color: var(--tv-color-text-primary);
-}
-
-.searchInput::placeholder {
-    color: var(--tv-color-text-secondary);
-}
-
-.filterSelect {
-    background-color: var(--tv-color-input-background, #2a2e39);
-    border: 1px solid var(--tv-color-border);
-    border-radius: 4px;
-    padding: 4px 8px;
-    font-size: 12px;
-    color: var(--tv-color-text-primary);
-    cursor: pointer;
-    outline: none;
-}
-
-.filterSelect:focus {
-    border-color: var(--tv-color-brand);
-}
-
-/* Symbol group with alert name */
-.symbolGroup {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-}
-
-.alertName {
-    font-size: 11px;
-    color: var(--tv-color-text-secondary);
-    font-style: italic;
-}
-
-/* Item meta with time and notification icons */
-.itemMeta {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-}
-
-.notifIcons {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    color: var(--tv-color-text-secondary);
-    opacity: 0.7;
-}
-
-/* Footer with bulk actions */
-.footer {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 10px 12px;
-    border-top: 1px solid var(--tv-color-border);
-    background-color: var(--tv-color-pane-background);
-}
-
-.bulkButton {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    padding: 6px 12px;
-    background-color: transparent;
-    border: 1px solid var(--tv-color-border);
-    border-radius: 4px;
-    font-size: 12px;
-    color: var(--tv-color-text-primary);
-    cursor: pointer;
-    transition: all 0.2s;
-}
-
-.bulkButton:hover {
-    background-color: var(--tv-color-hover-background, rgba(255, 255, 255, 0.05));
-    border-color: var(--tv-color-text-secondary);
-}
-
-.bulkButton svg {
-    color: var(--tv-color-text-secondary);
+/* Keyboard navigation focused state */
+.item.focused,
+.logItem.focused {
+    background-color: var(--tv-color-toolbar-button-background-hover);
+    outline: 1px solid var(--tv-color-brand);
+    outline-offset: -1px;
 }

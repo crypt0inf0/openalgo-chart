@@ -72,6 +72,46 @@
   --tv-color-input-background: #f8f9fa;
 }
 
+/* Midnight Theme */
+[data-theme="midnight"] {
+  --tv-color-platform-background: #0B0E11;
+  --tv-color-pane-background: #0B0E11;
+  --tv-color-toolbar-background: #0B0E11;
+  --tv-color-toolbar-button-background-hover: #1F2428;
+  --tv-color-toolbar-button-text: #E0E0E0;
+  --tv-color-toolbar-button-text-hover: #FFFFFF;
+  --tv-color-toolbar-button-text-active: #2962FF;
+  --tv-color-item-active-text: #2962FF;
+  --tv-color-border: #1F2428;
+  --tv-color-text-primary: #E0E0E0;
+  --tv-color-text-secondary: #8B949E;
+  --tv-color-brand: #2962FF;
+  --tv-color-up: #089981;
+  --tv-color-down: #F23645;
+  --tv-color-dropdown-background: #161B22;
+  --tv-color-input-background: #0B0E11;
+}
+
+/* Ocean Theme */
+[data-theme="ocean"] {
+  --tv-color-platform-background: #0F172A;
+  --tv-color-pane-background: #0F172A;
+  --tv-color-toolbar-background: #0F172A;
+  --tv-color-toolbar-button-background-hover: #1E293B;
+  --tv-color-toolbar-button-text: #E2E8F0;
+  --tv-color-toolbar-button-text-hover: #F8FAFC;
+  --tv-color-toolbar-button-text-active: #38BDF8;
+  --tv-color-item-active-text: #38BDF8;
+  --tv-color-border: #1E293B;
+  --tv-color-text-primary: #E2E8F0;
+  --tv-color-text-secondary: #94A3B8;
+  --tv-color-brand: #38BDF8;
+  --tv-color-up: #4ADE80;
+  --tv-color-down: #F87171;
+  --tv-color-dropdown-background: #1E293B;
+  --tv-color-input-background: #0F172A;
+}
+
 body {
   margin: 0;
   padding: 0;
@@ -115,6 +155,7 @@ body {
 
 /* Reduced Motion - disable animations for users who prefer it */
 @media (prefers-reduced-motion: reduce) {
+
   *,
   *::before,
   *::after {
@@ -179,6 +220,7 @@ body {
 
 /* Ensure touch targets are at least 44px on touch devices */
 @media (hover: none) and (pointer: coarse) {
+
   button,
   [role="button"],
   a,

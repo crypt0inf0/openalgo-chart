@@ -7,6 +7,7 @@ const ChartGrid = ({
     layout,
     activeChartId,
     onActiveChartChange,
+    onMaximizeChart,
     chartRefs,
     onAlertsSync,
     onAlertTriggered,
@@ -22,13 +23,23 @@ const ChartGrid = ({
         }
     };
 
+    const handleChartClick = (e, chartId) => {
+        if (e.altKey && onMaximizeChart) {
+            e.preventDefault();
+            e.stopPropagation();
+            onMaximizeChart(chartId);
+        } else {
+            onActiveChartChange(chartId);
+        }
+    };
+
     return (
         <div className={`${styles.gridContainer} ${getGridClass()}`}>
             {charts.map((chart) => (
                 <div
                     key={chart.id}
                     className={`${styles.chartWrapper} ${activeChartId === chart.id && layout !== '1' ? styles.active : ''}`}
-                    onClick={() => onActiveChartChange(chart.id)}
+                    onClick={(e) => handleChartClick(e, chart.id)}
                 >
                     <ChartComponent
                         ref={(el) => {

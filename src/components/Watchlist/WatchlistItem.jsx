@@ -17,6 +17,7 @@ import classNames from 'classnames';
 const WatchlistItem = ({
     item,
     isActive,
+    isFocused,
     isDragging,
     columnWidths,
     minColumnWidth,
@@ -75,6 +76,7 @@ const WatchlistItem = ({
             ref={itemRef}
             className={classNames(styles.item, {
                 [styles.active]: isActive,
+                [styles.focused]: isFocused,
                 [styles.dragging]: isDragging,
             })}
             onClick={handleClick}

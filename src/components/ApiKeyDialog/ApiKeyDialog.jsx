@@ -26,9 +26,18 @@ const ApiKeyDialog = ({ onSave, onClose }) => {
             // Save host URL before validation
             localStorage.setItem('oa_host_url', hostUrl);
 
+            // For local development, use relative path to leverage Vite proxy
+            // This avoids CORS issues when frontend (localhost:5001) calls backend (127.0.0.1:5000)
+            const isLocalhost = hostUrl === DEFAULT_HOST ||
+                hostUrl === 'http://localhost:5000' ||
+                hostUrl === 'http://127.0.0.1:5000';
+            const apiUrl = isLocalhost
+                ? `/api/v1/chart?apikey=${encodeURIComponent(apiKey.trim())}`
+                : `${hostUrl}/api/v1/chart?apikey=${encodeURIComponent(apiKey.trim())}`;
+
             // Validate API key and fetch preferences in one request
             // Uses GET with apikey as query parameter
-            const response = await fetch(`/api/v1/chart?apikey=${encodeURIComponent(apiKey.trim())}`, {
+            const response = await fetch(apiUrl, {
                 method: 'GET',
                 credentials: 'include'
             });

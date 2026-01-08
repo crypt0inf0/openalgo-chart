@@ -16,6 +16,231 @@ const DEFAULT_WS_HOST = '127.0.0.1:8765';
 const activeWebSockets = new Set();
 
 /**
+ * Module-scoped cache for previous close prices
+ * Used by WebSocket updates which don't include prev_close (mode 2)
+ * Replaces window._prevCloseCache to avoid global pollution
+ */
+const prevCloseCache = new Map();
+const MAX_PREV_CLOSE_CACHE_SIZE = 200; // Limit cache size to prevent memory leaks
+
+/**
+ * SHARED WEBSOCKET MANAGER - Singleton pattern
+ * Maintains a SINGLE WebSocket connection for the entire application.
+ * OpenAlgo only supports one WebSocket per API key, so we must share.
+ */
+class SharedWebSocketManager {
+    constructor() {
+        this._ws = null;
+        this._subscribers = new Map(); // subscriberId -> { symbols: Set, callback, mode }
+        this._subscribedSymbols = new Set(); // All subscribed symbol keys
+        this._nextId = 1;
+        this._reconnectTimer = null;
+        this._authenticated = false;
+    }
+
+    /**
+     * Subscribe to symbols. Returns an unsubscribe function.
+     */
+    subscribe(symbols, callback, mode = 2) {
+        const subscriberId = this._nextId++;
+        const symbolKeys = symbols.map(s => `${s.symbol}:${s.exchange || 'NSE'}`);
+
+        this._subscribers.set(subscriberId, {
+            symbols: new Set(symbolKeys),
+            symbolObjs: symbols,
+            callback,
+            mode
+        });
+
+        // Add symbols to global set
+        const newSymbols = [];
+        for (const key of symbolKeys) {
+            if (!this._subscribedSymbols.has(key)) {
+                this._subscribedSymbols.add(key);
+                newSymbols.push(symbols.find(s => `${s.symbol}:${s.exchange || 'NSE'}` === key));
+            }
+        }
+
+        // Ensure connection exists
+        this._ensureConnected();
+
+        // If already authenticated, subscribe new symbols immediately
+        // Otherwise, _resubscribeAll will be called after authentication
+        if (this._authenticated && newSymbols.length > 0) {
+            this._subscribeSymbols(newSymbols);
+        }
+
+        // Return unsubscribe function
+        return {
+            close: () => this._unsubscribe(subscriberId),
+            get readyState() { return this._ws?.readyState ?? WebSocket.CLOSED; }
+        };
+    }
+
+    _unsubscribe(subscriberId) {
+        const sub = this._subscribers.get(subscriberId);
+        if (!sub) return;
+
+        this._subscribers.delete(subscriberId);
+
+        // Check if any symbols are no longer needed by any subscriber
+        for (const symbolKey of sub.symbols) {
+            let stillNeeded = false;
+            for (const [id, otherSub] of this._subscribers) {
+                if (otherSub.symbols.has(symbolKey)) {
+                    stillNeeded = true;
+                    break;
+                }
+            }
+            if (!stillNeeded) {
+                this._subscribedSymbols.delete(symbolKey);
+                this._unsubscribeSymbol(symbolKey);
+            }
+        }
+
+        // Close connection if no subscribers left
+        if (this._subscribers.size === 0 && this._ws) {
+            // Clear any pending reconnect timer to prevent unnecessary reconnection
+            if (this._reconnectTimer) {
+                clearTimeout(this._reconnectTimer);
+                this._reconnectTimer = null;
+            }
+            this._ws.close();
+            this._ws = null;
+        }
+    }
+
+    _ensureConnected() {
+        if (this._ws && this._ws.readyState === WebSocket.OPEN) return;
+        if (this._ws && this._ws.readyState === WebSocket.CONNECTING) return;
+
+        const url = `ws://${localStorage.getItem('oa_ws_url') || DEFAULT_WS_HOST}`;
+        const apiKey = localStorage.getItem('oa_apikey');
+
+        this._ws = new WebSocket(url);
+        activeWebSockets.add({ close: () => this._ws?.close(), forceClose: () => this._ws?.close() });
+
+        this._ws.onopen = () => {
+            logger.debug('[SharedWS] Connected, authenticating...');
+            // Server expects 'authenticate' action, not 'auth'
+            this._ws.send(JSON.stringify({ action: 'authenticate', api_key: apiKey }));
+        };
+
+        this._ws.onmessage = (event) => {
+            try {
+                const message = JSON.parse(event.data);
+
+                // Handle ping - respond with pong
+                if (message.type === 'ping') {
+                    this._ws.send(JSON.stringify({ type: 'pong' }));
+                    return;
+                }
+
+                // Handle authentication response
+                // Server sends: { type: 'auth', status: 'success' } or { type: 'authenticated' }
+                if ((message.type === 'auth' && message.status === 'success') ||
+                    message.type === 'authenticated' ||
+                    message.status === 'authenticated') {
+                    logger.debug('[SharedWS] Authenticated, subscribing to', this._subscribedSymbols.size, 'symbols');
+                    this._authenticated = true;
+                    setConnectionStatus(ConnectionState.CONNECTED);
+                    // Re-subscribe all symbols
+                    this._resubscribeAll();
+                    return;
+                }
+
+                // Handle auth error
+                if (message.type === 'error' || (message.type === 'auth' && message.status !== 'success')) {
+                    console.error('[SharedWS] Auth error:', message.message || message.code);
+                    return;
+                }
+
+                if (message.type === 'market_data' && message.symbol) {
+                    const symbolKey = `${message.symbol}:${message.exchange || 'NSE'}`;
+                    // Dispatch to all subscribers interested in this symbol
+                    for (const [id, sub] of this._subscribers) {
+                        if (sub.symbols.has(symbolKey)) {
+                            try {
+                                sub.callback({ ...message, data: message.data || {} });
+                            } catch (err) {
+                                console.warn('[SharedWS] Callback error:', err);
+                            }
+                        }
+                    }
+                }
+            } catch (err) {
+                // Ignore parse errors
+            }
+        };
+
+        this._ws.onclose = () => {
+            logger.debug('[SharedWS] Disconnected');
+            this._authenticated = false;
+            setConnectionStatus(ConnectionState.DISCONNECTED);
+            // Auto-reconnect after 2 seconds if we still have subscribers
+            if (this._subscribers.size > 0) {
+                this._reconnectTimer = setTimeout(() => this._ensureConnected(), 2000);
+            }
+        };
+
+        this._ws.onerror = (err) => {
+            console.error('[SharedWS] Error:', err);
+        };
+    }
+
+    _resubscribeAll() {
+        if (!this._ws || this._ws.readyState !== WebSocket.OPEN || !this._authenticated) return;
+
+        // Collect all unique symbol objects
+        const allSymbols = [];
+        for (const [id, sub] of this._subscribers) {
+            for (const symObj of sub.symbolObjs) {
+                const key = `${symObj.symbol}:${symObj.exchange || 'NSE'}`;
+                if (!allSymbols.some(s => `${s.symbol}:${s.exchange || 'NSE'}` === key)) {
+                    allSymbols.push(symObj);
+                }
+            }
+        }
+
+        for (const sym of allSymbols) {
+            this._ws.send(JSON.stringify({
+                action: 'subscribe',
+                symbol: sym.symbol,
+                exchange: sym.exchange || 'NSE',
+                mode: 2
+            }));
+        }
+    }
+
+    _subscribeSymbols(symbols) {
+        if (!this._ws || this._ws.readyState !== WebSocket.OPEN || !this._authenticated) return;
+
+        for (const sym of symbols) {
+            this._ws.send(JSON.stringify({
+                action: 'subscribe',
+                symbol: sym.symbol,
+                exchange: sym.exchange || 'NSE',
+                mode: 2
+            }));
+        }
+    }
+
+    _unsubscribeSymbol(symbolKey) {
+        if (!this._ws || this._ws.readyState !== WebSocket.OPEN) return;
+
+        const [symbol, exchange] = symbolKey.split(':');
+        this._ws.send(JSON.stringify({
+            action: 'unsubscribe',
+            symbol,
+            exchange: exchange || 'NSE'
+        }));
+    }
+}
+
+// Global singleton instance
+export const sharedWebSocket = new SharedWebSocketManager();
+
+/**
  * Close all active WebSocket connections
  * Called on beforeunload to ensure proper cleanup
  */
@@ -64,7 +289,7 @@ export const getHostUrl = () => {
  * Check if we should use the Vite proxy (when using default localhost settings)
  * This avoids CORS issues during development
  */
-const shouldUseProxy = () => {
+export const shouldUseProxy = () => {
     const hostUrl = getHostUrl();
     // Use proxy when host is default localhost and we're running on localhost
     const isDefaultHost = hostUrl === DEFAULT_HOST || hostUrl === 'http://localhost:5000' || hostUrl === 'http://127.0.0.1:5000';
@@ -142,7 +367,7 @@ export const checkAuth = async () => {
 /**
  * Get API key from localStorage (set by OpenAlgo after login)
  */
-const getApiKey = () => {
+export const getApiKey = () => {
     return localStorage.getItem('oa_apikey') || '';
 };
 
@@ -466,7 +691,7 @@ export const getKlines = async (symbol, exchange = 'NSE', interval = '1d', limit
         const IST_OFFSET_SECONDS = 19800; // 5 hours 30 minutes in seconds
 
         if (data && data.data && Array.isArray(data.data)) {
-            return data.data.map(d => {
+            const candles = data.data.map(d => {
                 // If timestamp is a number, use directly (already in seconds)
                 // Otherwise parse date string
                 let time;
@@ -490,6 +715,18 @@ export const getKlines = async (symbol, exchange = 'NSE', interval = '1d', limit
             }).filter(candle =>
                 candle.time > 0 && [candle.open, candle.high, candle.low, candle.close].every(value => Number.isFinite(value))
             );
+
+            // Sort by time ascending and remove duplicates (keep the last occurrence for each timestamp)
+            candles.sort((a, b) => a.time - b.time);
+            const deduped = [];
+            const seenTimes = new Set();
+            for (let i = candles.length - 1; i >= 0; i--) {
+                if (!seenTimes.has(candles[i].time)) {
+                    seenTimes.add(candles[i].time);
+                    deduped.unshift(candles[i]);
+                }
+            }
+            return deduped;
         }
 
         return [];
@@ -554,14 +791,20 @@ export const getTickerPrice = async (symbol, exchange = 'NSE', signal) => {
             const changePercent = prevClose > 0 ? (change / prevClose) * 100 : 0;
 
             // Cache prev_close for WebSocket updates (WebSocket mode 2 doesn't include prev_close)
-            if (!window._prevCloseCache) window._prevCloseCache = {};
-            window._prevCloseCache[`${symbol}:${exchange}`] = prevClose;
+            // Evict oldest entry if cache is at capacity
+            if (prevCloseCache.size >= MAX_PREV_CLOSE_CACHE_SIZE) {
+                const firstKey = prevCloseCache.keys().next().value;
+                prevCloseCache.delete(firstKey);
+            }
+            prevCloseCache.set(`${symbol}:${exchange}`, prevClose);
 
             return {
                 lastPrice: ltp.toString(),
                 priceChange: change.toFixed(2),
                 priceChangePercent: changePercent.toFixed(2),
-                symbol: symbol
+                symbol: symbol,
+                volume: parseFloat(quoteData.volume || 0),
+                open: parseFloat(quoteData.open || 0)
             };
         }
 
@@ -574,12 +817,85 @@ export const getTickerPrice = async (symbol, exchange = 'NSE', signal) => {
     }
 };
 
+/**
+ * Get Market Depth (DOM) data
+ * Returns 5 best bid/ask levels with prices and quantities
+ * @param {string} symbol - Trading symbol (e.g., 'NIFTY31JUL25FUT')
+ * @param {string} exchange - Exchange code (e.g., 'NFO', 'NSE')
+ * @param {AbortSignal} signal - Optional abort signal
+ * @returns {Object} Depth data with bids, asks, totals, and market info
+ */
+export const getDepth = async (symbol, exchange = 'NSE', signal) => {
+    try {
+        const response = await fetch(`${getApiBase()}/depth`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            credentials: 'include',
+            signal,
+            body: JSON.stringify({
+                apikey: getApiKey(),
+                symbol,
+                exchange
+            })
+        });
+
+        if (!response.ok) {
+            if (response.status === 401) {
+                window.location.href = getLoginUrl();
+                return null;
+            }
+            throw new Error(`OpenAlgo depth error: ${response.status} ${response.statusText}`);
+        }
+
+        const data = await response.json();
+        logger.debug('[OpenAlgo] Depth request:', { symbol, exchange });
+        logger.debug('[OpenAlgo] Depth response:', data);
+
+        if (data && data.data) {
+            const depthData = data.data;
+            return {
+                // 5 best ask levels (sorted by price ascending - best ask first)
+                asks: (depthData.asks || []).map(a => ({
+                    price: parseFloat(a.price || 0),
+                    quantity: parseInt(a.quantity || 0, 10)
+                })),
+                // 5 best bid levels (sorted by price descending - best bid first)
+                bids: (depthData.bids || []).map(b => ({
+                    price: parseFloat(b.price || 0),
+                    quantity: parseInt(b.quantity || 0, 10)
+                })),
+                // Market info
+                ltp: parseFloat(depthData.ltp || 0),
+                ltq: parseInt(depthData.ltq || 0, 10),
+                high: parseFloat(depthData.high || 0),
+                low: parseFloat(depthData.low || 0),
+                open: parseFloat(depthData.open || 0),
+                prevClose: parseFloat(depthData.prev_close || 0),
+                volume: parseInt(depthData.volume || 0, 10),
+                oi: parseInt(depthData.oi || 0, 10),
+                // Total quantities
+                totalBuyQty: parseInt(depthData.totalbuyqty || 0, 10),
+                totalSellQty: parseInt(depthData.totalsellqty || 0, 10)
+            };
+        }
+
+        return null;
+    } catch (error) {
+        if (error.name !== 'AbortError') {
+            console.error('Error fetching depth:', error);
+        }
+        return null;
+    }
+};
+
 // IST offset for consistent time display (matches getKlines)
 const IST_OFFSET_SECONDS = 19800; // 5 hours 30 minutes
 
 /**
  * Subscribe to real-time ticker updates via WebSocket
- * Uses OpenAlgo WebSocket protocol with mode 2 (Quote) for OHLC data
+ * Uses SHARED WebSocket to prevent connection conflicts with OpenAlgo (1 conn per API key)
  * @param {string} symbol - Trading symbol
  * @param {string} exchange - Exchange code
  * @param {string} interval - Interval for candle updates
@@ -588,56 +904,50 @@ const IST_OFFSET_SECONDS = 19800; // 5 hours 30 minutes
 export const subscribeToTicker = (symbol, exchange = 'NSE', interval, callback) => {
     const subscriptions = [{ symbol, exchange }];
 
-    return createManagedWebSocket(
-        getWebSocketUrl,
-        {
-            subscriptions,
-            mode: 2, // Quote mode - includes OHLC, volume, etc.
-            onMessage: (message) => {
-                // Only process market_data messages for our symbol
-                if (message.type !== 'market_data' || message.symbol !== symbol) return;
+    // Use shared WebSocket to avoid connection conflicts
+    return sharedWebSocket.subscribe(subscriptions, (message) => {
+        // Only process market_data messages for our symbol
+        if (message.type !== 'market_data' || message.symbol !== symbol) return;
 
-                // Data is nested in message.data
-                const data = message.data || {};
-                const ltp = parseFloat(data.ltp || data.last_price || 0);
+        // Data is nested in message.data
+        const data = message.data || {};
+        const ltp = parseFloat(data.ltp || data.last_price || 0);
 
-                if (ltp > 0) {
-                    // For chart time: use server timestamp if available (to match historical candles)
-                    // Add IST offset to match historical data format
-                    let time;
-                    let brokerTimestamp; // Raw broker timestamp in seconds for time sync
+        if (ltp > 0) {
+            // For chart time: use server timestamp if available (to match historical candles)
+            // Add IST offset to match historical data format
+            let time;
+            let brokerTimestamp; // Raw broker timestamp in seconds for time sync
 
-                    if (data.timestamp) {
-                        // Server timestamp is in milliseconds, convert to seconds
-                        brokerTimestamp = Math.floor(data.timestamp / 1000);
-                        time = brokerTimestamp + IST_OFFSET_SECONDS;
-                    } else {
-                        // Fallback to local time if broker doesn't provide timestamp
-                        brokerTimestamp = Math.floor(Date.now() / 1000);
-                        time = brokerTimestamp + IST_OFFSET_SECONDS;
-                    }
-
-                    // Transform to candle format for chart
-                    const candle = {
-                        time, // With IST offset for chart display
-                        brokerTimestamp, // Raw broker timestamp for UI clock sync
-                        open: parseFloat(data.open || ltp),
-                        high: parseFloat(data.high || ltp),
-                        low: parseFloat(data.low || ltp),
-                        close: ltp,
-                        volume: parseFloat(data.volume || 0),
-                    };
-
-                    logger.debug('[WebSocket] Quote for', symbol, ':', { time: candle.time, brokerTimestamp: candle.brokerTimestamp, ltp });
-                    callback(candle);
-                }
+            if (data.timestamp) {
+                // Server timestamp is in milliseconds, convert to seconds
+                brokerTimestamp = Math.floor(data.timestamp / 1000);
+                time = brokerTimestamp + IST_OFFSET_SECONDS;
+            } else {
+                // Fallback to local time if broker doesn't provide timestamp
+                brokerTimestamp = Math.floor(Date.now() / 1000);
+                time = brokerTimestamp + IST_OFFSET_SECONDS;
             }
+
+            // Transform to candle format for chart
+            const candle = {
+                time, // With IST offset for chart display
+                brokerTimestamp, // Raw broker timestamp for UI clock sync
+                open: parseFloat(data.open || ltp),
+                high: parseFloat(data.high || ltp),
+                low: parseFloat(data.low || ltp),
+                close: ltp,
+                volume: parseFloat(data.volume || 0),
+            };
+
+            logger.debug('[WebSocket] Quote for', symbol, ':', { time: candle.time, brokerTimestamp: candle.brokerTimestamp, ltp });
+            callback(candle);
         }
-    );
+    }, 2);
 };
 /**
  * Subscribe to multiple tickers for watchlist
- * Uses OpenAlgo WebSocket protocol with mode 2 (Quote)
+ * Uses SHARED WebSocket to prevent connection conflicts with OpenAlgo (1 conn per API key)
  * @param {Array<{symbol: string, exchange: string}>} symbols - Array of symbol objects
  * @param {function} callback - Callback for each update
  */
@@ -652,43 +962,37 @@ export const subscribeToMultiTicker = (symbols, callback) => {
         return { symbol: sym.symbol, exchange: sym.exchange || 'NSE' };
     });
 
-    return createManagedWebSocket(
-        getWebSocketUrl,
-        {
-            subscriptions,
-            mode: 2, // Quote mode - includes OHLC, volume, prev_close, etc.
-            onMessage: (message) => {
-                // Only process market_data messages
-                if (message.type !== 'market_data' || !message.symbol) return;
+    // Use shared WebSocket to avoid connection conflicts
+    return sharedWebSocket.subscribe(subscriptions, (message) => {
+        // Only process market_data messages
+        if (message.type !== 'market_data' || !message.symbol) return;
 
-                // Data is nested in message.data
-                const data = message.data || {};
-                const ltp = parseFloat(data.ltp || data.last_price || 0);
-                const exchange = message.exchange || 'NSE';
+        // Data is nested in message.data
+        const data = message.data || {};
+        const ltp = parseFloat(data.ltp || data.last_price || 0);
+        const exchange = message.exchange || 'NSE';
 
-                if (ltp > 0) {
-                    // WebSocket mode 2 doesn't include prev_close, use cached value from initial quotes fetch
-                    const cacheKey = `${message.symbol}:${exchange}`;
-                    const cachedPrevClose = window._prevCloseCache?.[cacheKey];
+        if (ltp > 0) {
+            // WebSocket mode 2 doesn't include prev_close, use cached value from initial quotes fetch
+            const cacheKey = `${message.symbol}:${exchange}`;
+            const cachedPrevClose = prevCloseCache.get(cacheKey);
 
-                    // Use cached prev_close, fallback to open (if available), then ltp
-                    const prevClose = cachedPrevClose || parseFloat(data.open || ltp);
-                    const change = ltp - prevClose;
-                    const changePercent = prevClose > 0 ? (change / prevClose) * 100 : 0;
+            // Use cached prev_close, fallback to open (if available), then ltp
+            const prevClose = cachedPrevClose || parseFloat(data.open || ltp);
+            const change = ltp - prevClose;
+            const changePercent = prevClose > 0 ? (change / prevClose) * 100 : 0;
 
-                    callback({
-                        symbol: message.symbol,
-                        exchange: exchange, // Include exchange for proper matching
-                        last: ltp,
-                        open: parseFloat(data.open || prevClose),
-                        volume: parseFloat(data.volume || 0),
-                        chg: change,
-                        chgP: changePercent
-                    });
-                }
-            }
+            callback({
+                symbol: message.symbol,
+                exchange: exchange, // Include exchange for proper matching
+                last: ltp,
+                open: parseFloat(data.open || prevClose),
+                volume: parseFloat(data.volume || 0),
+                chg: change,
+                chgP: changePercent
+            });
         }
-    );
+    }, 2);
 };
 
 /**
@@ -822,7 +1126,7 @@ export const getHistoricalKlines = async (symbol, exchange = 'NSE', interval = '
         const IST_OFFSET_SECONDS = 19800; // 5 hours 30 minutes in seconds
 
         if (data && data.data && Array.isArray(data.data)) {
-            return data.data.map(d => {
+            const candles = data.data.map(d => {
                 let time;
                 if (typeof d.timestamp === 'number') {
                     time = d.timestamp + IST_OFFSET_SECONDS;
@@ -843,6 +1147,18 @@ export const getHistoricalKlines = async (symbol, exchange = 'NSE', interval = '
             }).filter(candle =>
                 candle.time > 0 && [candle.open, candle.high, candle.low, candle.close].every(value => Number.isFinite(value))
             );
+
+            // Sort by time ascending and remove duplicates (keep the last occurrence for each timestamp)
+            candles.sort((a, b) => a.time - b.time);
+            const deduped = [];
+            const seenTimes = new Set();
+            for (let i = candles.length - 1; i >= 0; i--) {
+                if (!seenTimes.has(candles[i].time)) {
+                    seenTimes.add(candles[i].time);
+                    deduped.unshift(candles[i]);
+                }
+            }
+            return deduped;
         }
 
         return [];
@@ -948,6 +1264,61 @@ export const saveUserPreferences = async (preferences) => {
 };
 
 /**
+ * Get Expiry Dates for Futures or Options
+ * @param {string} symbol - Underlying symbol (e.g., NIFTY, BANKNIFTY, RELIANCE)
+ * @param {string} exchange - Exchange code (NFO, BFO, MCX, CDS)
+ * @param {string} instrumentType - Type of instrument: 'futures' or 'options'
+ * @returns {Promise<string[]|null>} Array of expiry dates in DD-MMM-YY format, or null on error
+ */
+export const getExpiry = async (symbol, exchange = 'NFO', instrumentType = 'options') => {
+    try {
+        const requestBody = {
+            apikey: getApiKey(),
+            symbol,
+            exchange,
+            instrumenttype: instrumentType
+        };
+
+        logger.debug('[OpenAlgo] Expiry request:', requestBody);
+
+        const response = await fetch(`${getApiBase()}/expiry`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            credentials: 'include',
+            body: JSON.stringify(requestBody)
+        });
+
+        if (!response.ok) {
+            if (response.status === 401) {
+                window.location.href = getLoginUrl();
+                return null;
+            }
+            if (response.status === 400) {
+                const errorData = await response.json().catch(() => ({}));
+                logger.warn('[OpenAlgo] Expiry error:', errorData.message || response.statusText);
+                return null;
+            }
+            throw new Error(`OpenAlgo expiry error: ${response.status} ${response.statusText}`);
+        }
+
+        const data = await response.json();
+        logger.debug('[OpenAlgo] Expiry response:', data);
+
+        // Response format: { status, message, data: ["02-JAN-25", "09-JAN-25", ...] }
+        if (data && data.status === 'success' && Array.isArray(data.data)) {
+            return data.data;
+        }
+
+        return null;
+    } catch (error) {
+        console.error('Error fetching expiry dates:', error);
+        return null;
+    }
+};
+
+/**
  * Get Option Chain for an underlying
  * @param {string} underlying - Underlying symbol (e.g., NIFTY, BANKNIFTY, RELIANCE)
  * @param {string} exchange - Exchange code (NSE_INDEX, NSE, NFO, BSE_INDEX, BSE, BFO)
@@ -983,6 +1354,13 @@ export const getOptionChain = async (underlying, exchange = 'NFO', expiryDate = 
             if (response.status === 401) {
                 window.location.href = getLoginUrl();
                 return null;
+            }
+            // 400 typically means the symbol doesn't have F&O trading
+            if (response.status === 400) {
+                const error = new Error(`Symbol does not support F&O trading`);
+                error.code = 'NO_FO_SUPPORT';
+                error.status = 400;
+                throw error;
             }
             throw new Error(`OpenAlgo optionchain error: ${response.status} ${response.statusText}`);
         }
@@ -1070,6 +1448,672 @@ export const getOptionGreeks = async (symbol, exchange = 'NFO', options = {}) =>
     }
 };
 
+/**
+ * Get Option Greeks for multiple symbols in a single batch request
+ * Much faster than individual calls - processes up to 50 symbols at once
+ * @param {Array<{symbol: string, exchange: string}>} symbols - Array of option symbols
+ * @param {Object} options - Optional parameters (interest_rate, expiry_time)
+ * @returns {Promise<Object>} Response with data array and summary
+ */
+export const getMultiOptionGreeks = async (symbols, options = {}) => {
+    // Early return if no symbols provided
+    if (!symbols || symbols.length === 0) {
+        logger.debug('[OpenAlgo] Multi Option Greeks: No symbols to fetch');
+        return { status: 'success', data: [], summary: { total: 0, success: 0, failed: 0 } };
+    }
+
+    const MAX_BATCH_SIZE = 50;  // API limit
+
+    // If within limit, make single request
+    if (symbols.length <= MAX_BATCH_SIZE) {
+        return await fetchMultiGreeksBatch(symbols, options);
+    }
+
+    // Otherwise, batch into multiple requests
+    logger.debug('[OpenAlgo] Multi Option Greeks: Batching', symbols.length, 'symbols into chunks of', MAX_BATCH_SIZE);
+
+    const allData = [];
+    let totalSuccess = 0;
+    let totalFailed = 0;
+
+    for (let i = 0; i < symbols.length; i += MAX_BATCH_SIZE) {
+        const batch = symbols.slice(i, i + MAX_BATCH_SIZE);
+        const result = await fetchMultiGreeksBatch(batch, options);
+
+        if (result && result.data) {
+            allData.push(...result.data);
+            totalSuccess += result.summary?.success || 0;
+            totalFailed += result.summary?.failed || 0;
+        }
+    }
+
+    return {
+        status: totalFailed === 0 ? 'success' : totalSuccess > 0 ? 'partial' : 'error',
+        data: allData,
+        summary: { total: symbols.length, success: totalSuccess, failed: totalFailed }
+    };
+};
+
+// Internal helper for single batch request
+const fetchMultiGreeksBatch = async (symbols, options = {}) => {
+    try {
+        const requestBody = {
+            apikey: getApiKey(),
+            symbols: symbols.map(s => ({
+                symbol: s.symbol,
+                exchange: s.exchange || 'NFO'
+            })),
+            ...options
+        };
+
+        logger.debug('[OpenAlgo] Multi Option Greeks batch request:', { count: symbols.length });
+
+        const response = await fetch(`${getApiBase()}/multioptiongreeks`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            credentials: 'include',
+            body: JSON.stringify(requestBody)
+        });
+
+        if (!response.ok) {
+            if (response.status === 401) {
+                window.location.href = getLoginUrl();
+                return null;
+            }
+            throw new Error(`OpenAlgo multioptiongreeks error: ${response.status} ${response.statusText}`);
+        }
+
+        const data = await response.json();
+        logger.debug('[OpenAlgo] Multi Option Greeks batch response:', data.summary);
+
+        // Handle success, partial, or error - always return structure if we have data
+        if (data && data.data) {
+            return {
+                status: data.status || 'error',
+                data: data.data || [],
+                summary: data.summary || { total: symbols.length, success: 0, failed: symbols.length }
+            };
+        }
+
+        return null;
+    } catch (error) {
+        console.error('Error fetching multi option greeks batch:', error);
+        return null;
+    }
+};
+/**
+ * Fetch expiry dates for F&O instruments using the dedicated Expiry API
+ * @param {string} symbol - Underlying symbol (e.g., NIFTY, BANKNIFTY, RELIANCE, GOLD)
+ * @param {string} exchange - Exchange code (NFO, BFO, MCX, CDS)
+ * @param {string} instrumenttype - Type of instrument: 'futures' or 'options'
+ * @returns {Promise<Array<string>|null>} Array of expiry dates in DD-MMM-YY format or null on error
+ */
+export const fetchExpiryDates = async (symbol, exchange = 'NFO', instrumenttype = 'options') => {
+    try {
+        const requestBody = {
+            apikey: getApiKey(),
+            symbol,
+            exchange,
+            instrumenttype
+        };
+
+        logger.debug('[OpenAlgo] Expiry API request:', requestBody);
+
+        const response = await fetch(`${getApiBase()}/expiry`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            credentials: 'include',
+            body: JSON.stringify(requestBody)
+        });
+
+        if (!response.ok) {
+            if (response.status === 401) {
+                window.location.href = getLoginUrl();
+                return null;
+            }
+            // 400 typically means invalid parameters or no expiry found
+            if (response.status === 400) {
+                const error = new Error(`No expiry dates found for ${symbol} in ${exchange}`);
+                error.code = 'NO_EXPIRY_FOUND';
+                error.status = 400;
+                throw error;
+            }
+            throw new Error(`OpenAlgo expiry error: ${response.status} ${response.statusText}`);
+        }
+
+        const data = await response.json();
+        logger.debug('[OpenAlgo] Expiry API response:', data);
+
+        // Response format: { status: 'success', data: ['10-JUL-25', '17-JUL-25', ...], message: '...' }
+        if (data && data.status === 'success' && Array.isArray(data.data)) {
+            return data.data; // Sorted chronologically from earliest to latest
+        }
+
+        return null;
+    } catch (error) {
+        console.error('Error fetching expiry dates:', error);
+        return null;
+    }
+};
+
+/**
+ * ============================================
+ * ACCOUNTS API - Trading Account Operations
+ * ============================================
+ */
+
+/**
+ * Ping API - Check connectivity and validate API key
+ * @returns {Promise<Object|null>} { broker, message } on success, null on error
+ */
+export const ping = async () => {
+    try {
+        const apiKey = getApiKey();
+        if (!apiKey) return null;
+
+        const response = await fetch(`${getApiBase()}/ping`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ apikey: apiKey })
+        });
+
+        if (!response.ok) {
+            logger.warn('[OpenAlgo] Ping failed:', response.status);
+            return null;
+        }
+
+        const data = await response.json();
+        if (data.status === 'success') {
+            return data.data;
+        }
+        return null;
+    } catch (error) {
+        console.error('[OpenAlgo] Ping error:', error);
+        return null;
+    }
+};
+
+/**
+ * Get Funds - Fetch account balance and margin details
+ * @returns {Promise<Object|null>} { availablecash, collateral, m2mrealized, m2munrealized, utiliseddebits }
+ */
+export const getFunds = async () => {
+    try {
+        const apiKey = getApiKey();
+        if (!apiKey) return null;
+
+        const response = await fetch(`${getApiBase()}/funds`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ apikey: apiKey })
+        });
+
+        if (!response.ok) {
+            logger.warn('[OpenAlgo] Funds API failed:', response.status);
+            return null;
+        }
+
+        const data = await response.json();
+        if (data.status === 'success') {
+            return data.data;
+        }
+        return null;
+    } catch (error) {
+        console.error('[OpenAlgo] Funds error:', error);
+        return null;
+    }
+};
+
+/**
+ * Get Position Book - Fetch current open positions
+ * @returns {Promise<Array>} Array of position objects
+ */
+export const getPositionBook = async () => {
+    try {
+        const apiKey = getApiKey();
+        if (!apiKey) return [];
+
+        const response = await fetch(`${getApiBase()}/positionbook`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ apikey: apiKey })
+        });
+
+        if (!response.ok) {
+            logger.warn('[OpenAlgo] PositionBook API failed:', response.status);
+            return [];
+        }
+
+        const data = await response.json();
+        if (data.status === 'success') {
+            return data.data || [];
+        }
+        return [];
+    } catch (error) {
+        console.error('[OpenAlgo] PositionBook error:', error);
+        return [];
+    }
+};
+
+/**
+ * Get Order Book - Fetch all orders with statistics
+ * @returns {Promise<Object>} { orders: [], statistics: {} }
+ */
+export const getOrderBook = async () => {
+    try {
+        const apiKey = getApiKey();
+        if (!apiKey) return { orders: [], statistics: {} };
+
+        const response = await fetch(`${getApiBase()}/orderbook`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ apikey: apiKey })
+        });
+
+        if (!response.ok) {
+            logger.warn('[OpenAlgo] OrderBook API failed:', response.status);
+            return { orders: [], statistics: {} };
+        }
+
+        const data = await response.json();
+        if (data.status === 'success') {
+            return data.data || { orders: [], statistics: {} };
+        }
+        return { orders: [], statistics: {} };
+    } catch (error) {
+        console.error('[OpenAlgo] OrderBook error:', error);
+        return { orders: [], statistics: {} };
+    }
+};
+
+/**
+ * Get Trade Book - Fetch executed trades
+ * @returns {Promise<Array>} Array of trade objects
+ */
+export const getTradeBook = async () => {
+    try {
+        const apiKey = getApiKey();
+        if (!apiKey) return [];
+
+        const response = await fetch(`${getApiBase()}/tradebook`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ apikey: apiKey })
+        });
+
+        if (!response.ok) {
+            logger.warn('[OpenAlgo] TradeBook API failed:', response.status);
+            return [];
+        }
+
+        const data = await response.json();
+        if (data.status === 'success') {
+            return data.data || [];
+        }
+        return [];
+    } catch (error) {
+        console.error('[OpenAlgo] TradeBook error:', error);
+        return [];
+    }
+};
+
+/**
+ * Get Holdings - Fetch long-term stock holdings with P&L
+ * @returns {Promise<Object>} { holdings: [], statistics: {} }
+ */
+export const getHoldings = async () => {
+    try {
+        const apiKey = getApiKey();
+        if (!apiKey) return { holdings: [], statistics: {} };
+
+        const response = await fetch(`${getApiBase()}/holdings`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ apikey: apiKey })
+        });
+
+        if (!response.ok) {
+            logger.warn('[OpenAlgo] Holdings API failed:', response.status);
+            return { holdings: [], statistics: {} };
+        }
+
+        const data = await response.json();
+        if (data.status === 'success') {
+            return data.data || { holdings: [], statistics: {} };
+        }
+        return { holdings: [], statistics: {} };
+    } catch (error) {
+        console.error('[OpenAlgo] Holdings error:', error);
+        return { holdings: [], statistics: {} };
+    }
+};
+
+/**
+ * ============================================
+ * ORDERS API
+ * ============================================
+ */
+
+/**
+ * Place a new order
+ * @param {Object} orderDetails - Order details
+ * @param {string} orderDetails.symbol - Trading symbol
+ * @param {string} orderDetails.exchange - Exchange (NSE, NFO, etc.)
+ * @param {string} orderDetails.action - BUY or SELL
+ * @param {string} orderDetails.quantity - Quantity
+ * @param {string} orderDetails.product - MIS, CNC, NRML
+ * @param {string} orderDetails.pricetype - MARKET, LIMIT, SL, SL-M
+ * @param {number} orderDetails.price - Price (for LIMIT/SL)
+ * @param {number} orderDetails.trigger_price - Trigger Price (for SL/SL-M)
+ * @param {string} orderDetails.strategy - Strategy name (optional)
+ * @returns {Promise<Object>} { orderid, status, message }
+ */
+export const placeOrder = async (orderDetails) => {
+    try {
+        const apiKey = getApiKey();
+        if (!apiKey) throw new Error('API Key not found');
+
+        const requestBody = {
+            apikey: apiKey,
+            strategy: orderDetails.strategy || 'MANUAL',
+            exchange: orderDetails.exchange || 'NSE',
+            symbol: orderDetails.symbol,
+            action: orderDetails.action,
+            quantity: parseInt(orderDetails.quantity, 10),
+            product: orderDetails.product || 'MIS',
+            pricetype: orderDetails.pricetype || 'MARKET',
+            price: parseFloat(orderDetails.price || 0),
+            trigger_price: parseFloat(orderDetails.trigger_price || 0),
+            disclosed_quantity: 0
+        };
+
+        logger.debug('[OpenAlgo] Place Order request:', requestBody);
+
+        const response = await fetch(`${getApiBase()}/placeorder`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify(requestBody)
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(errorData.message || `Order failed: ${response.status}`);
+        }
+
+        const data = await response.json();
+        logger.debug('[OpenAlgo] Place Order response:', data);
+
+        if (data.status === 'success') {
+            return {
+                orderid: data.orderid,
+                status: 'success',
+                message: data.message
+            };
+        } else {
+            return {
+                status: 'error',
+                message: data.message || 'Unknown error'
+            };
+        }
+    } catch (error) {
+        console.error('[OpenAlgo] Place Order error:', error);
+        return {
+            status: 'error',
+            message: error.message
+        };
+    }
+};
+
+/**
+ * Modify an existing order
+ * @param {Object} orderDetails - Order modification details
+ * @returns {Promise<Object>} { orderid, status, message }
+ */
+export const modifyOrder = async (orderDetails) => {
+    try {
+        const apiKey = getApiKey();
+        if (!apiKey) throw new Error('API Key not found');
+
+        const requestBody = {
+            apikey: apiKey,
+            ...orderDetails
+        };
+
+        logger.debug('[OpenAlgo] Modify Order request:', requestBody);
+
+        const response = await fetch(`${getApiBase()}/modifyorder`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify(requestBody)
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(errorData.message || `Modify order failed: ${response.status}`);
+        }
+
+        const data = await response.json();
+        logger.debug('[OpenAlgo] Modify Order response:', data);
+
+        if (data.status === 'success') {
+            return {
+                orderid: data.orderid,
+                status: 'success',
+                message: data.message
+            };
+        } else {
+            return {
+                status: 'error',
+                message: data.message || 'Unknown error'
+            };
+        }
+    } catch (error) {
+        console.error('[OpenAlgo] Modify Order error:', error);
+        return {
+            status: 'error',
+            message: error.message
+        };
+    }
+};
+
+/**
+ * Cancel an existing order
+ * @param {string} orderId - ID of order to cancel
+ * @returns {Promise<Object>} { status, message }
+ */
+export const cancelOrder = async (orderDetails) => {
+    try {
+        const apiKey = getApiKey();
+        if (!apiKey) throw new Error('API Key not found');
+
+        // Handle both string (ID only) and object input
+        const requestPayload = typeof orderDetails === 'string'
+            ? { orderid: orderDetails }
+            : orderDetails;
+
+        const requestBody = {
+            apikey: apiKey,
+            ...requestPayload
+        };
+
+        logger.debug('[OpenAlgo] Cancel Order request:', requestBody);
+
+        const response = await fetch(`${getApiBase()}/cancelorder`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify(requestBody)
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(errorData.message || `Cancel order failed: ${response.status}`);
+        }
+
+        const data = await response.json();
+        logger.debug('[OpenAlgo] Cancel Order response:', data);
+
+        if (data.status === 'success') {
+            return {
+                status: 'success',
+                message: data.message
+            };
+        } else {
+            return {
+                status: 'error',
+                message: data.message || 'Unknown error'
+            };
+        }
+    } catch (error) {
+        console.error('[OpenAlgo] Cancel Order error:', error);
+        return {
+            status: 'error',
+            message: error.message
+        };
+    }
+};
+
+/**
+ * ============================================
+ * CHART DRAWINGS API
+ * ============================================
+ */
+
+/**
+ * Save chart drawings to backend
+ * Uses the existing /api/v1/chart preferences endpoint
+ * @param {string} symbol - Trading symbol
+ * @param {string} exchange - Exchange code  
+ * @param {string} interval - Chart interval
+ * @param {Array} drawings - Array of drawing objects from LineToolManager.exportDrawings()
+ */
+export const saveDrawings = async (symbol, exchange = 'NSE', interval = '1d', drawings) => {
+    try {
+        const apiKey = getApiKey();
+        if (!apiKey) {
+            logger.warn('[OpenAlgo] saveDrawings: No API key');
+            return false;
+        }
+
+        // Create a unique key for this symbol/exchange/interval combination
+        const drawingsKey = `drawings_${symbol}_${exchange}_${interval}`;
+
+        const response = await fetch(`${getApiBase()}/chart`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            credentials: 'include',
+            body: JSON.stringify({
+                apikey: apiKey,
+                [drawingsKey]: JSON.stringify(drawings)
+            })
+        });
+
+        if (!response.ok) {
+            console.error('[OpenAlgo] saveDrawings error:', response.status);
+            return false;
+        }
+
+        const data = await response.json();
+        logger.debug('[OpenAlgo] saveDrawings success:', { symbol, exchange, interval, count: drawings.length });
+        return data.status === 'success';
+    } catch (error) {
+        console.error('[OpenAlgo] Error saving drawings:', error);
+        return false;
+    }
+};
+
+/**
+ * Load chart drawings from backend
+ * @param {string} symbol - Trading symbol
+ * @param {string} exchange - Exchange code
+ * @param {string} interval - Chart interval
+ * @returns {Array|null} Array of drawing objects or null if not found
+ */
+export const loadDrawings = async (symbol, exchange = 'NSE', interval = '1d') => {
+    const drawingsKey = `drawings_${symbol}_${exchange}_${interval}`;
+
+    // First, check if CloudSync has already loaded data (stored in global cache)
+    if (window._chartPrefsCache && window._chartPrefsCache[drawingsKey]) {
+        try {
+            const drawings = typeof window._chartPrefsCache[drawingsKey] === 'string'
+                ? JSON.parse(window._chartPrefsCache[drawingsKey])
+                : window._chartPrefsCache[drawingsKey];
+            console.log('[OpenAlgo] loadDrawings from cache:', { symbol, exchange, interval, count: drawings.length });
+            return drawings;
+        } catch (parseError) {
+            console.warn('[OpenAlgo] Failed to parse cached drawings:', parseError);
+        }
+    }
+
+    // Fallback: make API call
+    try {
+        const apiKey = getApiKey();
+        if (!apiKey) {
+            logger.debug('[OpenAlgo] loadDrawings: No API key, skipping');
+            return null;
+        }
+
+        const response = await fetch(`${getApiBase()}/chart?apikey=${encodeURIComponent(apiKey)}`, {
+            method: 'GET',
+            credentials: 'include',
+        });
+
+        // 400 likely means no data saved yet - treat as empty result
+        if (response.status === 400) {
+            logger.debug('[OpenAlgo] loadDrawings: No saved preferences yet');
+            return null;
+        }
+
+        if (!response.ok) {
+            if (response.status === 401) {
+                return null;
+            }
+            logger.debug('[OpenAlgo] loadDrawings status:', response.status);
+            return null;
+        }
+
+        const data = await response.json();
+
+        if (data.status === 'success' && data.data) {
+            // Store in cache for future use
+            if (!window._chartPrefsCache) window._chartPrefsCache = {};
+            Object.assign(window._chartPrefsCache, data.data);
+
+            const drawingsJson = data.data[drawingsKey];
+
+            if (drawingsJson) {
+                try {
+                    const drawings = JSON.parse(drawingsJson);
+                    console.log('[OpenAlgo] loadDrawings success:', { symbol, exchange, interval, count: drawings.length });
+                    return drawings;
+                } catch (parseError) {
+                    console.warn('[OpenAlgo] Failed to parse drawings JSON:', parseError);
+                    return null;
+                }
+            }
+        }
+
+        return null;
+    } catch (error) {
+        logger.debug('[OpenAlgo] loadDrawings error:', error.message);
+        return null;
+    }
+};
+
 export default {
     checkAuth,
     getKlines,
@@ -1082,5 +2126,19 @@ export default {
     fetchUserPreferences,
     saveUserPreferences,
     getOptionChain,
-    getOptionGreeks
+    getOptionGreeks,
+    getMultiOptionGreeks,
+    fetchExpiryDates,
+    saveDrawings,
+    loadDrawings,
+    // Accounts API
+    ping,
+    getFunds,
+    getPositionBook,
+    getOrderBook,
+    getTradeBook,
+    getHoldings,
+    placeOrder,
+    modifyOrder,
+    cancelOrder
 };

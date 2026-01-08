@@ -1,0 +1,428 @@
+.accountPanel {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  background-color: var(--tv-color-pane-background, #131722);
+  color: var(--tv-color-text-primary, #d1d4dc);
+  font-size: 12px;
+  border-top: 1px solid var(--tv-color-border, #2A2E39);
+}
+
+/* Header */
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px 8px 60px;
+  /* Extra left padding to clear left toolbar (48px + 12px) */
+  background-color: var(--tv-color-toolbar-background, #1e1e1e);
+  border-bottom: 1px solid var(--tv-color-border, #2A2E39);
+  gap: 16px;
+  min-width: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  transition: padding-left 0.15s ease;
+}
+
+.header::-webkit-scrollbar {
+  display: none;
+}
+
+.headerLeft {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.headerIcon {
+  color: var(--tv-color-brand, #2962ff);
+}
+
+.title {
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--tv-color-text-primary);
+  white-space: nowrap;
+}
+
+.brokerBadge {
+  padding: 2px 8px;
+  background-color: var(--tv-color-brand, #2962ff);
+  color: white;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.headerCenter {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  flex: 1;
+  justify-content: center;
+  flex-shrink: 1;
+}
+
+.summaryItem {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.summaryLabel {
+  font-size: 10px;
+  color: var(--tv-color-text-secondary, #787b86);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.summaryValue {
+  font-size: 13px;
+  font-weight: 600;
+  font-family: 'Roboto Mono', monospace;
+}
+
+.headerRight {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.refreshBtn,
+.closeBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  color: var(--tv-color-text-secondary);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.refreshBtn:hover,
+.closeBtn:hover {
+  background-color: var(--tv-color-hover, rgba(255, 255, 255, 0.1));
+  color: var(--tv-color-text-primary);
+}
+
+.refreshBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.controlBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  color: var(--tv-color-text-secondary);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.controlBtn:hover {
+  background-color: var(--tv-color-hover, rgba(255, 255, 255, 0.1));
+  color: var(--tv-color-text-primary);
+}
+
+/* Tabs */
+.tabs {
+  display: flex;
+  gap: 0;
+  padding: 0 12px 0 60px;
+  /* Extra left padding to clear left toolbar (48px + 12px) */
+  background-color: var(--tv-color-toolbar-background, #1e1e1e);
+  border-bottom: 1px solid var(--tv-color-border, #2A2E39);
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  transition: padding-left 0.15s ease;
+}
+
+.tabs::-webkit-scrollbar {
+  display: none;
+}
+
+/* When left toolbar is hidden, reduce left padding */
+.noToolbar {
+  padding-left: 12px !important;
+}
+
+.tab {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 16px;
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--tv-color-text-secondary);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.tab:hover {
+  color: var(--tv-color-text-primary);
+  background-color: rgba(255, 255, 255, 0.03);
+}
+
+.tabActive {
+  color: var(--tv-color-brand, #2962ff);
+  border-bottom-color: var(--tv-color-brand, #2962ff);
+}
+
+.tabBadge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  background-color: var(--tv-color-brand, #2962ff);
+  color: white;
+  border-radius: 9px;
+  font-size: 10px;
+  font-weight: 600;
+}
+
+/* Content Area */
+.content {
+  flex: 1;
+  overflow: auto;
+  padding: 0 0 0 48px;
+  /* Extra left padding to clear left toolbar (48px) - table cells add 12px more = 60px aligns with header */
+  transition: padding-left 0.15s ease;
+}
+
+.content.noToolbar {
+  padding-left: 0 !important;
+  /* 0px padding + 12px table cell padding = 12px aligns with header */
+}
+
+/* Tables */
+.tableWrapper {
+  overflow-x: auto;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11px;
+  table-layout: fixed;
+}
+
+.table thead {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+.table th {
+  padding: 8px 12px;
+  text-align: left;
+  font-weight: 500;
+  color: var(--tv-color-text-secondary);
+  background-color: var(--tv-color-toolbar-background, #1e1e1e);
+  border-bottom: 1px solid var(--tv-color-border, #2A2E39);
+  white-space: nowrap;
+  text-transform: uppercase;
+  font-size: 10px;
+  letter-spacing: 0.5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.table td {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--tv-color-border-subtle, rgba(255, 255, 255, 0.05));
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.table tbody tr:hover {
+  background-color: rgba(255, 255, 255, 0.03);
+}
+
+.clickableRow {
+  cursor: pointer;
+}
+
+.clickableRow:hover {
+  background-color: rgba(41, 98, 255, 0.1) !important;
+}
+
+.alignRight {
+  text-align: right;
+}
+
+/* Ensure right-alignment works for table headers (overrides .table th default) */
+.table th.alignRight,
+.table td.alignRight {
+  text-align: right !important;
+}
+
+.symbolCell {
+  font-weight: 600;
+  color: var(--tv-color-text-primary);
+}
+
+.timeCell {
+  color: var(--tv-color-text-secondary);
+  font-size: 10px;
+}
+
+/* P&L Colors */
+.positive {
+  color: #089981 !important;
+}
+
+.negative {
+  color: #F23645 !important;
+}
+
+/* Status Badges */
+.statusBadge {
+  display: inline-block;
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-size: 10px;
+  font-weight: 500;
+  text-transform: capitalize;
+}
+
+.statuscomplete {
+  background-color: rgba(8, 153, 129, 0.2);
+  color: #089981;
+}
+
+.statusopen {
+  background-color: rgba(41, 98, 255, 0.2);
+  color: #2962ff;
+}
+
+.statusrejected {
+  background-color: rgba(242, 54, 69, 0.2);
+  color: #F23645;
+}
+
+.statuspending {
+  background-color: rgba(255, 152, 0, 0.2);
+  color: #FF9800;
+}
+
+/* Footer */
+.footer {
+  flex-shrink: 0;
+  border-top: 1px solid var(--tv-color-border, #2A2E39);
+  background-color: var(--tv-color-toolbar-background, #1e1e1e);
+  z-index: 2;
+  transition: padding-left 0.15s ease;
+  padding-left: 48px;
+  /* Match content padding */
+}
+
+.footer.noToolbar {
+  padding-left: 0 !important;
+}
+
+/* Stats Footer */
+.orderStats,
+.holdingStats {
+  display: flex;
+  gap: 16px;
+  padding: 8px 12px;
+  font-size: 11px;
+  color: var(--tv-color-text-secondary);
+}
+
+/* Empty State */
+.emptyState {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 20px;
+  color: var(--tv-color-text-secondary);
+  text-align: center;
+}
+
+.emptyIcon {
+  font-size: 32px;
+  margin-bottom: 12px;
+  opacity: 0.5;
+}
+
+.emptyState p {
+  margin: 0;
+  font-size: 13px;
+}
+
+/* Loading State */
+.loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 20px;
+  color: var(--tv-color-text-secondary);
+  gap: 12px;
+}
+
+.spinning {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .headerCenter {
+    display: none;
+  }
+
+  .header {
+    padding: 6px 8px 6px 60px;
+    /* Keep 60px left padding for toolbar clearance */
+  }
+
+  .tabs {
+    padding-left: 60px;
+    /* Keep left padding for toolbar clearance */
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .tab {
+    padding: 8px 12px;
+    font-size: 11px;
+  }
+}

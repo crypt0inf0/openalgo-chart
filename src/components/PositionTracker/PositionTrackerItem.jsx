@@ -3,7 +3,7 @@ import classNames from 'classnames';
 import { ArrowUp, ArrowDown, Minus, X } from 'lucide-react';
 import styles from './PositionTrackerItem.module.css';
 
-const PositionTrackerItem = memo(({ item, onClick, onRemove, showRemove }) => {
+const PositionTrackerItem = memo(({ item, isFocused, onClick, onRemove, showRemove, columnWidths }) => {
   const {
     symbol,
     exchange,
@@ -95,38 +95,41 @@ const PositionTrackerItem = memo(({ item, onClick, onRemove, showRemove }) => {
 
   return (
     <div
-      className={classNames(styles.item, animationClass)}
+      className={classNames(styles.item, animationClass, {
+        [styles.focused]: isFocused,
+      })}
       onClick={onClick}
       role="button"
-      tabIndex={0}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
-          onClick();
-        }
-      }}
     >
-      <span className={styles.rank}>{getRankDisplay(currentRank)}</span>
+      <span className={styles.rank} style={columnWidths?.rank ? { width: columnWidths.rank } : undefined}>
+        {getRankDisplay(currentRank)}
+      </span>
+      <span className={styles.spacer} />
 
-      <span className={styles.moveCol}>
+      <span className={styles.moveCol} style={columnWidths?.move ? { width: columnWidths.move } : undefined}>
         {renderMovementIndicator()}
       </span>
+      <span className={styles.spacer} />
 
-      <span className={styles.symbolCol}>
+      <span className={styles.symbolCol} style={columnWidths?.symbol ? { width: columnWidths.symbol, flex: 'none' } : undefined}>
         <span className={styles.symbolName}>{symbol}</span>
         {exchange && exchange !== 'NSE' && (
           <span className={styles.exchangeBadge}>{exchange}</span>
         )}
       </span>
+      <span className={styles.spacer} />
 
-      <span className={classNames(styles.ltp, isPositive ? styles.up : styles.down)}>
+      <span className={classNames(styles.ltp, isPositive ? styles.up : styles.down)} style={columnWidths?.ltp ? { width: columnWidths.ltp } : undefined}>
         {formatLtp(ltp)}
       </span>
+      <span className={styles.spacer} />
 
-      <span className={classNames(styles.change, isPositive ? styles.up : styles.down)}>
+      <span className={classNames(styles.change, isPositive ? styles.up : styles.down)} style={columnWidths?.change ? { width: columnWidths.change } : undefined}>
         {formatPercentChange(percentChange)}
       </span>
+      <span className={styles.spacer} />
 
-      <span className={styles.volume}>
+      <span className={styles.volume} style={columnWidths?.volume ? { width: columnWidths.volume } : undefined}>
         {isVolumeSpike && '🔥'}{formatVolume(volume)}
       </span>
 

@@ -22,5 +22,11 @@ export default defineConfig({
         secure: true,
       }
     }
+  },
+  test: {
+    globals: true,
+    environment: 'jsdom',
+    setupFiles: './vitest.setup.js',
+    css: true,
   }
 })

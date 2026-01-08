@@ -28,7 +28,9 @@ const SYNC_KEYS = [
     'tv_layout_templates',   // Layout templates
     'tv_favorite_drawing_tools', // Favorite drawing tools
     'tv_floating_toolbar_pos', // Floating toolbar position
-    'tv_recent_commands'     // Recent commands
+    'tv_recent_commands',    // Recent commands
+    'oa_session_break_visible', // Session break visibility setting
+    'oa_timer_visible'       // Timer visibility setting
 ];
 
 /**
@@ -152,6 +154,11 @@ export const useCloudWorkspaceSync = (isAuthenticated) => {
                             logger.error(`[CloudSync] Error applying key ${key}:`, e);
                         }
                     });
+
+                    // Populate global cache for loadDrawings to use (avoids duplicate API calls)
+                    if (!window._chartPrefsCache) window._chartPrefsCache = {};
+                    Object.assign(window._chartPrefsCache, prefs);
+
                     logger.info(`[CloudSync] Applied ${appliedCount} preferences from cloud.`);
                     // Increment syncKey to force AppContent remount with new localStorage data
                     setSyncKey(prev => prev + 1);

@@ -146,6 +146,29 @@
     border-radius: 0 2px 2px 0;
 }
 
+/* Persistent Chart Label - Always visible for multi-chart layouts */
+.chartLabel {
+    position: absolute;
+    top: 8px;
+    z-index: 14;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-family: -apple-system, BlinkMacSystemFont, 'Trebuchet MS', Roboto, Ubuntu, sans-serif;
+    font-size: 11px;
+    pointer-events: none;
+}
+
+.chartLabelSymbol {
+    color: var(--tv-color-text-primary, #D1D4DC);
+    font-weight: 600;
+}
+
+.chartLabelInterval {
+    color: var(--tv-color-text-secondary, #787B86);
+    font-weight: 400;
+}
+
 /* OHLC Header Bar */
 .ohlcHeader {
     position: absolute;
@@ -164,6 +187,13 @@
 .ohlcSymbol {
     color: var(--tv-color-text-primary, #D1D4DC);
     font-weight: 600;
+    margin-right: 2px;
+}
+
+.ohlcInterval {
+    color: var(--tv-color-text-secondary, #787B86);
+    font-weight: 400;
+    margin-right: 2px;
 }
 
 .ohlcDot {
@@ -171,6 +201,7 @@
     height: 6px;
     border-radius: 50%;
     background-color: #089981;
+    margin-right: 2px;
 }
 
 .ohlcDot.down {
@@ -426,10 +457,10 @@
 /* Right-click Context Menu */
 .contextMenu {
     position: fixed;
-    background-color: var(--tv-color-popup-background, #1e222d);
-    border: 1px solid var(--tv-color-border, #363a45);
+    background-color: var(--tv-color-popup-background, var(--tv-color-platform-background, #ffffff));
+    border: 1px solid var(--tv-color-border, #e0e3eb);
     border-radius: 4px;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
     z-index: 1000;
     min-width: 160px;
     padding: 4px 0;
@@ -442,7 +473,7 @@
     padding: 8px 12px;
     background: transparent;
     border: none;
-    color: var(--tv-color-text-primary, #d1d4dc);
+    color: var(--tv-color-text-primary, #131722);
     font-size: 13px;
     cursor: pointer;
     text-align: left;
@@ -450,5 +481,5 @@
 }
 
 .contextMenuItem:hover {
-    background-color: var(--tv-color-toolbar-button-background-hover, #2a2e39);
+    background-color: var(--tv-color-toolbar-button-background-hover, var(--tv-color-platform-background-hover, #f0f3fa));
 }

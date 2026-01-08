@@ -64,11 +64,16 @@ export const syncTimeWithAPI = async () => {
                 const localTimestampUTC = Date.now() / 1000;
 
                 // Offset = NPL time - local time (how much our clock is off from true UTC)
-                timeOffset = adjustedNplTime - localTimestampUTC;
+                const newOffset = adjustedNplTime - localTimestampUTC;
+
+                // Only log if offset changes significantly (> 100ms) or first sync
+                if (Math.abs(newOffset - timeOffset) > 0.1 || !isSynced) {
+                    logger.debug('[TimeService] Synced with NPL India. Offset:', newOffset.toFixed(3), 'seconds, Latency:', (networkLatency * 1000).toFixed(0), 'ms');
+                }
+
+                timeOffset = newOffset;
                 lastSyncTime = Date.now();
                 isSynced = true;
-
-                logger.debug('[TimeService] Synced with NPL India. Offset:', timeOffset.toFixed(3), 'seconds, Latency:', (networkLatency * 1000).toFixed(0), 'ms');
                 return true;
             }
         }
@@ -126,11 +131,11 @@ export const initTimeService = async () => {
         return;
     }
 
-    await syncTimeWithAPI();
+    await syncTimeWithAPI().catch(err => logger.debug('[TimeService] Initial sync error:', err));
 
     // Set up periodic resync
     syncIntervalId = setInterval(() => {
-        syncTimeWithAPI();
+        syncTimeWithAPI().catch(err => logger.debug('[TimeService] Interval sync error:', err));
     }, SYNC_INTERVAL_MS);
 
     console.log('[TimeService] Initialized with NPL India. Offset:', timeOffset.toFixed(3), 'seconds');

@@ -1,573 +1,321 @@
 /**
  * TPO Profile Primitive for lightweight-charts
- * Implements ISeriesPrimitive interface to render TPO/Market Profile
- *
- * This primitive renders:
- * - TPO letters/blocks at each price level (with gradient colors)
- * - POC (Point of Control) line
- * - Value Area shading (VAH/VAL)
- * - Initial Balance range
- * - Poor High/Low indicators
- * - Single Prints highlighting
- * - Midpoint line
- * - Open/Close markers
+ * High-Contrast "Block + Letter" Rendering Style
+ * 
+ * Features:
+ * - Each letter is drawn inside a solid colored block
+ * - White text on colored background for maximum contrast
+ * - Verdana Bold font for readability
+ * - Profiles are positioned at their Session Start time
  */
 
 import { getLetterColor, TPO_LINE_COLORS } from './TPOConstants';
 
 const DEFAULT_OPTIONS = {
-  // Display options
-  showLetters: true,
-  showPOC: true,
-  showValueArea: true,
-  showInitialBalance: true,
-  showVAH: true,
-  showVAL: true,
-  showPoorHigh: false,
-  showPoorLow: false,
-  showSinglePrints: false,
-  showMidpoint: false,
-  showOpen: false,
-  showClose: false,
-  useGradientColors: true,  // Use TradingView-style gradient
-  position: 'right', // 'left', 'right', 'overlay'
+    // Display options
+    visible: true,
+    showLetters: true,
+    showPOC: true,
+    showValueArea: true,
+    showInitialBalance: false,
+    showVAH: true,
+    showVAL: true,
+    showPoorHigh: false,
+    showPoorLow: false,
+    useGradientColors: true,
 
-  // Sizing
-  letterWidth: 12,
-  letterHeight: 14,
-  letterSpacing: 2,
-  maxLettersVisible: 26,
+    // Sizing - Optimized for Block+Letter style
+    letterWidth: 14,
+    letterHeight: 18,
+    letterSpacing: 1,      // 1px gap between blocks
+    maxLettersVisible: 40,
 
-  // Colors - defaults from TPO_LINE_COLORS
-  letterColor: '#1E88E5',  // Fallback if gradient disabled
-  letterBackgroundColor: 'transparent',
-  pocColor: TPO_LINE_COLORS.poc,
-  pocLineWidth: 2,
-  vahColor: TPO_LINE_COLORS.vah,
-  valColor: TPO_LINE_COLORS.val,
-  valueAreaColor: TPO_LINE_COLORS.valueArea,
-  ibColor: TPO_LINE_COLORS.ibFill,
-  ibBorderColor: TPO_LINE_COLORS.ibBorder,
-  poorHighColor: TPO_LINE_COLORS.poorHigh,
-  poorLowColor: TPO_LINE_COLORS.poorLow,
-  singlePrintColor: TPO_LINE_COLORS.singlePrint,
-  midpointColor: TPO_LINE_COLORS.midpoint,
-  openColor: '#4CAF50',   // Green for open
-  closeColor: '#F44336',  // Red for close
+    // Colors
+    pocColor: '#FFEB3B',     // Bright yellow
+    pocLineWidth: 2,
+    vahColor: '#26a69a',     // Teal
+    valColor: '#ef5350',     // Red
+    valueAreaColor: 'rgba(100, 181, 246, 0.1)', // Very faint background
+    ibColor: 'rgba(255, 193, 7, 0.15)',
+    ibBorderColor: '#FFC107',
 
-  // Font
-  fontSize: 11,
-  fontFamily: 'Arial, sans-serif',
+    // Font
+    fontSize: 10,
+    fontFamily: 'Verdana, Arial, sans-serif',
 };
 
 /**
  * TPO Pane Renderer - handles actual Canvas2D drawing
  */
 class TPOPaneRenderer {
-  constructor(source) {
-    this._source = source;
-  }
-
-  draw(target) {
-    target.useBitmapCoordinateSpace((scope) => {
-      const { context: ctx, bitmapSize, horizontalPixelRatio, verticalPixelRatio } = scope;
-      const profiles = this._source._profiles;
-      const options = this._source._options;
-      const series = this._source._series;
-      const chart = this._source._chart;
-
-      if (!series || !profiles || profiles.length === 0) return;
-
-      // Get the most recent profile (current session)
-      const currentProfile = profiles[profiles.length - 1];
-      if (!currentProfile || !currentProfile.priceLevels) return;
-
-      const chartWidth = bitmapSize.width;
-      const chartHeight = bitmapSize.height;
-
-      // Calculate x position for TPO display based on position option
-      // Calculate required width for TPO letters
-      const letterWidth = options.letterWidth * horizontalPixelRatio;
-      const spacing = options.letterSpacing * horizontalPixelRatio;
-      const maxTpoWidth = options.maxLettersVisible * (letterWidth + spacing);
-
-      let baseX;
-      if (options.position === 'left') {
-        baseX = 20 * horizontalPixelRatio;
-      } else if (options.position === 'overlay') {
-        baseX = chartWidth * 0.5; // Center of chart
-      } else {
-        // Right (default) - position in right 30% of chart
-        baseX = chartWidth * 0.7;
-      }
-
-      // Draw Initial Balance range (background)
-      if (options.showInitialBalance && currentProfile.ibHigh !== undefined && currentProfile.ibLow !== undefined) {
-        this._drawInitialBalance(ctx, series, currentProfile, options, chartWidth, horizontalPixelRatio, verticalPixelRatio);
-      }
-
-      // Draw Value Area shading (background)
-      if (options.showValueArea && currentProfile.vah !== undefined && currentProfile.val !== undefined) {
-        this._drawValueArea(ctx, series, currentProfile, options, chartWidth, horizontalPixelRatio, verticalPixelRatio);
-      }
-
-      // Draw Single Prints highlighting (background)
-      if (options.showSinglePrints && currentProfile.singlePrints?.length > 0) {
-        this._drawSinglePrints(ctx, series, currentProfile, options, chartWidth, horizontalPixelRatio, verticalPixelRatio);
-      }
-
-      // Draw TPO letters/blocks at each price level
-      this._drawTPOLetters(ctx, series, currentProfile, options, baseX, horizontalPixelRatio, verticalPixelRatio);
-
-      // Draw POC line
-      if (options.showPOC && currentProfile.poc !== undefined && currentProfile.poc !== 0) {
-        this._drawPOCLine(ctx, series, currentProfile.poc, options, chartWidth, horizontalPixelRatio, verticalPixelRatio);
-      }
-
-      // Draw VAH/VAL lines
-      if (options.showVAH || options.showVAL) {
-        this._drawVALines(ctx, series, currentProfile, options, chartWidth, horizontalPixelRatio, verticalPixelRatio);
-      }
-
-      // Draw Poor High line
-      if (options.showPoorHigh && currentProfile.poorHigh !== null) {
-        this._drawPoorHighLine(ctx, series, currentProfile.poorHigh, options, chartWidth, horizontalPixelRatio, verticalPixelRatio);
-      }
-
-      // Draw Poor Low line
-      if (options.showPoorLow && currentProfile.poorLow !== null) {
-        this._drawPoorLowLine(ctx, series, currentProfile.poorLow, options, chartWidth, horizontalPixelRatio, verticalPixelRatio);
-      }
-
-      // Draw Midpoint line
-      if (options.showMidpoint && currentProfile.midpoint) {
-        this._drawMidpointLine(ctx, series, currentProfile.midpoint, options, chartWidth, horizontalPixelRatio, verticalPixelRatio);
-      }
-
-      // Draw Open/Close markers
-      if (options.showOpen && currentProfile.openPrice) {
-        this._drawOpenMarker(ctx, series, currentProfile.openPrice, options, chartWidth, horizontalPixelRatio, verticalPixelRatio);
-      }
-      if (options.showClose && currentProfile.closePrice) {
-        this._drawCloseMarker(ctx, series, currentProfile.closePrice, options, chartWidth, horizontalPixelRatio, verticalPixelRatio);
-      }
-    });
-  }
-
-  _drawTPOLetters(ctx, series, profile, options, baseX, hRatio, vRatio) {
-    const letterWidth = options.letterWidth * hRatio;
-    const letterHeight = options.letterHeight * vRatio;
-    const spacing = options.letterSpacing * hRatio;
-
-    ctx.font = `bold ${options.fontSize * vRatio}px ${options.fontFamily}`;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-
-    for (const [price, levelData] of profile.priceLevels) {
-      const y = series.priceToCoordinate(price);
-      if (y === null) continue;
-
-      const yPixel = Math.round(y * vRatio);
-      const letters = [...levelData.letters].sort();
-
-      // Determine background color based on level type
-      let bgColor = options.letterBackgroundColor;
-      if (price === profile.poc) {
-        bgColor = options.pocColor + '40'; // 25% opacity
-      } else if (price >= profile.val && price <= profile.vah) {
-        bgColor = options.valueAreaColor;
-      }
-
-      // Draw each letter with gradient colors
-      letters.slice(0, options.maxLettersVisible).forEach((letter, idx) => {
-        const x = baseX + (idx * (letterWidth + spacing));
-
-        // Draw background block
-        if (bgColor && bgColor !== 'transparent') {
-          ctx.fillStyle = bgColor;
-          ctx.fillRect(
-            x - letterWidth / 2,
-            yPixel - letterHeight / 2,
-            letterWidth,
-            letterHeight
-          );
-        }
-
-        // Get color for this letter (gradient or fallback)
-        const letterColor = options.useGradientColors
-          ? getLetterColor(letter)
-          : options.letterColor;
-
-        // Draw letter or block
-        if (options.showLetters) {
-          ctx.fillStyle = letterColor;
-          ctx.fillText(letter, x, yPixel);
-        } else {
-          // Draw solid block instead of letter
-          ctx.fillStyle = price === profile.poc ? options.pocColor : letterColor;
-          ctx.globalAlpha = 0.8;
-          ctx.fillRect(
-            x - letterWidth / 2 + 1,
-            yPixel - letterHeight / 2 + 1,
-            letterWidth - 2,
-            letterHeight - 2
-          );
-          ctx.globalAlpha = 1;
-        }
-      });
-
-      // If more letters than visible, show indicator
-      if (letters.length > options.maxLettersVisible) {
-        const x = baseX + (options.maxLettersVisible * (letterWidth + spacing));
-        ctx.fillStyle = options.useGradientColors ? '#9E9E9E' : options.letterColor;
-        ctx.fillText('...', x, yPixel);
-      }
+    constructor(source) {
+        this._source = source;
     }
-  }
 
-  _drawPOCLine(ctx, series, poc, options, chartWidth, hRatio, vRatio) {
-    const y = series.priceToCoordinate(poc);
-    if (y === null) return;
+    draw(target) {
+        target.useBitmapCoordinateSpace((scope) => {
+            const { context: ctx, bitmapSize, horizontalPixelRatio, verticalPixelRatio } = scope;
+            const profiles = this._source._profiles;
+            const options = this._source._options;
+            const series = this._source._series;
+            const chart = this._source._chart;
 
-    const yPixel = Math.round(y * vRatio);
+            if (!series || !chart || !profiles || profiles.length === 0 || options.visible === false) return;
 
-    ctx.beginPath();
-    ctx.strokeStyle = options.pocColor;
-    ctx.lineWidth = options.pocLineWidth * hRatio;
-    ctx.setLineDash([5 * hRatio, 5 * hRatio]);
-    ctx.moveTo(0, yPixel);
-    ctx.lineTo(chartWidth, yPixel);
-    ctx.stroke();
-    ctx.setLineDash([]);
+            const timeScale = chart.timeScale();
+            const chartWidth = bitmapSize.width;
 
-    // Draw POC label
-    ctx.fillStyle = options.pocColor;
-    ctx.font = `bold ${10 * vRatio}px ${options.fontFamily}`;
-    ctx.textAlign = 'left';
-    ctx.fillText('POC', 5 * hRatio, yPixel - 5 * vRatio);
-  }
+            // Loop through ALL profiles
+            for (const profile of profiles) {
+                // Determine absolute X position based on time
+                const startX = timeScale.timeToCoordinate(profile.sessionStart);
 
-  _drawVALines(ctx, series, profile, options, chartWidth, hRatio, vRatio) {
-    // VAH line
-    if (options.showVAH) {
-      const vahY = series.priceToCoordinate(profile.vah);
-      if (vahY !== null) {
-        const yPixel = Math.round(vahY * vRatio);
+                // If startX is null, it means the start time is not currently visible on the time scale
+                // If startX is null, check endX. If neither visible, skip.
+                const endX = timeScale.timeToCoordinate(profile.sessionEnd);
+
+                if (startX === null && endX === null) continue;
+
+                // Handle valid StartX or fallback
+                // If startX is null (offscreen left), we assume negative coordinate?
+                // This is hard with lightweight-charts coordinate API. 
+                // We'll trust whatever startX we get if it's not null, or 0 if it is but end matches?
+                // For now, simple standard: skip if null.
+                if (startX === null) continue;
+
+                const scaledStartX = startX * horizontalPixelRatio;
+
+                // Determine effective EndX for width calculation
+                let scaledEndX;
+                if (endX !== null) {
+                    scaledEndX = endX * horizontalPixelRatio;
+                } else {
+                    // endX is null (offscreen right?).
+                    // Assume enough space?
+                    scaledEndX = chartWidth + 1000;
+                }
+
+                const availableWidth = scaledEndX - scaledStartX;
+
+                // 1. Calculate Profile layout
+                const maxCols = this._calculateMaxCols(profile, options);
+
+                // Dynamic Block Sizing:
+                // Calculate optimal block width to fit within session duration
+                const idealBlockWidth = (availableWidth / Math.max(1, maxCols));
+                const standardBlockWidth = options.letterWidth * horizontalPixelRatio;
+
+                // Clamp:
+                // - Max: standard letterWidth (don't get giant if zoomed way in)
+                // - Min: 2px (don't vanish completely)
+                // Note: idealBlockWidth is the LIMIT. We must be smaller than it to avoid overlap with NEXT session.
+                // So we take min(standard, ideal).
+                let blockWidth = Math.min(standardBlockWidth, idealBlockWidth);
+
+                // Enforce minimum visibility
+                // If blocks get smaller than 2px, we might still draw them as 1px lines potentially overlapping slightly, 
+                // or we accept they are unreadable. 2px is a good minimum.
+                blockWidth = Math.max(2 * horizontalPixelRatio, blockWidth);
+
+                const profileWidth = maxCols * blockWidth;
+
+                // Decide whether to show text (only if blocks are wide enough)
+                const showText = blockWidth >= 8 * horizontalPixelRatio;
+
+                // 2. Draw Value Area Background
+                if (options.showValueArea && profile.vah && profile.val) {
+                    this._drawValueArea(ctx, series, profile, options, scaledStartX, profileWidth, horizontalPixelRatio, verticalPixelRatio);
+                }
+
+                // 3. Draw Lines (POC, VAH, VAL)
+                if (options.showPOC && profile.poc) {
+                    this._drawPOCLine(ctx, series, profile.poc, options, scaledStartX, profileWidth, horizontalPixelRatio, verticalPixelRatio);
+                }
+                if (options.showVAH || options.showVAL) {
+                    this._drawVALines(ctx, series, profile, options, scaledStartX, profileWidth, horizontalPixelRatio, verticalPixelRatio);
+                }
+
+                // 4. Draw Block+Letter TPO (Top Layer)
+                this._drawTPOLetters(ctx, series, profile, options, scaledStartX, blockWidth, showText, horizontalPixelRatio, verticalPixelRatio);
+            }
+        });
+    }
+
+    _calculateMaxCols(profile, options) {
+        let maxLen = 0;
+        for (const levelData of profile.priceLevels.values()) {
+            if (levelData.letters.size > maxLen) {
+                maxLen = levelData.letters.size;
+            }
+        }
+        return Math.min(maxLen, options.maxLettersVisible);
+    }
+
+    _drawTPOLetters(ctx, series, profile, options, startX, blockWidth, showText, hRatio, vRatio) {
+        const fontSize = options.fontSize * vRatio;
+        const rowHeight = options.letterHeight * vRatio;
+        // Use reduced spacing if blocks are tiny
+        const spacing = (blockWidth < 4 * hRatio) ? 0 : (1 * hRatio);
+
+        if (showText) {
+            ctx.font = `bold ${fontSize}px ${options.fontFamily}`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+        }
+
+        const sortedPrices = [...profile.priceLevels.keys()].sort((a, b) => b - a);
+
+        for (const price of sortedPrices) {
+            const levelData = profile.priceLevels.get(price);
+            const y = series.priceToCoordinate(price);
+            if (y === null) continue;
+
+            const yPixel = Math.round(y * vRatio);
+            const letters = [...levelData.letters].sort();
+
+            let x = startX;
+
+            letters.slice(0, options.maxLettersVisible).forEach((letter) => {
+                let color = options.useGradientColors ? getLetterColor(letter) : '#26a69a';
+
+                // Draw Solid background block
+                ctx.fillStyle = color;
+                ctx.fillRect(x, yPixel - rowHeight / 2 + 1, blockWidth - spacing, rowHeight - 2);
+
+                // Draw White Text (only if space permits)
+                if (showText) {
+                    ctx.fillStyle = '#FFFFFF';
+                    ctx.fillText(letter, Math.round(x + (blockWidth - spacing) / 2), Math.round(yPixel + 1));
+                }
+
+                x += blockWidth;
+            });
+
+            // Overflow indicator
+            if (letters.length > options.maxLettersVisible) {
+                ctx.fillStyle = '#9E9E9E';
+                if (showText) {
+                    ctx.textAlign = 'left';
+                    ctx.fillText('+', x + 2, yPixel);
+                    ctx.textAlign = 'center';
+                } else {
+                    ctx.fillRect(x, yPixel - 2, 2 * hRatio, 4 * hRatio);
+                }
+            }
+        }
+    }
+
+    _drawPOCLine(ctx, series, poc, options, startX, width, hRatio, vRatio) {
+        const y = series.priceToCoordinate(poc);
+        if (y === null) return;
+        const yPixel = Math.round(y * vRatio);
+        const endX = startX + width;
+
         ctx.beginPath();
-        ctx.strokeStyle = options.vahColor;
-        ctx.lineWidth = 1 * hRatio;
-        ctx.setLineDash([3 * hRatio, 3 * hRatio]);
-        ctx.moveTo(0, yPixel);
-        ctx.lineTo(chartWidth, yPixel);
+        ctx.strokeStyle = options.pocColor;
+        ctx.lineWidth = options.pocLineWidth * hRatio;
+        ctx.setLineDash([6 * hRatio, 4 * hRatio]);
+        ctx.moveTo(startX, yPixel);
+        ctx.lineTo(endX + 30 * hRatio, yPixel); // Extend slightly
         ctx.stroke();
         ctx.setLineDash([]);
 
-        ctx.fillStyle = options.vahColor;
-        ctx.font = `${9 * vRatio}px ${options.fontFamily}`;
+        ctx.fillStyle = options.pocColor;
+        ctx.font = `bold ${10 * vRatio}px ${options.fontFamily}`;
         ctx.textAlign = 'left';
-        ctx.fillText('VAH', 5 * hRatio, yPixel - 3 * vRatio);
-      }
+        ctx.fillText('POC', endX + 32 * hRatio, yPixel + 3 * vRatio);
     }
 
-    // VAL line
-    if (options.showVAL) {
-      const valY = series.priceToCoordinate(profile.val);
-      if (valY !== null) {
-        const yPixel = Math.round(valY * vRatio);
-        ctx.beginPath();
-        ctx.strokeStyle = options.valColor;
-        ctx.lineWidth = 1 * hRatio;
-        ctx.setLineDash([3 * hRatio, 3 * hRatio]);
-        ctx.moveTo(0, yPixel);
-        ctx.lineTo(chartWidth, yPixel);
-        ctx.stroke();
-        ctx.setLineDash([]);
+    _drawVALines(ctx, series, profile, options, startX, width, hRatio, vRatio) {
+        const endX = startX + width;
 
-        ctx.fillStyle = options.valColor;
-        ctx.font = `${9 * vRatio}px ${options.fontFamily}`;
-        ctx.textAlign = 'left';
-        ctx.fillText('VAL', 5 * hRatio, yPixel + 10 * vRatio);
-      }
+        if (options.showVAH && profile.vah) {
+            const y = series.priceToCoordinate(profile.vah);
+            if (y !== null) {
+                const yPixel = Math.round(y * vRatio);
+                ctx.beginPath();
+                ctx.strokeStyle = options.vahColor;
+                ctx.lineWidth = 1.5 * hRatio;
+                ctx.setLineDash([4 * hRatio, 4 * hRatio]);
+                ctx.moveTo(startX, yPixel);
+                ctx.lineTo(endX, yPixel);
+                ctx.stroke();
+                ctx.setLineDash([]);
+            }
+        }
+
+        if (options.showVAL && profile.val) {
+            const y = series.priceToCoordinate(profile.val);
+            if (y !== null) {
+                const yPixel = Math.round(y * vRatio);
+                ctx.beginPath();
+                ctx.strokeStyle = options.valColor;
+                ctx.lineWidth = 1.5 * hRatio;
+                ctx.setLineDash([4 * hRatio, 4 * hRatio]);
+                ctx.moveTo(startX, yPixel);
+                ctx.lineTo(endX, yPixel);
+                ctx.stroke();
+                ctx.setLineDash([]);
+            }
+        }
     }
-  }
 
-  _drawValueArea(ctx, series, profile, options, chartWidth, hRatio, vRatio) {
-    const vahY = series.priceToCoordinate(profile.vah);
-    const valY = series.priceToCoordinate(profile.val);
+    _drawValueArea(ctx, series, profile, options, startX, profileWidth, hRatio, vRatio) {
+        const vahY = series.priceToCoordinate(profile.vah);
+        const valY = series.priceToCoordinate(profile.val);
+        if (vahY === null || valY === null) return;
 
-    if (vahY === null || valY === null) return;
+        const top = Math.round(Math.min(vahY, valY) * vRatio);
+        const bottom = Math.round(Math.max(vahY, valY) * vRatio);
+        const height = bottom - top;
 
-    const top = Math.round(Math.min(vahY, valY) * vRatio);
-    const bottom = Math.round(Math.max(vahY, valY) * vRatio);
-    const height = bottom - top;
-
-    // LIMIT TO TPO AREA (right 30% of chart) - not full width
-    const tpoAreaStart = chartWidth * 0.7;
-    const tpoAreaWidth = chartWidth * 0.3;
-
-    ctx.fillStyle = options.valueAreaColor;
-    ctx.fillRect(tpoAreaStart, top, tpoAreaWidth, height);
-  }
-
-  _drawInitialBalance(ctx, series, profile, options, chartWidth, hRatio, vRatio) {
-    const ibHighY = series.priceToCoordinate(profile.ibHigh);
-    const ibLowY = series.priceToCoordinate(profile.ibLow);
-
-    if (ibHighY === null || ibLowY === null) return;
-
-    const top = Math.round(Math.min(ibHighY, ibLowY) * vRatio);
-    const bottom = Math.round(Math.max(ibHighY, ibLowY) * vRatio);
-    const height = bottom - top;
-
-    // LIMIT TO TPO AREA (right 30% of chart) - not full width
-    const tpoAreaStart = chartWidth * 0.7;
-    const tpoAreaWidth = chartWidth * 0.3;
-
-    // Fill - LIMITED WIDTH
-    ctx.fillStyle = options.ibColor;
-    ctx.fillRect(tpoAreaStart, top, tpoAreaWidth, height);
-
-    // Border - LIMITED WIDTH
-    ctx.strokeStyle = options.ibBorderColor;
-    ctx.lineWidth = 1 * hRatio;
-    ctx.setLineDash([2 * hRatio, 2 * hRatio]);
-    ctx.strokeRect(tpoAreaStart, top, tpoAreaWidth, height);
-    ctx.setLineDash([]);
-
-    // Label - position at end of TPO area
-    ctx.fillStyle = options.ibBorderColor;
-    ctx.font = `${9 * vRatio}px ${options.fontFamily}`;
-    ctx.textAlign = 'right';
-    ctx.fillText('IB', chartWidth - 5 * hRatio, top + 12 * vRatio);
-  }
-
-  _drawPoorHighLine(ctx, series, poorHigh, options, chartWidth, hRatio, vRatio) {
-    const y = series.priceToCoordinate(poorHigh);
-    if (y === null) return;
-
-    const yPixel = Math.round(y * vRatio);
-
-    ctx.beginPath();
-    ctx.strokeStyle = options.poorHighColor;
-    ctx.lineWidth = 1.5 * hRatio;
-    ctx.setLineDash([4 * hRatio, 4 * hRatio]);
-    ctx.moveTo(0, yPixel);
-    ctx.lineTo(chartWidth, yPixel);
-    ctx.stroke();
-    ctx.setLineDash([]);
-
-    // Draw label
-    ctx.fillStyle = options.poorHighColor;
-    ctx.font = `${9 * vRatio}px ${options.fontFamily}`;
-    ctx.textAlign = 'left';
-    ctx.fillText('Poor High', 5 * hRatio, yPixel - 5 * vRatio);
-  }
-
-  _drawPoorLowLine(ctx, series, poorLow, options, chartWidth, hRatio, vRatio) {
-    const y = series.priceToCoordinate(poorLow);
-    if (y === null) return;
-
-    const yPixel = Math.round(y * vRatio);
-
-    ctx.beginPath();
-    ctx.strokeStyle = options.poorLowColor;
-    ctx.lineWidth = 1.5 * hRatio;
-    ctx.setLineDash([4 * hRatio, 4 * hRatio]);
-    ctx.moveTo(0, yPixel);
-    ctx.lineTo(chartWidth, yPixel);
-    ctx.stroke();
-    ctx.setLineDash([]);
-
-    // Draw label
-    ctx.fillStyle = options.poorLowColor;
-    ctx.font = `${9 * vRatio}px ${options.fontFamily}`;
-    ctx.textAlign = 'left';
-    ctx.fillText('Poor Low', 5 * hRatio, yPixel + 12 * vRatio);
-  }
-
-  _drawSinglePrints(ctx, series, profile, options, chartWidth, hRatio, vRatio) {
-    // Draw highlighting for single print zones
-    const tpoAreaStart = chartWidth * 0.7;
-    const tpoAreaWidth = chartWidth * 0.3;
-
-    for (const price of profile.singlePrints) {
-      const y = series.priceToCoordinate(price);
-      if (y === null) continue;
-
-      const yPixel = Math.round(y * vRatio);
-      const height = options.letterHeight * vRatio;
-
-      // Yellow highlight behind single print levels
-      ctx.fillStyle = options.singlePrintColor + '40'; // 25% opacity
-      ctx.fillRect(tpoAreaStart, yPixel - height / 2, tpoAreaWidth, height);
+        ctx.fillStyle = options.valueAreaColor;
+        // Draw background corresponding to profile width
+        ctx.fillRect(startX, top, profileWidth, height);
     }
-  }
-
-  _drawMidpointLine(ctx, series, midpoint, options, chartWidth, hRatio, vRatio) {
-    const y = series.priceToCoordinate(midpoint);
-    if (y === null) return;
-
-    const yPixel = Math.round(y * vRatio);
-
-    ctx.beginPath();
-    ctx.strokeStyle = options.midpointColor;
-    ctx.lineWidth = 1 * hRatio;
-    ctx.setLineDash([2 * hRatio, 4 * hRatio]);
-    ctx.moveTo(0, yPixel);
-    ctx.lineTo(chartWidth, yPixel);
-    ctx.stroke();
-    ctx.setLineDash([]);
-
-    // Draw label
-    ctx.fillStyle = options.midpointColor;
-    ctx.font = `${9 * vRatio}px ${options.fontFamily}`;
-    ctx.textAlign = 'left';
-    ctx.fillText('MID', 5 * hRatio, yPixel - 3 * vRatio);
-  }
-
-  _drawOpenMarker(ctx, series, openPrice, options, chartWidth, hRatio, vRatio) {
-    const y = series.priceToCoordinate(openPrice);
-    if (y === null) return;
-
-    const yPixel = Math.round(y * vRatio);
-    const markerSize = 6 * hRatio;
-
-    // Draw triangle pointing right (open)
-    ctx.beginPath();
-    ctx.fillStyle = options.openColor;
-    ctx.moveTo(10 * hRatio, yPixel - markerSize);
-    ctx.lineTo(10 * hRatio + markerSize, yPixel);
-    ctx.lineTo(10 * hRatio, yPixel + markerSize);
-    ctx.closePath();
-    ctx.fill();
-
-    // Label
-    ctx.font = `${8 * vRatio}px ${options.fontFamily}`;
-    ctx.textAlign = 'left';
-    ctx.fillText('O', 18 * hRatio, yPixel + 3 * vRatio);
-  }
-
-  _drawCloseMarker(ctx, series, closePrice, options, chartWidth, hRatio, vRatio) {
-    const y = series.priceToCoordinate(closePrice);
-    if (y === null) return;
-
-    const yPixel = Math.round(y * vRatio);
-    const markerSize = 6 * hRatio;
-
-    // Draw square (close)
-    ctx.fillStyle = options.closeColor;
-    ctx.fillRect(
-      10 * hRatio - markerSize / 2,
-      yPixel - markerSize / 2,
-      markerSize,
-      markerSize
-    );
-
-    // Label
-    ctx.font = `${8 * vRatio}px ${options.fontFamily}`;
-    ctx.textAlign = 'left';
-    ctx.fillText('C', 18 * hRatio, yPixel + 3 * vRatio);
-  }
 }
 
-/**
- * TPO Pane View - creates renderer for drawing
- */
 class TPOPaneView {
-  constructor(source) {
-    this._source = source;
-  }
-
-  update() {
-    // Called when chart needs to update
-  }
-
-  renderer() {
-    return new TPOPaneRenderer(this._source);
-  }
-
-  zOrder() {
-    return 'bottom'; // Draw behind candlesticks
-  }
+    constructor(source) { this._source = source; }
+    update() { }
+    renderer() { return new TPOPaneRenderer(this._source); }
+    zOrder() { return 'top'; }
 }
 
-/**
- * Main TPO Profile Primitive class
- * Implements ISeriesPrimitive interface for lightweight-charts
- */
 export class TPOProfilePrimitive {
-  constructor(options = {}) {
-    this._options = { ...DEFAULT_OPTIONS, ...options };
-    this._profiles = [];
-    this._paneViews = [new TPOPaneView(this)];
-    this._chart = null;
-    this._series = null;
-    this._requestUpdate = null;
-  }
-
-  /**
-   * Called when primitive is attached to a series
-   */
-  attached({ chart, series, requestUpdate }) {
-    this._chart = chart;
-    this._series = series;
-    this._requestUpdate = requestUpdate;
-  }
-
-  /**
-   * Called when primitive is detached from series
-   */
-  detached() {
-    this._chart = null;
-    this._series = null;
-    this._requestUpdate = null;
-  }
-
-  /**
-   * Returns pane views for rendering
-   */
-  paneViews() {
-    return this._paneViews;
-  }
-
-  /**
-   * Trigger re-render of all views
-   */
-  updateAllViews() {
-    this._paneViews.forEach(view => view.update());
-    this._requestUpdate?.();
-  }
-
-  /**
-   * Set TPO profile data
-   * @param {Array} profiles - Array of calculated TPO profiles
-   */
-  setData(profiles) {
-    this._profiles = profiles || [];
-    this.updateAllViews();
-  }
-
-  /**
-   * Get current options
-   */
-  options() {
-    return this._options;
-  }
-
-  /**
-   * Update options and re-render
-   */
-  applyOptions(options) {
-    this._options = { ...this._options, ...options };
-    this.updateAllViews();
-  }
-
-  /**
-   * Autoscale info - return null to not affect chart scaling
-   */
-  autoscaleInfo() {
-    return null;
-  }
+    constructor(options = {}) {
+        this._options = { ...DEFAULT_OPTIONS, ...options };
+        this._profiles = [];
+        this._paneViews = [new TPOPaneView(this)];
+        this._chart = null;
+        this._series = null;
+        this._requestUpdate = null;
+    }
+    attached({ chart, series, requestUpdate }) {
+        this._chart = chart;
+        this._series = series;
+        this._requestUpdate = requestUpdate;
+    }
+    detached() {
+        this._chart = null;
+        this._series = null;
+        this._requestUpdate = null;
+    }
+    paneViews() { return this._paneViews; }
+    updateAllViews() {
+        this._paneViews.forEach(view => view.update());
+        this._requestUpdate?.();
+    }
+    setData(profiles) {
+        this._profiles = profiles || [];
+        this.updateAllViews();
+    }
+    options() { return this._options; }
+    applyOptions(options) {
+        this._options = { ...this._options, ...options };
+        this.updateAllViews();
+    }
+    autoscaleInfo() { return null; }
 }
 
 export default TPOProfilePrimitive;

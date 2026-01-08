@@ -73,13 +73,71 @@
   background-color: var(--tv-color-toolbar-background, #1e1e1e);
 }
 
+/* Account Panel Area - collapsible panel below chart */
+.accountPanelArea {
+  flex: 0 0 auto;
+  width: 100%;
+  height: 200px;
+  min-height: 38px;
+  max-height: 60vh;
+  background-color: var(--tv-color-pane-background, #131722);
+  overflow: hidden;
+  position: relative;
+  border-top: 1px solid var(--tv-color-border, #2A2E39);
+}
+
+/* Note: Toolbar visibility handling is done via internal padding in AccountPanel component */
+
+.accountPanelResizing {
+  user-select: none;
+}
+
+/* Resize handle for account panel (horizontal bar at top for vertical resize) */
+.accountResizeHandle {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 6px;
+  cursor: ns-resize;
+  background: transparent;
+  z-index: 10;
+  transition: background-color 0.15s ease;
+}
+
+.accountResizeHandle::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 2px;
+  transform: translateX(-50%);
+  width: 40px;
+  height: 2px;
+  background-color: transparent;
+  border-radius: 1px;
+  transition: background-color 0.15s ease;
+}
+
+.accountResizeHandle:hover::before,
+.accountResizeHandleActive::before {
+  background-color: var(--tv-color-brand, #2962ff);
+}
+
+.accountResizeHandle:hover,
+.accountResizeHandleActive {
+  background-color: rgba(41, 98, 255, 0.1);
+}
+
+/* Chart area modifier when account panel is open - uses flex to shrink */
+
 .watchlistArea {
   flex: 0 0 auto;
   width: var(--sidebar-width-desktop, 320px);
   background-color: var(--tv-color-pane-background, #131722);
   border-left: 1px solid var(--tv-color-border, #2A2E39);
   overflow: hidden;
-  position: relative; /* For absolute resize handle */
+  position: relative;
+  /* For absolute resize handle */
 }
 
 /* Resize handle for watchlist panel */
@@ -184,6 +242,11 @@
 
   .leftToolbarArea {
     display: none;
+  }
+  
+  .leftToolbarArea.leftToolbarMobile {
+    display: block;
+    z-index: 50; /* Ensure above chart */
   }
 
   .bottomBarArea {

@@ -119,8 +119,10 @@ const Watchlist = ({
     const [draggedSection, setDraggedSection] = useState(null); // Track dragged section
     const [columnWidths, setColumnWidths] = useState(DEFAULT_COLUMN_WIDTHS);
     const [resizing, setResizing] = useState(null);
+    const [focusedIndex, setFocusedIndex] = useState(-1); // Keyboard navigation
     const startXRef = useRef(0);
     const startWidthRef = useRef(0);
+    const listRef = useRef(null);
 
     // Smart tooltip state
     const tooltip = useSmartTooltip();
@@ -441,6 +443,48 @@ const Watchlist = ({
         return groups;
     }, [sortedItems]);
 
+    // Get flat list of stock items (excluding sections) for keyboard navigation
+    const stockItems = useMemo(() => {
+        return sortedItems.filter(item => typeof item !== 'string' || !item.startsWith('###'));
+    }, [sortedItems]);
+
+    // Keyboard navigation handler
+    const handleKeyDown = useCallback((e) => {
+        if (stockItems.length === 0) return;
+
+        if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            setFocusedIndex(prev => {
+                const newIndex = prev < 0 ? 0 : Math.min(prev + 1, stockItems.length - 1);
+                return newIndex;
+            });
+        } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            setFocusedIndex(prev => {
+                const newIndex = prev < 0 ? 0 : Math.max(prev - 1, 0);
+                return newIndex;
+            });
+        } else if (e.key === 'Enter' && focusedIndex >= 0 && focusedIndex < stockItems.length) {
+            e.preventDefault();
+            const item = stockItems[focusedIndex];
+            if (item && item.symbol) {
+                onSymbolSelect({ symbol: item.symbol, exchange: item.exchange || 'NSE' });
+            }
+        }
+    }, [stockItems, focusedIndex, onSymbolSelect]);
+
+    // Wrapper for onSymbolSelect that also updates focusedIndex
+    const handleSymbolSelect = useCallback((symData) => {
+        // Find the index of the selected stock in stockItems
+        const idx = stockItems.findIndex(
+            i => i.symbol === symData.symbol && i.exchange === (symData.exchange || 'NSE')
+        );
+        if (idx >= 0) {
+            setFocusedIndex(idx);
+        }
+        onSymbolSelect(symData);
+    }, [stockItems, onSymbolSelect]);
+
     return (
         <div
             className={classNames(styles.watchlist, { [styles.isResizing]: resizing })}
@@ -538,7 +582,12 @@ const Watchlist = ({
                 </span>
             </div>
 
-            <div className={styles.list}>
+            <div
+                className={styles.list}
+                ref={listRef}
+                tabIndex={0}
+                onKeyDown={handleKeyDown}
+            >
                 {isLoading ? (
                     Array.from({ length: 5 }).map((_, index) => (
                         <SkeletonRow key={`skeleton-${index}`} />
@@ -573,17 +622,21 @@ const Watchlist = ({
                                             const globalIndex = sortedItems.findIndex(
                                                 i => i.symbol === item.symbol && i.exchange === item.exchange
                                             );
+                                            const stockIndex = stockItems.findIndex(
+                                                i => i.symbol === item.symbol && i.exchange === item.exchange
+                                            );
                                             return (
                                                 <WatchlistItem
                                                     key={`${item.symbol}-${item.exchange}`}
                                                     item={item}
                                                     isActive={currentSymbol === item.symbol && currentExchange === (item.exchange || 'NSE')}
+                                                    isFocused={stockIndex === focusedIndex}
                                                     isDragging={draggedIndex === globalIndex}
                                                     columnWidths={columnWidths}
                                                     minColumnWidth={MIN_COLUMN_WIDTH}
                                                     sortEnabled={!!sortConfig.key}
                                                     index={globalIndex}
-                                                    onSelect={onSymbolSelect}
+                                                    onSelect={handleSymbolSelect}
                                                     onRemove={onRemoveClick}
                                                     onDragStart={handleDragStart}
                                                     onDragOver={handleDragOver}
@@ -602,17 +655,21 @@ const Watchlist = ({
                                     const globalIndex = sortedItems.findIndex(
                                         i => i.symbol === item.symbol && i.exchange === item.exchange
                                     );
+                                    const stockIndex = stockItems.findIndex(
+                                        i => i.symbol === item.symbol && i.exchange === item.exchange
+                                    );
                                     return (
                                         <WatchlistItem
                                             key={`${item.symbol}-${item.exchange}`}
                                             item={item}
                                             isActive={currentSymbol === item.symbol && currentExchange === (item.exchange || 'NSE')}
+                                            isFocused={stockIndex === focusedIndex}
                                             isDragging={draggedIndex === globalIndex}
                                             columnWidths={columnWidths}
                                             minColumnWidth={MIN_COLUMN_WIDTH}
                                             sortEnabled={!!sortConfig.key}
                                             index={globalIndex}
-                                            onSelect={onSymbolSelect}
+                                            onSelect={handleSymbolSelect}
                                             onRemove={onRemoveClick}
                                             onDragStart={handleDragStart}
                                             onDragOver={handleDragOver}

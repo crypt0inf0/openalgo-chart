@@ -1,74 +1,57 @@
-import React, { useState, useMemo } from 'react';
-import { Bell, Trash2, PlayCircle, PauseCircle, Search, Filter, Volume2, BellOff, Download } from 'lucide-react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
+import { X, Bell, Trash2, PlayCircle, PauseCircle, Clock, Edit2 } from 'lucide-react';
 import styles from './AlertsPanel.module.css';
 import classNames from 'classnames';
 
-const AlertsPanel = ({ alerts, logs, onRemoveAlert, onRestartAlert, onPauseAlert, onClearAllTriggered }) => {
+const AlertsPanel = ({ alerts, logs, onRemoveAlert, onRestartAlert, onPauseAlert, onNavigate, onEditAlert }) => {
     const [activeTab, setActiveTab] = useState('alerts');
-    const [searchQuery, setSearchQuery] = useState('');
-    const [statusFilter, setStatusFilter] = useState('all');
+    const [focusedIndex, setFocusedIndex] = useState(-1);
+    const listRef = useRef(null);
 
-    // Filter alerts based on search and status
-    const filteredAlerts = useMemo(() => {
-        return alerts.filter(alert => {
-            // Status filter
-            if (statusFilter !== 'all' && alert.status?.toLowerCase() !== statusFilter) {
-                return false;
-            }
+    // Reset focusedIndex when tab changes
+    useEffect(() => {
+        setFocusedIndex(-1);
+    }, [activeTab]);
 
-            // Search filter
-            if (searchQuery) {
-                const query = searchQuery.toLowerCase();
-                const matchSymbol = alert.symbol?.toLowerCase().includes(query);
-                const matchName = alert.name?.toLowerCase().includes(query);
-                const matchCondition = alert.condition?.toLowerCase().includes(query);
-                return matchSymbol || matchName || matchCondition;
-            }
+    // Keyboard navigation handler
+    const handleKeyDown = useCallback((e) => {
+        const items = activeTab === 'alerts' ? alerts : logs;
+        if (items.length === 0) return;
 
-            return true;
-        });
-    }, [alerts, searchQuery, statusFilter]);
+        if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            setFocusedIndex(prev => prev < 0 ? 0 : Math.min(prev + 1, items.length - 1));
+        } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            setFocusedIndex(prev => prev < 0 ? 0 : Math.max(prev - 1, 0));
+        } else if (e.key === 'Delete' && focusedIndex >= 0 && activeTab === 'alerts') {
+            e.preventDefault();
+            onRemoveAlert(alerts[focusedIndex].id);
+        } else if (e.key === ' ' && focusedIndex >= 0 && activeTab === 'alerts') {
+            e.preventDefault();
+            const alert = alerts[focusedIndex];
+            if (alert.status === 'Active') onPauseAlert(alert.id);
+            else onRestartAlert(alert.id);
+        }
+    }, [activeTab, alerts, logs, focusedIndex, onRemoveAlert, onPauseAlert, onRestartAlert]);
 
-    // Count alerts by status
-    const statusCounts = useMemo(() => {
-        const counts = { active: 0, triggered: 0, paused: 0 };
-        alerts.forEach(alert => {
-            const status = alert.status?.toLowerCase() || 'active';
-            if (counts[status] !== undefined) counts[status]++;
-        });
-        return counts;
-    }, [alerts]);
+    // Handle click on alert row to navigate to that chart
+    const handleAlertClick = useCallback((alert, e) => {
+        // Don't navigate if clicking on action buttons
+        if (e.target.closest('svg') || e.target.closest('button')) return;
 
-    // Export logs as CSV
-    const exportLogs = () => {
-        if (logs.length === 0) return;
-
-        const csvContent = [
-            ['Time', 'Symbol', 'Exchange', 'Message'].join(','),
-            ...logs.map(log => [
-                new Date(log.time).toISOString(),
-                log.symbol,
-                log.exchange || 'NSE',
-                `"${log.message.replace(/"/g, '""')}"`
-            ].join(','))
-        ].join('\n');
-
-        const blob = new Blob([csvContent], { type: 'text/csv' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `alert-logs-${new Date().toISOString().split('T')[0]}.csv`;
-        a.click();
-        URL.revokeObjectURL(url);
-    };
+        if (onNavigate && alert.symbol) {
+            onNavigate({ symbol: alert.symbol, exchange: alert.exchange || 'NSE' });
+        }
+    }, [onNavigate]);
 
     return (
         <div className={styles.panel}>
             <div className={styles.header}>
-                <span className={styles.title}>
-                    <Bell size={16} />
-                    Alerts
-                </span>
+                <span className={styles.title}>Alerts</span>
+                <div className={styles.actions}>
+                    {/* Add actions if needed */}
+                </div>
             </div>
 
             <div className={styles.tabs}>
@@ -77,7 +60,6 @@ const AlertsPanel = ({ alerts, logs, onRemoveAlert, onRestartAlert, onPauseAlert
                     onClick={() => setActiveTab('alerts')}
                 >
                     Alerts
-                    {alerts.length > 0 && <span className={styles.tabCount}>{alerts.length}</span>}
                 </div>
                 <div
                     className={classNames(styles.tab, { [styles.activeTab]: activeTab === 'log' })}
@@ -88,54 +70,36 @@ const AlertsPanel = ({ alerts, logs, onRemoveAlert, onRestartAlert, onPauseAlert
                 </div>
             </div>
 
-            {activeTab === 'alerts' && alerts.length > 0 && (
-                <div className={styles.toolbar}>
-                    <div className={styles.searchBox}>
-                        <Search size={14} />
-                        <input
-                            type="text"
-                            placeholder="Search alerts..."
-                            value={searchQuery}
-                            onChange={(e) => setSearchQuery(e.target.value)}
-                            className={styles.searchInput}
-                        />
-                    </div>
-                    <select
-                        value={statusFilter}
-                        onChange={(e) => setStatusFilter(e.target.value)}
-                        className={styles.filterSelect}
-                    >
-                        <option value="all">All ({alerts.length})</option>
-                        <option value="active">Active ({statusCounts.active})</option>
-                        <option value="triggered">Triggered ({statusCounts.triggered})</option>
-                        <option value="paused">Paused ({statusCounts.paused})</option>
-                    </select>
-                </div>
-            )}
-
             <div className={styles.content}>
                 {activeTab === 'alerts' ? (
-                    <div className={styles.list}>
-                        {filteredAlerts.length === 0 ? (
-                            <div className={styles.emptyState}>
-                                {alerts.length === 0 ? 'No active alerts' : 'No matching alerts'}
-                            </div>
+                    <div
+                        className={styles.list}
+                        ref={listRef}
+                        tabIndex={0}
+                        onKeyDown={handleKeyDown}
+                    >
+                        {alerts.length === 0 ? (
+                            <div className={styles.emptyState}>No active alerts</div>
                         ) : (
-                            filteredAlerts.map(alert => {
+                            alerts.map((alert, index) => {
+                                // Normalize status so we always show a readable label
                                 const status = alert.status || 'Active';
                                 const statusKey = status.toLowerCase();
 
                                 return (
-                                    <div key={alert.id} className={classNames(styles.item, styles[statusKey])}>
+                                    <div
+                                        key={alert.id}
+                                        className={classNames(styles.item, styles[statusKey], {
+                                            [styles.focused]: index === focusedIndex
+                                        })}
+                                        onClick={(e) => handleAlertClick(alert, e)}
+                                        style={{ cursor: 'pointer' }}
+                                        title="Click to view chart"
+                                    >
                                         <div className={styles.itemHeader}>
-                                            <div className={styles.symbolGroup}>
-                                                <span className={styles.symbol}>
-                                                    {alert.symbol}{alert.exchange ? `:${alert.exchange}` : ''}
-                                                </span>
-                                                {alert.name && (
-                                                    <span className={styles.alertName}>{alert.name}</span>
-                                                )}
-                                            </div>
+                                            <span className={styles.symbol}>
+                                                {alert.symbol}{alert.exchange ? `:${alert.exchange}` : ''}
+                                            </span>
                                             <span className={classNames(styles.status, styles[statusKey])}>
                                                 {status}
                                             </span>
@@ -144,15 +108,9 @@ const AlertsPanel = ({ alerts, logs, onRemoveAlert, onRestartAlert, onPauseAlert
                                             {alert.condition}
                                         </div>
                                         <div className={styles.itemFooter}>
-                                            <div className={styles.itemMeta}>
-                                                <span className={styles.time}>
-                                                    {new Date(alert.created_at).toLocaleDateString()} {new Date(alert.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                                                </span>
-                                                <div className={styles.notifIcons}>
-                                                    {alert.enableSound !== false && <Volume2 size={12} title="Sound enabled" />}
-                                                    {alert.enablePush !== false && <Bell size={12} title="Push enabled" />}
-                                                </div>
-                                            </div>
+                                            <span className={styles.time}>
+                                                {new Date(alert.created_at).toLocaleDateString()} {new Date(alert.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                                            </span>
                                             <div className={styles.itemActions}>
                                                 {status === 'Active' && (
                                                     <PauseCircle
@@ -170,6 +128,12 @@ const AlertsPanel = ({ alerts, logs, onRemoveAlert, onRestartAlert, onPauseAlert
                                                         title="Resume Alert"
                                                     />
                                                 )}
+                                                <Edit2
+                                                    size={16}
+                                                    className={styles.actionIcon}
+                                                    onClick={() => onEditAlert && onEditAlert(alert)}
+                                                    title="Edit Alert"
+                                                />
                                                 <Trash2
                                                     size={16}
                                                     className={styles.actionIcon}
@@ -184,12 +148,19 @@ const AlertsPanel = ({ alerts, logs, onRemoveAlert, onRestartAlert, onPauseAlert
                         )}
                     </div>
                 ) : (
-                    <div className={styles.list}>
+                    <div
+                        className={styles.list}
+                        ref={listRef}
+                        tabIndex={0}
+                        onKeyDown={handleKeyDown}
+                    >
                         {logs.length === 0 ? (
                             <div className={styles.emptyState}>No logs</div>
                         ) : (
-                            logs.map(log => (
-                                <div key={log.id} className={styles.logItem}>
+                            logs.map((log, index) => (
+                                <div key={`${log.id}-${index}`} className={classNames(styles.logItem, {
+                                    [styles.focused]: index === focusedIndex
+                                })}>
                                     <div className={styles.logHeader}>
                                         <span className={styles.symbol}>
                                             {log.symbol}{log.exchange ? `:${log.exchange}` : ''}
@@ -205,33 +176,6 @@ const AlertsPanel = ({ alerts, logs, onRemoveAlert, onRestartAlert, onPauseAlert
                     </div>
                 )}
             </div>
-
-            {/* Bulk Actions Footer */}
-            {activeTab === 'alerts' && statusCounts.triggered > 0 && (
-                <div className={styles.footer}>
-                    <button
-                        className={styles.bulkButton}
-                        onClick={onClearAllTriggered}
-                        title="Remove all triggered alerts"
-                    >
-                        <Trash2 size={14} />
-                        Clear Triggered ({statusCounts.triggered})
-                    </button>
-                </div>
-            )}
-
-            {activeTab === 'log' && logs.length > 0 && (
-                <div className={styles.footer}>
-                    <button
-                        className={styles.bulkButton}
-                        onClick={exportLogs}
-                        title="Export logs as CSV"
-                    >
-                        <Download size={14} />
-                        Export Logs
-                    </button>
-                </div>
-            )}
         </div>
     );
 };

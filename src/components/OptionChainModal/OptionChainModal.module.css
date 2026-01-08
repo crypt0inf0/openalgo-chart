@@ -89,7 +89,15 @@
     overflow: hidden;
     box-shadow: var(--oc-modal-shadow);
     color: var(--oc-text);
+    transition: width 0.2s ease;
 }
+
+/* Wider modal for Greeks view */
+.modalWide {
+    width: 1150px;
+}
+
+
 
 /* Header */
 .header {
@@ -100,6 +108,54 @@
     background: var(--oc-bg);
     border-bottom: 1px solid var(--oc-border);
 }
+
+/* View Toggle - Segmented Control */
+.viewToggle {
+    display: flex;
+    align-items: center;
+    background: var(--oc-hover);
+    border-radius: 6px;
+    padding: 3px;
+    gap: 2px;
+}
+
+.viewToggleBtn {
+    padding: 6px 14px;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--oc-text-muted);
+    background: transparent;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    white-space: nowrap;
+}
+
+.viewToggleBtn:hover:not(.viewToggleBtnActive) {
+    color: var(--oc-text);
+}
+
+.viewToggleBtnActive {
+    background: var(--oc-bg);
+    color: var(--oc-text);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+[data-theme="dark"] .viewToggleBtnActive {
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+
+/* Greeks Loading Indicator */
+.greeksLoading {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    color: var(--oc-text-muted);
+}
+
+
 
 .headerLeft {
     display: flex;
@@ -398,6 +454,7 @@
 /* Table Body */
 .tableBody {
     background: var(--oc-bg);
+    outline: none;
 }
 
 /* Row - 3 columns */
@@ -411,6 +468,16 @@
 
 .row:hover {
     background: var(--oc-hover);
+}
+
+/* Focused row for keyboard navigation */
+.row.focused {
+    background: var(--oc-hover);
+}
+
+.row.focused .focusedCell {
+    outline: 2px solid var(--oc-accent);
+    outline-offset: -2px;
 }
 
 /* ITM Highlighting - Calls (column 1) */
@@ -650,6 +717,42 @@
     }
 }
 
+/* Load More Strikes Button */
+.loadMoreBtn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    width: 100%;
+    padding: 10px 16px;
+    background: linear-gradient(90deg, rgba(255, 193, 7, 0.15), rgba(255, 193, 7, 0.35), rgba(255, 193, 7, 0.15));
+    border: none;
+    border-bottom: 1px solid var(--oc-border);
+    color: #b8860b;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.loadMoreBtn:hover:not(:disabled) {
+    background: linear-gradient(90deg, rgba(255, 193, 7, 0.25), rgba(255, 193, 7, 0.5), rgba(255, 193, 7, 0.25));
+}
+
+.loadMoreBtn:disabled {
+    opacity: 0.7;
+    cursor: not-allowed;
+}
+
+[data-theme="dark"] .loadMoreBtn {
+    background: linear-gradient(90deg, rgba(255, 193, 7, 0.08), rgba(255, 193, 7, 0.2), rgba(255, 193, 7, 0.08));
+    color: #d4a617;
+}
+
+[data-theme="dark"] .loadMoreBtn:hover:not(:disabled) {
+    background: linear-gradient(90deg, rgba(255, 193, 7, 0.15), rgba(255, 193, 7, 0.35), rgba(255, 193, 7, 0.15));
+}
+
 /* Responsive */
 @media (max-width: 768px) {
     .modal {
@@ -676,5 +779,165 @@
     .cell {
         padding: 8px 4px;
         font-size: 11px;
+    }
+}
+
+/* ============================================
+   GREEKS MODE STYLES
+   ============================================ */
+
+/* Greeks mode column headers */
+.colHeadersGreeks {
+    display: grid;
+    grid-template-columns: 1fr 80px 1fr;
+    padding: 8px 8px;
+    background: var(--oc-bg);
+    border-bottom: 1px solid var(--oc-border);
+}
+
+.greeksHeaderGroup {
+    display: flex;
+    align-items: center;
+    justify-content: space-around;
+    gap: 4px;
+}
+
+.greeksHeaderLabel {
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--oc-text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+    text-align: center;
+    min-width: 50px;
+}
+
+/* Greeks row layout - 5 columns each side */
+.rowGreeks {
+    display: grid;
+    grid-template-columns: 1fr 80px 1fr;
+    border-bottom: 1px solid var(--oc-border);
+    transition: background 0.1s;
+    color: var(--oc-text);
+}
+
+.rowGreeks:hover {
+    background: var(--oc-hover);
+}
+
+/* Greeks cell container */
+.greeksCell {
+    display: flex;
+    align-items: center;
+    justify-content: space-around;
+    padding: 8px 4px;
+    cursor: pointer;
+    border-radius: 4px;
+    transition: background 0.12s;
+}
+
+.greeksCell:hover {
+    background: rgba(26, 115, 232, 0.08) !important;
+}
+
+/* Individual Greek value */
+.greekValue {
+    font-size: 12px;
+    font-weight: 500;
+    font-variant-numeric: tabular-nums;
+    color: var(--oc-text);
+    min-width: 50px;
+    text-align: center;
+}
+
+.greekValue.muted {
+    color: var(--oc-text-muted);
+}
+
+/* LTP in Greeks mode */
+.greekLtp {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--oc-text);
+    min-width: 60px;
+    text-align: center;
+}
+
+/* IV percentage styling */
+.greekIv {
+    color: var(--oc-accent);
+}
+
+/* Delta with color coding */
+.greekDeltaPositive {
+    color: var(--oc-green);
+}
+
+.greekDeltaNegative {
+    color: var(--oc-red);
+}
+
+/* Theta always negative */
+.greekTheta {
+    color: var(--oc-red);
+}
+
+/* Strike cell in Greeks mode */
+.strikeCellGreeks {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 13px;
+    color: var(--oc-text);
+    background: transparent;
+    gap: 2px;
+}
+
+.strikeIv {
+    font-size: 10px;
+    font-weight: 400;
+    color: var(--oc-text-muted);
+}
+
+/* ITM Highlighting for Greeks mode */
+.rowGreeks.itmCE .greeksCell:first-child {
+    background: var(--oc-itm-bg);
+}
+
+.rowGreeks.itmPE .greeksCell:last-child {
+    background: var(--oc-itm-bg);
+}
+
+.rowGreeks.itmCE:hover .greeksCell:first-child,
+.rowGreeks.itmPE:hover .greeksCell:last-child {
+    background: var(--oc-itm-hover);
+}
+
+/* Focused row in Greeks mode */
+.rowGreeks.focused {
+    background: var(--oc-hover);
+}
+
+.rowGreeks.focused .focusedCell {
+    outline: 2px solid var(--oc-accent);
+    outline-offset: -2px;
+}
+
+/* Responsive adjustments for Greeks mode */
+@media (max-width: 1200px) {
+    .modalWide {
+        width: 95vw;
+    }
+
+    .greekValue {
+        font-size: 11px;
+        min-width: 40px;
+    }
+
+    .greekLtp {
+        font-size: 12px;
+        min-width: 50px;
     }
 }

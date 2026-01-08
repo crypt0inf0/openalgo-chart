@@ -102,7 +102,7 @@ const HighlightText = ({ text, highlight }) => {
     );
 };
 
-const SymbolSearch = ({ isOpen, onClose, onSelect, addedSymbols = [], isCompareMode = false }) => {
+const SymbolSearch = ({ isOpen, onClose, onSelect, addedSymbols = [], isCompareMode = false, initialValue = '', onInitialValueUsed }) => {
     const [searchTerm, setSearchTerm] = useState('');
     const [symbols, setSymbols] = useState([]);
     const [isLoading, setIsLoading] = useState(false);
@@ -130,6 +130,17 @@ const SymbolSearch = ({ isOpen, onClose, onSelect, addedSymbols = [], isCompareM
         enabled: isOpen,
         onEscape: onClose,
     });
+
+    // Apply initial value when modal opens with a pre-filled character
+    useEffect(() => {
+        if (isOpen && initialValue) {
+            setSearchTerm(initialValue);
+            // Clear the initial value after using it
+            if (onInitialValueUsed) {
+                onInitialValueUsed();
+            }
+        }
+    }, [isOpen, initialValue, onInitialValueUsed]);
 
     // Load default popular symbols on open
     useEffect(() => {
