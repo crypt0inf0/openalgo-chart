@@ -671,6 +671,9 @@ const Topbar = ({
                                                             <div className={styles.dropdownDivider}></div>
                                                             <div className={styles.dropdownSection}>Market Profile</div>
                                                             <div className={styles.dropdownItem} onClick={(e) => { e.stopPropagation(); onAddIndicator('tpo'); }}>TPO Profile (30m)</div>
+                                                            <div className={styles.dropdownDivider}></div>
+                                                            <div className={styles.dropdownSection}>Strategy</div>
+                                                            <div className={styles.dropdownItem} onClick={(e) => { e.stopPropagation(); onAddIndicator('firstCandle'); }}>First Red Candle</div>
                                                         </div>
                                                     )}
                                                 </div>

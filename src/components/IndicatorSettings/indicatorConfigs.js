@@ -191,6 +191,20 @@ export const indicatorConfigs = {
             { key: 'midpointColor', label: 'Midpoint', type: 'color', default: '#9C27B0' },
         ],
     },
+
+    firstCandle: {
+        name: 'First Red Candle',
+        fullName: 'First Red Candle Strategy',
+        pane: 'main',
+        category: 'strategy',
+        description: 'Identifies the first RED candle after market open (9:15 AM IST) on 5-minute charts',
+        inputs: [],
+        style: [
+            { key: 'highlightColor', label: 'Marker Color', type: 'color', default: '#FFD700' },
+            { key: 'highLineColor', label: 'High Line', type: 'color', default: '#ef5350' },
+            { key: 'lowLineColor', label: 'Low Line', type: 'color', default: '#26a69a' },
+        ],
+    },
 };
 
 /**

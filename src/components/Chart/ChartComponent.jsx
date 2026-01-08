@@ -2452,7 +2452,7 @@ const ChartComponent = forwardRef(({
                         if (colored && colored.length > 0) series.setData(colored);
                         break;
                     }
-                    // TPO, FirstCandle, PAR?
+                    // TPO, PAR?
                     // They usually don't tick update in the same simple way or are handled by updateIndicators re-run.
                     // But strictly speaking they should update.
                     // TPO is a primitive attached to main series usually.
@@ -2640,7 +2640,86 @@ const ChartComponent = forwardRef(({
             });
         }
 
+        // ========== FIRST RED CANDLE INDICATOR (5-min only) ==========
+        const firstCandleInd = indicatorsArray?.find(ind => ind.type === 'firstCandle');
+        const is5MinChart = intervalRef.current === '5' || intervalRef.current === '5m';
+        const firstCandleEnabled = firstCandleInd?.visible !== false && is5MinChart;
 
+        console.log('[FirstCandle] updateIndicators:', {
+            firstCandleInd: !!firstCandleInd,
+            is5MinChart,
+            firstCandleEnabled,
+            dataLength: data?.length || 0
+        });
+
+        if (firstCandleEnabled && firstCandleInd && data && data.length > 0) {
+            const highLineColor = firstCandleInd.highLineColor || '#ef5350';
+            const lowLineColor = firstCandleInd.lowLineColor || '#26a69a';
+
+            const result = calculateFirstCandle(data, {
+                highlightColor: firstCandleInd.highlightColor || '#FFD700',
+                highLineColor: highLineColor,
+                lowLineColor: lowLineColor
+            });
+
+            console.log('[FirstCandle] Calculate result:', {
+                daysCount: result.days?.length || 0,
+                levelsCount: result.allLevels?.length || 0
+            });
+
+            // Remove old line series if count changed
+            const existingCount = firstCandleSeriesRef.current.length;
+            const neededCount = (result.allLevels?.length || 0) * 2;
+
+            if (existingCount !== neededCount) {
+                for (const series of firstCandleSeriesRef.current) {
+                    try { chartRef.current.removeSeries(series); } catch (e) { /* ignore */ }
+                }
+                firstCandleSeriesRef.current = [];
+            }
+
+            // Create/update line series for each day's high and low
+            if (result.allLevels && result.allLevels.length > 0 && chartRef.current) {
+                console.log('[FirstCandle] Creating series for', result.allLevels.length, 'days');
+                let seriesIndex = 0;
+                for (const level of result.allLevels) {
+                    const { high, low, startTime, endTime } = level;
+                    console.log('[FirstCandle] Level:', { high, low, startTime, endTime });
+
+                    // High line
+                    if (!firstCandleSeriesRef.current[seriesIndex]) {
+                        firstCandleSeriesRef.current[seriesIndex] = chartRef.current.addSeries(LineSeries, {
+                            color: highLineColor, lineWidth: 2, lineStyle: 2,
+                            priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false,
+                        });
+                    }
+                    firstCandleSeriesRef.current[seriesIndex].setData([
+                        { time: startTime, value: high },
+                        { time: endTime, value: high }
+                    ]);
+                    seriesIndex++;
+
+                    // Low line
+                    if (!firstCandleSeriesRef.current[seriesIndex]) {
+                        firstCandleSeriesRef.current[seriesIndex] = chartRef.current.addSeries(LineSeries, {
+                            color: lowLineColor, lineWidth: 2, lineStyle: 2,
+                            priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false,
+                        });
+                    }
+                    firstCandleSeriesRef.current[seriesIndex].setData([
+                        { time: startTime, value: low },
+                        { time: endTime, value: low }
+                    ]);
+                    seriesIndex++;
+                }
+            }
+        } else if (!firstCandleEnabled) {
+            // Remove first candle series when disabled
+            for (const series of firstCandleSeriesRef.current) {
+                try { chartRef.current.removeSeries(series); } catch (e) { /* ignore */ }
+            }
+            firstCandleSeriesRef.current = [];
+        }
 
         // --- CLEANUP LOGIC ---
         // Identify IDs that are no longer in the list
@@ -3752,8 +3831,6 @@ const ChartComponent = forwardRef(({
             }
         }
     }, [interval, symbol, exchange, tpoSettingsHash]);
-
-
 
     // Helper to prepare indicators for the legend
     const getActiveIndicators = useCallback(() => {

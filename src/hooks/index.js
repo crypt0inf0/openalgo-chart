@@ -34,6 +34,3 @@ export {
 
 // Global keyboard shortcuts
 export { useGlobalShortcuts } from './useGlobalShortcuts';
-
-// First Red Candle indicator hook
-export { useFirstRedCandle } from './useFirstRedCandle';
