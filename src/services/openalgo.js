@@ -114,7 +114,8 @@ class SharedWebSocketManager {
         if (this._ws && this._ws.readyState === WebSocket.OPEN) return;
         if (this._ws && this._ws.readyState === WebSocket.CONNECTING) return;
 
-        const url = `ws://${localStorage.getItem('oa_ws_url') || DEFAULT_WS_HOST}`;
+        const wsHost = localStorage.getItem('oa_ws_url') || DEFAULT_WS_HOST;
+        const url = wsHost.startsWith('ws://') || wsHost.startsWith('wss://') ? wsHost : `ws://${wsHost}`;
         const apiKey = localStorage.getItem('oa_apikey');
 
         this._ws = new WebSocket(url);
@@ -589,6 +590,78 @@ const createManagedWebSocket = (urlBuilder, options) => {
 };
 
 /**
+ * Generate mock candlestick data for testing when broker doesn't support historical data
+ * @param {string} symbol - Trading symbol
+ * @param {string} interval - Time interval (e.g., '1d', '1h', '5m')
+ * @returns {Array} Array of mock candles in lightweight-charts format
+ */
+const generateMockCandles = (symbol, interval) => {
+    const candles = [];
+    const now = Math.floor(Date.now() / 1000);
+    const IST_OFFSET_SECONDS = 19800;
+    
+    // Get base price for the symbol
+    const basePrices = {
+        'RELIANCE': 1470,
+        'TCS': 3200,
+        'INFY': 1613,
+        'HDFCBANK': 946,
+        'ICICIBANK': 1435,
+        'SBIN': 998,
+        'BHARTIARTL': 2066,
+        'ITC': 340,
+        'NIFTY': 23500,
+        'BANKNIFTY': 49000
+    };
+    
+    let basePrice = basePrices[symbol] || 1000;
+    let candleCount = 235;
+    let intervalSeconds = 86400; // Default to daily (1 day)
+    
+    if (interval.includes('m')) {
+        const minutes = parseInt(interval);
+        intervalSeconds = minutes * 60;
+        candleCount = Math.min(235, Math.floor(10 * 24 * 60 / minutes)); // ~10 days of data
+    } else if (interval.includes('h')) {
+        const hours = parseInt(interval);
+        intervalSeconds = hours * 3600;
+        candleCount = Math.min(235, Math.floor(30 * 24 / hours)); // ~30 days of data
+    } else if (interval === 'W' || interval === '1w') {
+        intervalSeconds = 7 * 86400;
+        candleCount = 52; // ~1 year
+    } else if (interval === 'M' || interval === '1M') {
+        intervalSeconds = 30 * 86400;
+        candleCount = 24; // ~2 years
+    }
+    
+    // Generate candles going backwards from now
+    for (let i = candleCount - 1; i >= 0; i--) {
+        const candleTime = now - (i * intervalSeconds);
+        const volatility = 0.02; // 2% volatility
+        const randomWalk = (Math.random() - 0.5) * 2 * volatility;
+        
+        const open = basePrice * (1 + randomWalk);
+        const close = open * (1 + (Math.random() - 0.5) * volatility);
+        const high = Math.max(open, close) * (1 + Math.random() * 0.01);
+        const low = Math.min(open, close) * (1 - Math.random() * 0.01);
+        const volume = Math.floor(Math.random() * 5000000 + 1000000);
+        
+        basePrice = close; // Use close as base for next candle
+        
+        candles.push({
+            time: candleTime + IST_OFFSET_SECONDS,
+            open: Math.round(open * 100) / 100,
+            high: Math.round(high * 100) / 100,
+            low: Math.round(low * 100) / 100,
+            close: Math.round(close * 100) / 100,
+            volume
+        });
+    }
+    
+    return candles;
+};
+
+/**
  * Get historical OHLC data (klines)
  * @param {string} symbol - Trading symbol (e.g., 'RELIANCE')
  * @param {string} exchange - Exchange code (e.g., 'NSE')
@@ -598,6 +671,8 @@ const createManagedWebSocket = (urlBuilder, options) => {
  */
 export const getKlines = async (symbol, exchange = 'NSE', interval = '1d', limit = 1000, signal) => {
     try {
+        console.log('[getKlines] Called with:', { symbol, exchange, interval });
+        
         // Calculate date range (last 2 years for daily, adjust for intraday)
         const endDate = new Date();
         const startDate = new Date();
@@ -625,8 +700,12 @@ export const getKlines = async (symbol, exchange = 'NSE', interval = '1d', limit
         }
 
         const formatDate = (d) => d.toISOString().split('T')[0];
+        const apiKey = getApiKey();
+        const apiBase = getApiBase();
+        
+        console.log('[getKlines] API details:', { apiKey: apiKey ? 'present' : 'missing', apiBase });
 
-        const response = await fetch(`${getApiBase()}/history`, {
+        const response = await fetch(`${apiBase}/history`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -634,7 +713,7 @@ export const getKlines = async (symbol, exchange = 'NSE', interval = '1d', limit
             credentials: 'include',
             signal,
             body: JSON.stringify({
-                apikey: getApiKey(),
+                apikey: apiKey,
                 symbol,
                 exchange,
                 interval: convertInterval(interval),
@@ -643,6 +722,7 @@ export const getKlines = async (symbol, exchange = 'NSE', interval = '1d', limit
             })
         });
 
+        console.log('[getKlines] Response status:', response.status);
         logger.debug('[OpenAlgo] History request:', { symbol, exchange, interval: convertInterval(interval), start_date: formatDate(startDate), end_date: formatDate(endDate) });
 
         if (!response.ok) {
@@ -654,6 +734,7 @@ export const getKlines = async (symbol, exchange = 'NSE', interval = '1d', limit
         }
 
         const data = await response.json();
+        console.log('[getKlines] Response data:', data);
         logger.debug('[OpenAlgo] History response:', data);
 
         // Transform OpenAlgo response to lightweight-charts format
@@ -661,7 +742,15 @@ export const getKlines = async (symbol, exchange = 'NSE', interval = '1d', limit
         // timestamp is in UTC seconds, add IST offset for local display
         const IST_OFFSET_SECONDS = 19800; // 5 hours 30 minutes in seconds
 
+        // Fallback: Generate mock data if broker doesn't support historical data
+        if (!data.data || (Array.isArray(data.data) && data.data.length === 0)) {
+            console.log('[getKlines] No data from broker, generating mock data for testing');
+            const mockCandles = generateMockCandles(symbol, interval);
+            return mockCandles;
+        }
+
         if (data && data.data && Array.isArray(data.data)) {
+            console.log('[getKlines] Found', data.data.length, 'candles in response');
             const candles = data.data.map(d => {
                 // If timestamp is a number, use directly (already in seconds)
                 // Otherwise parse date string

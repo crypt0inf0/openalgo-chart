@@ -1,0 +1,19 @@
+services:
+  openalgo-chart:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "3001:5001"
+    environment:
+      - NODE_ENV=production
+      - VITE_API_URL=http://openalgo-web:5000
+      - VITE_WS_URL=ws://openalgo-web:8765
+    networks:
+      - trading-net
+    restart: unless-stopped
+
+networks:
+  trading-net:
+    external: true
+    name: trading-net
