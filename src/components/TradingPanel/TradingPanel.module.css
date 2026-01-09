@@ -329,3 +329,80 @@
     background: #F23645;
     color: white;
 }
+
+/* Lot Size Label */
+.lotSizeLabel {
+    font-weight: 400;
+    color: var(--tv-color-brand, #2962FF);
+    margin-left: 4px;
+}
+
+/* Quantity Wrapper with +/- buttons */
+.quantityWrapper {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.qtyBtn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    background: var(--tv-color-toolbar-background, #2A2E39);
+    border: 1px solid transparent;
+    border-radius: 4px;
+    color: var(--tv-color-text-secondary, #787B86);
+    cursor: pointer;
+    transition: all 0.15s ease;
+    flex-shrink: 0;
+}
+
+.qtyBtn:hover:not(:disabled) {
+    background: var(--tv-color-toolbar-button-background-hover, rgba(255, 255, 255, 0.1));
+    color: var(--tv-color-text-primary, #D1D4DC);
+    border-color: var(--tv-color-border, #2A2E39);
+}
+
+.qtyBtn:disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+}
+
+.quantityInput {
+    flex: 1;
+    background: var(--tv-color-toolbar-background, #2A2E39);
+    border: 1px solid transparent;
+    border-radius: 4px;
+    color: var(--tv-color-text-primary, #D1D4DC);
+    padding: 8px;
+    font-size: 13px;
+    text-align: center;
+    outline: none;
+    min-width: 0;
+}
+
+.quantityInput:focus {
+    border-color: var(--tv-color-brand, #2962FF);
+}
+
+/* Chrome, Safari, Edge, Opera - Remove arrows from number input */
+.quantityInput::-webkit-outer-spin-button,
+.quantityInput::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
+/* Firefox */
+.quantityInput[type=number] {
+    -moz-appearance: textfield;
+}
+
+/* Lots Info Display */
+.lotsInfo {
+    font-size: 11px;
+    color: var(--tv-color-text-secondary, #787B86);
+    text-align: center;
+    margin-top: 4px;
+}

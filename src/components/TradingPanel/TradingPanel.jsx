@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Briefcase, X } from 'lucide-react';
+import { Briefcase, X, Plus, Minus } from 'lucide-react';
 import styles from './TradingPanel.module.css';
-import { subscribeToTicker, placeOrder } from '../../services/openalgo';
+import { subscribeToTicker, placeOrder, getLotSize } from '../../services/openalgo';
 import Toast from '../Toast/Toast';
 
 const TradingPanel = ({ symbol, exchange = 'NSE', isOpen, onClose, showToast }) => {
@@ -13,6 +13,10 @@ const TradingPanel = ({ symbol, exchange = 'NSE', isOpen, onClose, showToast }) 
     const [price, setPrice] = useState('');
     const [triggerPrice, setTriggerPrice] = useState('');
 
+    // Lot Size State
+    const [lotSize, setLotSize] = useState(1);
+    const [isLoadingLotSize, setIsLoadingLotSize] = useState(false);
+
     // Market Data State
     const [ltp, setLtp] = useState(0);
     const [priceChange, setPriceChange] = useState(0);
@@ -21,6 +25,9 @@ const TradingPanel = ({ symbol, exchange = 'NSE', isOpen, onClose, showToast }) 
 
     // UI State
     const [isSubmitting, setIsSubmitting] = useState(false);
+
+    // Check if F&O instrument (requires lot size handling)
+    const isFnO = exchange === 'NFO' || exchange === 'MCX' || exchange === 'BFO' || exchange === 'CDS' || exchange === 'BCD';
 
     // Refs
     const unsubscribeRef = useRef(null);
@@ -55,6 +62,47 @@ const TradingPanel = ({ symbol, exchange = 'NSE', isOpen, onClose, showToast }) 
         };
     }, [isOpen, symbol, exchange]);
 
+    // Fetch lot size when symbol/exchange changes
+    useEffect(() => {
+        if (!isOpen || !symbol) return;
+
+        const fetchLotSize = async () => {
+            setIsLoadingLotSize(true);
+            try {
+                const fetchedLotSize = await getLotSize(symbol, exchange);
+                setLotSize(fetchedLotSize);
+                // Auto-fill quantity with lot size for F&O instruments
+                if (fetchedLotSize > 1) {
+                    setQuantity(String(fetchedLotSize));
+                } else {
+                    setQuantity('1');
+                }
+            } catch (error) {
+                console.error('Error fetching lot size:', error);
+                setLotSize(1);
+                setQuantity('1');
+            } finally {
+                setIsLoadingLotSize(false);
+            }
+        };
+
+        fetchLotSize();
+    }, [isOpen, symbol, exchange]);
+
+    // Quantity adjustment functions
+    const incrementQuantity = () => {
+        const currentQty = parseInt(quantity, 10) || 0;
+        setQuantity(String(currentQty + lotSize));
+    };
+
+    const decrementQuantity = () => {
+        const currentQty = parseInt(quantity, 10) || 0;
+        const newQty = currentQty - lotSize;
+        if (newQty >= lotSize) {
+            setQuantity(String(newQty));
+        }
+    };
+
     // Handle Order Placement
     const handleSubmit = async () => {
         if (!symbol || !quantity) {
@@ -67,6 +115,12 @@ const TradingPanel = ({ symbol, exchange = 'NSE', isOpen, onClose, showToast }) 
         const qtyNum = parseInt(quantity, 10);
         if (isNaN(qtyNum) || qtyNum <= 0) {
             if (showToast) showToast('Invalid quantity', 'error');
+            return;
+        }
+
+        // Lot size validation for F&O instruments
+        if (lotSize > 1 && qtyNum % lotSize !== 0) {
+            if (showToast) showToast(`Quantity must be a multiple of lot size (${lotSize})`, 'error');
             return;
         }
 
@@ -190,17 +244,46 @@ const TradingPanel = ({ symbol, exchange = 'NSE', isOpen, onClose, showToast }) 
 
                 {/* Quantity */}
                 <div className={styles.inputGroup}>
-                    <label className={styles.label}>Quantity</label>
-                    <div className={styles.inputWrapper}>
+                    <label className={styles.label}>
+                        Quantity
+                        {lotSize > 1 && (
+                            <span className={styles.lotSizeLabel}>
+                                {isLoadingLotSize ? ' (Loading...)' : ` (Lot: ${lotSize})`}
+                            </span>
+                        )}
+                    </label>
+                    <div className={styles.quantityWrapper}>
+                        <button
+                            type="button"
+                            className={styles.qtyBtn}
+                            onClick={decrementQuantity}
+                            disabled={parseInt(quantity, 10) <= lotSize}
+                            title={`Decrease by ${lotSize}`}
+                        >
+                            <Minus size={14} />
+                        </button>
                         <input
                             type="number"
-                            className={styles.input}
+                            className={styles.quantityInput}
                             value={quantity}
                             onChange={(e) => setQuantity(e.target.value)}
-                            min="1"
+                            min={lotSize}
+                            step={lotSize}
                         />
-                        <span className={styles.unit}>Qty</span>
+                        <button
+                            type="button"
+                            className={styles.qtyBtn}
+                            onClick={incrementQuantity}
+                            title={`Increase by ${lotSize}`}
+                        >
+                            <Plus size={14} />
+                        </button>
                     </div>
+                    {lotSize > 1 && (
+                        <div className={styles.lotsInfo}>
+                            {Math.floor(parseInt(quantity, 10) / lotSize) || 0} lot(s) = {quantity} qty
+                        </div>
+                    )}
                 </div>
 
                 {/* Price (Conditional) */}
