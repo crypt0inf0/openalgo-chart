@@ -33,3 +33,6 @@ export { calculateFirstCandle, getLatestFirstCandle } from './firstCandle';
 
 // Price Action Range Strategy
 export { calculatePriceActionRange, getLatestPriceActionRange } from './priceActionRange';
+
+// Range Breakout Strategy (Opening Range 9:30-10:00)
+export { calculateRangeBreakout, getLatestRangeBreakout } from './rangeBreakout';

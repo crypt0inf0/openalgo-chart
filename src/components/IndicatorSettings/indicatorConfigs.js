@@ -205,6 +205,26 @@ export const indicatorConfigs = {
             { key: 'lowLineColor', label: 'Low Line', type: 'color', default: '#26a69a' },
         ],
     },
+
+    rangeBreakout: {
+        name: 'Range Breakout',
+        fullName: 'Opening Range Breakout (9:30-10:00)',
+        pane: 'main',
+        category: 'strategy',
+        description: 'Draws 9:30-10:00 AM range high/low lines with breakout/breakdown signals for Nifty/Sensex options',
+        inputs: [
+            { key: 'rangeStartHour', label: 'Range Start Hour', type: 'number', min: 9, max: 15, default: 9 },
+            { key: 'rangeStartMinute', label: 'Range Start Min', type: 'number', min: 0, max: 59, default: 30 },
+            { key: 'rangeEndHour', label: 'Range End Hour', type: 'number', min: 9, max: 15, default: 10 },
+            { key: 'rangeEndMinute', label: 'Range End Min', type: 'number', min: 0, max: 59, default: 0 },
+            { key: 'showSignals', label: 'Show Signals', type: 'boolean', default: true },
+        ],
+        style: [
+            { key: 'highColor', label: 'High Line (Breakout)', type: 'color', default: '#089981' },
+            { key: 'lowColor', label: 'Low Line (Breakdown)', type: 'color', default: '#F23645' },
+            { key: 'lineWidth', label: 'Line Width', type: 'number', min: 1, max: 4, default: 2 },
+        ],
+    },
 };
 
 /**

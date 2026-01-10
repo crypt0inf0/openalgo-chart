@@ -30,6 +30,7 @@ import {
 import { calculateTPO } from '../../utils/indicators/tpo';
 import { calculateFirstCandle } from '../../utils/indicators/firstCandle';
 import { calculatePriceActionRange } from '../../utils/indicators/priceActionRange';
+import { calculateRangeBreakout } from '../../utils/indicators/rangeBreakout';
 import { TPOProfilePrimitive } from '../../plugins/tpo-profile/TPOProfilePrimitive';
 import { calculateHeikinAshi } from '../../utils/chartUtils';
 import { calculateRenko } from '../../utils/renkoUtils';
@@ -183,6 +184,7 @@ const ChartComponent = forwardRef(({
     const oiPriceLinesRef = useRef({ maxCallOI: null, maxPutOI: null, maxPain: null }); // Refs for OI price lines
     const firstCandleSeriesRef = useRef([]); // Array of line series for all days' high/low
     const priceActionRangeSeriesRef = useRef([]); // Array of line series for PAR support/resistance
+    const rangeBreakoutSeriesRef = useRef([]); // Array of line series for range breakout high/low
     const wsRef = useRef(null);
     const chartTypeRef = useRef(chartType);
     const dataRef = useRef([]);
@@ -2719,6 +2721,90 @@ const ChartComponent = forwardRef(({
                 try { chartRef.current.removeSeries(series); } catch (e) { /* ignore */ }
             }
             firstCandleSeriesRef.current = [];
+        }
+
+        // ========== RANGE BREAKOUT INDICATOR ==========
+        const rangeBreakoutInd = indicatorsArray?.find(ind => ind.type === 'rangeBreakout');
+        const rangeBreakoutEnabled = rangeBreakoutInd?.visible !== false;
+
+        if (rangeBreakoutEnabled && rangeBreakoutInd && data && data.length > 0) {
+            const highColor = rangeBreakoutInd.highColor || '#089981';
+            const lowColor = rangeBreakoutInd.lowColor || '#F23645';
+            const lineWidth = rangeBreakoutInd.lineWidth || 2;
+
+            const result = calculateRangeBreakout(data, {
+                rangeStartHour: rangeBreakoutInd.rangeStartHour || 9,
+                rangeStartMinute: rangeBreakoutInd.rangeStartMinute || 30,
+                rangeEndHour: rangeBreakoutInd.rangeEndHour || 10,
+                rangeEndMinute: rangeBreakoutInd.rangeEndMinute || 0,
+                showSignals: rangeBreakoutInd.showSignals !== false,
+                highColor,
+                lowColor
+            });
+
+            // Remove old line series if count changed
+            const existingCount = rangeBreakoutSeriesRef.current.length;
+            const neededCount = (result.allLevels?.length || 0) * 2;
+
+            if (existingCount !== neededCount) {
+                for (const series of rangeBreakoutSeriesRef.current) {
+                    try { chartRef.current.removeSeries(series); } catch (e) { /* ignore */ }
+                }
+                rangeBreakoutSeriesRef.current = [];
+            }
+
+            // Create/update line series for each day's high and low
+            if (result.allLevels && result.allLevels.length > 0 && chartRef.current) {
+                let seriesIndex = 0;
+                for (const level of result.allLevels) {
+                    const { high, low, startTime, endTime } = level;
+
+                    // High line (green - breakout level)
+                    if (!rangeBreakoutSeriesRef.current[seriesIndex]) {
+                        rangeBreakoutSeriesRef.current[seriesIndex] = chartRef.current.addSeries(LineSeries, {
+                            color: highColor, lineWidth: lineWidth, lineStyle: 2, // dashed
+                            priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false,
+                        });
+                    }
+                    rangeBreakoutSeriesRef.current[seriesIndex].setData([
+                        { time: startTime, value: high },
+                        { time: endTime, value: high }
+                    ]);
+                    seriesIndex++;
+
+                    // Low line (red - breakdown level)
+                    if (!rangeBreakoutSeriesRef.current[seriesIndex]) {
+                        rangeBreakoutSeriesRef.current[seriesIndex] = chartRef.current.addSeries(LineSeries, {
+                            color: lowColor, lineWidth: lineWidth, lineStyle: 2, // dashed
+                            priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false,
+                        });
+                    }
+                    rangeBreakoutSeriesRef.current[seriesIndex].setData([
+                        { time: startTime, value: low },
+                        { time: endTime, value: low }
+                    ]);
+                    seriesIndex++;
+                }
+            }
+
+            // Set markers on the main candlestick series for breakout/breakdown signals
+            if (result.markers && result.markers.length > 0 && mainSeriesRef.current) {
+                try {
+                    mainSeriesRef.current.setMarkers(result.markers);
+                } catch (e) {
+                    console.warn('[RangeBreakout] Error setting markers:', e);
+                }
+            }
+        } else if (!rangeBreakoutEnabled) {
+            // Remove range breakout series when disabled
+            for (const series of rangeBreakoutSeriesRef.current) {
+                try { chartRef.current.removeSeries(series); } catch (e) { /* ignore */ }
+            }
+            rangeBreakoutSeriesRef.current = [];
+            // Clear markers
+            if (mainSeriesRef.current) {
+                try { mainSeriesRef.current.setMarkers([]); } catch (e) { /* ignore */ }
+            }
         }
 
         // --- CLEANUP LOGIC ---
