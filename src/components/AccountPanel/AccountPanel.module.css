@@ -403,6 +403,53 @@
   }
 }
 
+/* Action Buttons */
+.alignCenter {
+  text-align: center;
+}
+
+.table th.alignCenter,
+.table td.alignCenter {
+  text-align: center !important;
+}
+
+.exitBtn,
+.cancelBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  border: none;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.exitBtn {
+  background-color: rgba(242, 54, 69, 0.15);
+  color: #F23645;
+}
+
+.exitBtn:hover {
+  background-color: rgba(242, 54, 69, 0.3);
+}
+
+.cancelBtn {
+  background-color: rgba(255, 152, 0, 0.15);
+  color: #FF9800;
+}
+
+.cancelBtn:hover {
+  background-color: rgba(255, 152, 0, 0.3);
+}
+
+.noAction {
+  color: var(--tv-color-text-secondary, #787b86);
+  opacity: 0.5;
+}
+
 /* Responsive */
 @media (max-width: 768px) {
   .headerCenter {
@@ -424,5 +471,15 @@
   .tab {
     padding: 8px 12px;
     font-size: 11px;
+  }
+
+  .exitBtn span,
+  .cancelBtn span {
+    display: none;
+  }
+
+  .exitBtn,
+  .cancelBtn {
+    padding: 4px 6px;
   }
 }

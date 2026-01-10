@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { ChevronDown, ChevronUp, RefreshCw, X, Wallet, Minus, Maximize2, Minimize2 } from 'lucide-react';
+import { ChevronDown, ChevronUp, RefreshCw, X, Wallet, Minus, Maximize2, Minimize2, LogOut, XCircle } from 'lucide-react';
 import styles from './AccountPanel.module.css';
-import { getFunds, getPositionBook, getOrderBook, getHoldings, getTradeBook, ping } from '../../services/openalgo';
+import { getFunds, getPositionBook, getOrderBook, getHoldings, getTradeBook, ping, placeOrder, cancelOrder } from '../../services/openalgo';
+import ExitPositionModal from '../ExitPositionModal';
 
 // Tab definitions
 const TABS = [
@@ -36,6 +37,7 @@ const AccountPanel = ({
     isMaximized = false,
     onMaximize,
     isToolbarVisible = true,
+    showToast,
     // Data props from parent (optional, to avoid duplicate fetching)
     positions: propPositions,
     orders: propOrders,
@@ -47,6 +49,10 @@ const AccountPanel = ({
     const [isLoading, setIsLoading] = useState(false);
     const [brokerName, setBrokerName] = useState('');
     const [lastRefresh, setLastRefresh] = useState(null);
+
+    // Exit Position Modal state
+    const [isExitModalOpen, setIsExitModalOpen] = useState(false);
+    const [selectedPositionForExit, setSelectedPositionForExit] = useState(null);
 
     // Data states
     const [funds, setFunds] = useState(null);
@@ -155,6 +161,50 @@ const AccountPanel = ({
         }
     };
 
+    // Handle exit position - opens the exit modal
+    const handleExitPosition = (position, e) => {
+        e.stopPropagation(); // Prevent row click
+        setSelectedPositionForExit(position);
+        setIsExitModalOpen(true);
+    };
+
+    // Handle exit modal close
+    const handleExitModalClose = () => {
+        setIsExitModalOpen(false);
+        setSelectedPositionForExit(null);
+    };
+
+    // Handle exit complete - refresh data
+    const handleExitComplete = () => {
+        setTimeout(fetchAccountData, 1000);
+    };
+
+    // Handle cancel order
+    const handleCancelOrder = async (order, e) => {
+        e.stopPropagation(); // Prevent row click
+
+        const confirmCancel = window.confirm(
+            `Cancel order for ${order.symbol}?\n\nOrder ID: ${order.orderid}`
+        );
+
+        if (!confirmCancel) return;
+
+        try {
+            const result = await cancelOrder({ orderid: order.orderid });
+
+            if (result.status === 'success') {
+                if (showToast) showToast(`Order cancelled successfully`, 'success');
+                // Refresh data after successful cancel
+                setTimeout(fetchAccountData, 1000);
+            } else {
+                if (showToast) showToast(`Cancel failed: ${result.message}`, 'error');
+            }
+        } catch (error) {
+            console.error('Error cancelling order:', error);
+            if (showToast) showToast('Failed to cancel order', 'error');
+        }
+    };
+
     if (!isOpen) return null;
 
     // Render positions table
@@ -177,13 +227,14 @@ const AccountPanel = ({
             <div className={styles.tableWrapper}>
                 <table className={styles.table}>
                     <colgroup>
-                        <col style={{ width: '20%' }} />
-                        <col style={{ width: '12%' }} />
-                        <col style={{ width: '12%' }} />
+                        <col style={{ width: '18%' }} />
                         <col style={{ width: '10%' }} />
-                        <col style={{ width: '15%' }} />
-                        <col style={{ width: '15%' }} />
-                        <col style={{ width: '16%' }} />
+                        <col style={{ width: '10%' }} />
+                        <col style={{ width: '10%' }} />
+                        <col style={{ width: '14%' }} />
+                        <col style={{ width: '14%' }} />
+                        <col style={{ width: '14%' }} />
+                        <col style={{ width: '10%' }} />
                     </colgroup>
                     <thead>
                         <tr>
@@ -194,6 +245,7 @@ const AccountPanel = ({
                             <th className={styles.alignRight}>Avg Price</th>
                             <th className={styles.alignRight}>LTP</th>
                             <th className={styles.alignRight}>P&L</th>
+                            <th className={styles.alignCenter}>Action</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -215,6 +267,16 @@ const AccountPanel = ({
                                     <td className={styles.alignRight}>{formatCurrency(pos.ltp)}</td>
                                     <td className={`${styles.alignRight} ${pnl >= 0 ? styles.positive : styles.negative}`}>
                                         {pnl >= 0 ? '+' : ''}{formatCurrency(pnl)}
+                                    </td>
+                                    <td className={styles.alignCenter}>
+                                        <button
+                                            className={styles.exitBtn}
+                                            onClick={(e) => handleExitPosition(pos, e)}
+                                            title={`Exit position - ${pos.quantity > 0 ? 'SELL' : 'BUY'} ${Math.abs(pos.quantity)} qty`}
+                                        >
+                                            <LogOut size={12} />
+                                            <span>Exit</span>
+                                        </button>
                                     </td>
                                 </tr>
                             );
@@ -257,17 +319,24 @@ const AccountPanel = ({
             );
         }
 
+        // Helper to check if order can be cancelled
+        const isOpenStatus = (status) => {
+            const s = (status || '').toUpperCase().replace(/\s+/g, '_');
+            return ['OPEN', 'PENDING', 'TRIGGER_PENDING', 'AMO_REQ_RECEIVED', 'VALIDATION_PENDING'].includes(s);
+        };
+
         return (
             <div className={styles.tableWrapper}>
                 <table className={styles.table}>
                     <colgroup>
+                        <col style={{ width: '15%' }} />
+                        <col style={{ width: '16%' }} />
+                        <col style={{ width: '8%' }} />
+                        <col style={{ width: '10%' }} />
+                        <col style={{ width: '8%' }} />
+                        <col style={{ width: '12%' }} />
                         <col style={{ width: '18%' }} />
-                        <col style={{ width: '18%' }} />
-                        <col style={{ width: '10%' }} />
-                        <col style={{ width: '10%' }} />
-                        <col style={{ width: '10%' }} />
-                        <col style={{ width: '14%' }} />
-                        <col style={{ width: '20%' }} />
+                        <col style={{ width: '13%' }} />
                     </colgroup>
                     <thead>
                         <tr>
@@ -278,30 +347,48 @@ const AccountPanel = ({
                             <th className={styles.alignRight}>Qty</th>
                             <th className={styles.alignRight}>Price</th>
                             <th>Status</th>
+                            <th className={styles.alignCenter}>Action</th>
                         </tr>
                     </thead>
                     <tbody>
-                        {orderList.map((order, idx) => (
-                            <tr
-                                key={order.orderid || idx}
-                                onClick={() => handleRowClick(order.symbol, order.exchange)}
-                                className={styles.clickableRow}
-                            >
-                                <td className={styles.timeCell}>{order.timestamp}</td>
-                                <td className={styles.symbolCell}>{order.symbol}</td>
-                                <td className={order.action === 'BUY' ? styles.positive : styles.negative}>
-                                    {order.action}
-                                </td>
-                                <td>{order.pricetype}</td>
-                                <td className={styles.alignRight}>{order.quantity}</td>
-                                <td className={styles.alignRight}>{formatCurrency(order.price)}</td>
-                                <td>
-                                    <span className={`${styles.statusBadge} ${styles[`status${order.order_status}`]}`}>
-                                        {order.order_status}
-                                    </span>
-                                </td>
-                            </tr>
-                        ))}
+                        {orderList.map((order, idx) => {
+                            const canCancel = isOpenStatus(order.order_status);
+                            return (
+                                <tr
+                                    key={order.orderid || idx}
+                                    onClick={() => handleRowClick(order.symbol, order.exchange)}
+                                    className={styles.clickableRow}
+                                >
+                                    <td className={styles.timeCell}>{order.timestamp}</td>
+                                    <td className={styles.symbolCell}>{order.symbol}</td>
+                                    <td className={order.action === 'BUY' ? styles.positive : styles.negative}>
+                                        {order.action}
+                                    </td>
+                                    <td>{order.pricetype}</td>
+                                    <td className={styles.alignRight}>{order.quantity}</td>
+                                    <td className={styles.alignRight}>{formatCurrency(order.price)}</td>
+                                    <td>
+                                        <span className={`${styles.statusBadge} ${styles[`status${order.order_status}`]}`}>
+                                            {order.order_status}
+                                        </span>
+                                    </td>
+                                    <td className={styles.alignCenter}>
+                                        {canCancel ? (
+                                            <button
+                                                className={styles.cancelBtn}
+                                                onClick={(e) => handleCancelOrder(order, e)}
+                                                title="Cancel order"
+                                            >
+                                                <XCircle size={12} />
+                                                <span>Cancel</span>
+                                            </button>
+                                        ) : (
+                                            <span className={styles.noAction}>-</span>
+                                        )}
+                                    </td>
+                                </tr>
+                            );
+                        })}
                     </tbody>
                 </table>
             </div>
@@ -567,6 +654,15 @@ const AccountPanel = ({
                     )}
                 </>
             )}
+
+            {/* Exit Position Modal */}
+            <ExitPositionModal
+                isOpen={isExitModalOpen}
+                position={selectedPositionForExit}
+                onClose={handleExitModalClose}
+                onExitComplete={handleExitComplete}
+                showToast={showToast}
+            />
         </div>
     );
 };

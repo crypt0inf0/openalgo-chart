@@ -1,0 +1,439 @@
+/* Overlay */
+.overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0.7);
+    backdrop-filter: blur(2px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10000;
+    animation: fadeIn 0.15s ease;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+    }
+    to {
+        opacity: 1;
+    }
+}
+
+/* Modal */
+.modal {
+    background: var(--tv-color-pane-background, #131722);
+    border: 1px solid var(--tv-color-border, #2A2E39);
+    border-radius: 8px;
+    width: 100%;
+    max-width: 420px;
+    max-height: 90vh;
+    overflow-y: auto;
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+    animation: slideUp 0.2s ease;
+}
+
+@keyframes slideUp {
+    from {
+        transform: translateY(20px);
+        opacity: 0;
+    }
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
+
+/* Header */
+.header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--tv-color-border, #2A2E39);
+    background: var(--tv-color-toolbar-background, #1E222D);
+}
+
+.title {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--tv-color-text-primary, #D1D4DC);
+    margin: 0;
+}
+
+.closeBtn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    background: transparent;
+    border: none;
+    border-radius: 4px;
+    color: var(--tv-color-text-secondary, #787B86);
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.closeBtn:hover {
+    background: var(--tv-color-hover, rgba(255, 255, 255, 0.1));
+    color: var(--tv-color-text-primary, #D1D4DC);
+}
+
+/* Position Summary */
+.positionSummary {
+    padding: 16px 20px;
+    background: var(--tv-color-toolbar-background, #1E222D);
+    border-bottom: 1px solid var(--tv-color-border, #2A2E39);
+}
+
+.symbolRow {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+
+.symbolName {
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--tv-color-text-primary, #D1D4DC);
+}
+
+.exchange {
+    font-size: 10px;
+    padding: 2px 6px;
+    background: rgba(41, 98, 255, 0.15);
+    color: var(--tv-color-brand, #2962FF);
+    border-radius: 3px;
+}
+
+.product {
+    font-size: 10px;
+    padding: 2px 6px;
+    background: rgba(255, 255, 255, 0.08);
+    color: var(--tv-color-text-secondary, #787B86);
+    border-radius: 3px;
+}
+
+.statsRow {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+}
+
+.stat {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.statLabel {
+    font-size: 10px;
+    color: var(--tv-color-text-secondary, #787B86);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.statValue {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--tv-color-text-primary, #D1D4DC);
+    display: flex;
+    align-items: baseline;
+    gap: 4px;
+}
+
+.lotsLabel {
+    font-size: 11px;
+    color: var(--tv-color-text-secondary, #787B86);
+    font-weight: 400;
+}
+
+.pnlPercent {
+    font-size: 11px;
+    font-weight: 400;
+}
+
+/* Sections */
+.section {
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--tv-color-border-subtle, rgba(255, 255, 255, 0.05));
+}
+
+.section:last-of-type {
+    border-bottom: none;
+}
+
+.sectionLabel {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 11px;
+    color: var(--tv-color-text-secondary, #787B86);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    font-weight: 600;
+    margin-bottom: 10px;
+}
+
+.lotSizeLabel {
+    font-weight: 400;
+    color: var(--tv-color-brand, #2962FF);
+    text-transform: none;
+}
+
+/* Order Type Grid */
+.orderTypeGrid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 6px;
+    margin-bottom: 8px;
+}
+
+.orderTypeBtn {
+    padding: 8px 4px;
+    font-size: 12px;
+    font-weight: 500;
+    text-align: center;
+    cursor: pointer;
+    border-radius: 4px;
+    color: var(--tv-color-text-secondary, #787B86);
+    background: var(--tv-color-toolbar-background, #2A2E39);
+    border: 1px solid transparent;
+    transition: all 0.15s ease;
+}
+
+.orderTypeBtn:hover {
+    color: var(--tv-color-text-primary, #D1D4DC);
+    background: var(--tv-color-toolbar-button-background-hover, rgba(255, 255, 255, 0.08));
+    border-color: var(--tv-color-border, #2A2E39);
+}
+
+.orderTypeBtn.active {
+    background: rgba(41, 98, 255, 0.15);
+    color: var(--tv-color-brand, #2962FF);
+    border-color: rgba(41, 98, 255, 0.3);
+}
+
+.orderTypeDesc {
+    font-size: 11px;
+    color: var(--tv-color-text-secondary, #787B86);
+    margin: 0;
+    padding-left: 2px;
+}
+
+/* Quantity Wrapper */
+.quantityWrapper {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.qtyBtn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    background: var(--tv-color-toolbar-background, #2A2E39);
+    border: 1px solid transparent;
+    border-radius: 4px;
+    color: var(--tv-color-text-secondary, #787B86);
+    cursor: pointer;
+    transition: all 0.15s ease;
+    flex-shrink: 0;
+}
+
+.qtyBtn:hover:not(:disabled) {
+    background: var(--tv-color-toolbar-button-background-hover, rgba(255, 255, 255, 0.1));
+    color: var(--tv-color-text-primary, #D1D4DC);
+    border-color: var(--tv-color-border, #2A2E39);
+}
+
+.qtyBtn:disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+}
+
+.quantityInput {
+    flex: 1;
+    background: var(--tv-color-toolbar-background, #2A2E39);
+    border: 1px solid transparent;
+    border-radius: 4px;
+    color: var(--tv-color-text-primary, #D1D4DC);
+    padding: 10px 12px;
+    font-size: 14px;
+    text-align: center;
+    outline: none;
+    min-width: 0;
+}
+
+.quantityInput:focus {
+    border-color: var(--tv-color-brand, #2962FF);
+}
+
+/* Chrome, Safari, Edge, Opera - Remove arrows from number input */
+.quantityInput::-webkit-outer-spin-button,
+.quantityInput::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
+/* Firefox */
+.quantityInput[type=number] {
+    -moz-appearance: textfield;
+}
+
+.lotsInfo {
+    font-size: 11px;
+    color: var(--tv-color-text-secondary, #787B86);
+    text-align: center;
+    margin: 6px 0 0;
+}
+
+/* Price Input */
+.inputWrapper {
+    display: flex;
+    align-items: center;
+    background: var(--tv-color-toolbar-background, #2A2E39);
+    border: 1px solid transparent;
+    border-radius: 4px;
+    transition: border-color 0.2s;
+}
+
+.inputWrapper:focus-within {
+    border-color: var(--tv-color-brand, #2962FF);
+}
+
+.inputPrefix {
+    padding: 0 12px;
+    color: var(--tv-color-text-secondary, #787B86);
+    font-size: 14px;
+}
+
+.priceInput {
+    flex: 1;
+    background: transparent;
+    border: none;
+    color: var(--tv-color-text-primary, #D1D4DC);
+    padding: 10px 12px 10px 0;
+    font-size: 14px;
+    outline: none;
+    min-width: 0;
+}
+
+.priceInput::-webkit-outer-spin-button,
+.priceInput::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
+.priceInput[type=number] {
+    -moz-appearance: textfield;
+}
+
+.priceInput::placeholder {
+    color: var(--tv-color-text-secondary, #787B86);
+    opacity: 0.6;
+}
+
+/* Trigger Hint */
+.triggerHint {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    color: #FF9800;
+    margin: 8px 0 0;
+}
+
+/* Actions */
+.actions {
+    display: flex;
+    gap: 12px;
+    padding: 16px 20px;
+    background: var(--tv-color-toolbar-background, #1E222D);
+    border-top: 1px solid var(--tv-color-border, #2A2E39);
+}
+
+.cancelBtn {
+    flex: 1;
+    padding: 12px 16px;
+    font-size: 14px;
+    font-weight: 500;
+    border: 1px solid var(--tv-color-border, #2A2E39);
+    border-radius: 4px;
+    background: transparent;
+    color: var(--tv-color-text-secondary, #787B86);
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.cancelBtn:hover:not(:disabled) {
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--tv-color-text-primary, #D1D4DC);
+}
+
+.cancelBtn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.submitBtn {
+    flex: 2;
+    padding: 12px 16px;
+    font-size: 14px;
+    font-weight: 600;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.submitBtn:hover:not(:disabled) {
+    opacity: 0.9;
+}
+
+.submitBtn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.btnSell {
+    background: #F23645;
+    color: white;
+}
+
+.btnBuy {
+    background: #089981;
+    color: white;
+}
+
+/* P&L Colors */
+.positive {
+    color: #089981 !important;
+}
+
+.negative {
+    color: #F23645 !important;
+}
+
+/* Responsive */
+@media (max-width: 480px) {
+    .modal {
+        max-width: calc(100% - 32px);
+        margin: 16px;
+    }
+
+    .statsRow {
+        grid-template-columns: repeat(2, 1fr);
+    }
+
+    .orderTypeGrid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}

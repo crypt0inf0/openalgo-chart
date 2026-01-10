@@ -2790,6 +2790,7 @@ function AppContent({ isAuthenticated, setIsAuthenticated }) {
             isMaximized={isAccountPanelMaximized}
             onMaximize={handleAccountPanelMaximize}
             isToolbarVisible={showDrawingToolbar}
+            showToast={showToast}
             // Pass shared data to avoid duplicate fetching
             positions={allPositions}
             orders={allOrders}
