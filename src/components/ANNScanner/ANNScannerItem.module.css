@@ -1,0 +1,127 @@
+.item {
+  display: flex;
+  align-items: center;
+  padding: 8px 12px;
+  border-bottom: 1px solid transparent;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.item:hover {
+  background-color: var(--tv-color-toolbar-button-background-hover, #2a2e39);
+}
+
+.item.focused {
+  background-color: var(--tv-color-toolbar-button-background-hover, #2a2e39);
+  border-left: 2px solid var(--tv-color-brand, #2962ff);
+  padding-left: 10px;
+}
+
+.item.hasError {
+  opacity: 0.6;
+}
+
+/* Symbol Column */
+.colSymbol {
+  flex-shrink: 0;
+  overflow: hidden;
+}
+
+.symbolText {
+  font-weight: 500;
+  font-size: 12px;
+  color: var(--tv-color-text-primary, #d1d4dc);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Signal Column */
+.colSignal {
+  flex-shrink: 0;
+  display: flex;
+  justify-content: center;
+}
+
+.signalBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.signalLong {
+  background: rgba(38, 166, 154, 0.15);
+  color: #26A69A;
+}
+
+.signalShort {
+  background: rgba(239, 83, 80, 0.15);
+  color: #EF5350;
+}
+
+.signalNone {
+  background: var(--tv-color-border, #363a45);
+  color: var(--tv-color-text-secondary, #787b86);
+}
+
+.errorBadge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-size: 10px;
+  font-weight: 600;
+  background: rgba(239, 83, 80, 0.15);
+  color: #EF5350;
+  cursor: help;
+}
+
+/* Streak Column */
+.colStreak {
+  flex-shrink: 0;
+  display: flex;
+  justify-content: center;
+}
+
+.streakValue {
+  font-weight: 600;
+  font-size: 12px;
+}
+
+.streakLong {
+  color: #26A69A;
+}
+
+.streakShort {
+  color: #EF5350;
+}
+
+.streakNone {
+  color: var(--tv-color-text-secondary, #787b86);
+}
+
+/* NN Output Column */
+.colNnOutput {
+  flex-shrink: 0;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.nnValue {
+  font-family: monospace;
+  font-size: 11px;
+  color: var(--tv-color-text-secondary, #787b86);
+}
+
+.nnPositive {
+  color: #26A69A;
+}
+
+.nnNegative {
+  color: #EF5350;
+}

@@ -42,6 +42,7 @@ import GlobalAlertPopup from './components/GlobalAlertPopup/GlobalAlertPopup';
 import DepthOfMarket from './components/DepthOfMarket';
 import AccountPanel from './components/AccountPanel';
 import TradingPanel from './components/TradingPanel/TradingPanel';
+import ANNScanner from './components/ANNScanner';
 const VALID_INTERVAL_UNITS = new Set(['s', 'm', 'h', 'd', 'w', 'M']);
 const DEFAULT_FAVORITE_INTERVALS = []; // No default favorites
 
@@ -2991,6 +2992,23 @@ function AppContent({ isAuthenticated, setIsAuthenticated }) {
               isLoading={watchlistLoading}
               onSourceModeChange={(mode) => setPositionTrackerSettings(prev => ({ ...prev, sourceMode: mode }))}
               onCustomSymbolsChange={(symbols) => setPositionTrackerSettings(prev => ({ ...prev, customSymbols: symbols }))}
+              onSymbolSelect={(symData) => {
+                const symbol = typeof symData === 'string' ? symData : symData.symbol;
+                const exchange = typeof symData === 'string' ? 'NSE' : (symData.exchange || 'NSE');
+                setCharts(prev => prev.map(chart =>
+                  chart.id === activeChartId ? { ...chart, symbol: symbol, exchange: exchange, strategyConfig: null } : chart
+                ));
+              }}
+              isAuthenticated={isAuthenticated}
+            />
+          ) : activeRightPanel === 'ann_scanner' ? (
+            <ANNScanner
+              watchlistSymbols={watchlistSymbols
+                .filter(s => !(typeof s === 'string' && s.startsWith('###')))
+                .map(s => typeof s === 'string'
+                  ? { symbol: s, exchange: 'NSE' }
+                  : { symbol: s.symbol, exchange: s.exchange || 'NSE' }
+                )}
               onSymbolSelect={(symData) => {
                 const symbol = typeof symData === 'string' ? symData : symData.symbol;
                 const exchange = typeof symData === 'string' ? 'NSE' : (symData.exchange || 'NSE');
