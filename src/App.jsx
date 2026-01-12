@@ -464,6 +464,17 @@ function AppContent({ isAuthenticated, setIsAuthenticated }) {
     return saved || { sourceMode: 'watchlist', customSymbols: [] };
   });
 
+  // ANN Scanner persisted state (survives tab switches)
+  const [annScannerState, setAnnScannerState] = useState({
+    results: [],
+    previousResults: [],
+    lastScanTime: null,
+    source: 'watchlist',
+    filter: 'all',
+    refreshInterval: 'off',
+    alertsEnabled: true,
+  });
+
   // Sector Heatmap Modal State
   const [isSectorHeatmapOpen, setIsSectorHeatmapOpen] = useState(false);
 
@@ -3035,6 +3046,8 @@ function AppContent({ isAuthenticated, setIsAuthenticated }) {
                 }
               }}
               showToast={showToast}
+              persistedState={annScannerState}
+              onStateChange={setAnnScannerState}
             />
           ) : activeRightPanel === 'dom' ? (
             <DepthOfMarket

@@ -44,30 +44,33 @@ const ANNScanner = ({
   isAuthenticated,
   onAddToWatchlist,
   showToast,
+  // Persistence props - state survives tab switches
+  persistedState = {},
+  onStateChange,
 }) => {
-  // State
-  const [source, setSource] = useState('watchlist');
-  const [filter, setFilter] = useState('all');
+  // State - use persisted values if available
+  const [source, setSource] = useState(persistedState.source ?? 'watchlist');
+  const [filter, setFilter] = useState(persistedState.filter ?? 'all');
   const [sortBy, setSortBy] = useState('streak');
   const [sortDir, setSortDir] = useState('desc');
-  const [results, setResults] = useState([]);
+  const [results, setResults] = useState(persistedState.results ?? []);
   const [isScanning, setIsScanning] = useState(false);
   const [progress, setProgress] = useState({ current: 0, total: 0 });
   const [error, setError] = useState(null);
-  const [lastScanTime, setLastScanTime] = useState(null);
+  const [lastScanTime, setLastScanTime] = useState(persistedState.lastScanTime ?? null);
   const [columnWidths, setColumnWidths] = useState(DEFAULT_COLUMN_WIDTHS);
   const [resizing, setResizing] = useState(null);
   const [focusedIndex, setFocusedIndex] = useState(-1);
 
   // Auto-refresh state
-  const [refreshInterval, setRefreshInterval] = useState('off');
+  const [refreshInterval, setRefreshInterval] = useState(persistedState.refreshInterval ?? 'off');
   const [countdown, setCountdown] = useState(0);
 
   // Previous results for comparison
-  const [previousResults, setPreviousResults] = useState([]);
+  const [previousResults, setPreviousResults] = useState(persistedState.previousResults ?? []);
 
   // Alert state
-  const [alertsEnabled, setAlertsEnabled] = useState(true);
+  const [alertsEnabled, setAlertsEnabled] = useState(persistedState.alertsEnabled ?? true);
   const [notificationPermission, setNotificationPermission] = useState('default');
 
   // Refs
@@ -84,6 +87,21 @@ const ANNScanner = ({
       setNotificationPermission(Notification.permission);
     }
   }, []);
+
+  // Sync state back to parent for persistence across tab switches
+  useEffect(() => {
+    if (onStateChange) {
+      onStateChange({
+        results,
+        previousResults,
+        lastScanTime,
+        source,
+        filter,
+        refreshInterval,
+        alertsEnabled,
+      });
+    }
+  }, [results, previousResults, lastScanTime, source, filter, refreshInterval, alertsEnabled, onStateChange]);
 
   // Watchlist set for quick lookup
   const watchlistSet = useMemo(() => {
