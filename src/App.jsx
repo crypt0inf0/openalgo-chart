@@ -473,6 +473,7 @@ function AppContent({ isAuthenticated, setIsAuthenticated }) {
     filter: 'all',
     refreshInterval: 'off',
     alertsEnabled: true,
+    sectorFilter: 'All',
   });
 
   // Sector Heatmap Modal State

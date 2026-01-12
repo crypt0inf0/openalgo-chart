@@ -162,6 +162,42 @@
   color: #EF5350;
 }
 
+/* Sector Filter */
+.sectorFilter {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--tv-color-border, #363a45);
+}
+
+.sectorSelect {
+  flex: 1;
+  padding: 6px 8px;
+  border: 1px solid var(--tv-color-border, #363a45);
+  border-radius: 4px;
+  background: var(--tv-color-platform-background, #1e222d);
+  color: var(--tv-color-text-primary, #d1d4dc);
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.sectorSelect:focus {
+  outline: none;
+  border-color: var(--tv-color-brand, #2962ff);
+}
+
+.sectorSelect:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.sectorCount {
+  font-size: 10px;
+  color: var(--tv-color-text-secondary, #787b86);
+  white-space: nowrap;
+}
+
 /* Progress */
 .progressContainer {
   padding: 8px 12px;

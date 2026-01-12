@@ -5,6 +5,7 @@ import styles from './ANNScanner.module.css';
 import ANNScannerItem from './ANNScannerItem';
 import { scanStocks, sortResults, filterResults } from '../../services/annScannerService';
 import { getStockList, STOCK_LIST_OPTIONS } from '../../data/stockLists';
+import { SECTORS, getSector } from '../PositionTracker/sectorMapping';
 
 // Default column widths - updated with new columns
 const DEFAULT_COLUMN_WIDTHS = {
@@ -73,6 +74,9 @@ const ANNScanner = ({
   const [alertsEnabled, setAlertsEnabled] = useState(persistedState.alertsEnabled ?? true);
   const [notificationPermission, setNotificationPermission] = useState('default');
 
+  // Sector filter state
+  const [sectorFilter, setSectorFilter] = useState(persistedState.sectorFilter ?? 'All');
+
   // Refs
   const abortControllerRef = useRef(null);
   const listRef = useRef(null);
@@ -99,9 +103,10 @@ const ANNScanner = ({
         filter,
         refreshInterval,
         alertsEnabled,
+        sectorFilter,
       });
     }
-  }, [results, previousResults, lastScanTime, source, filter, refreshInterval, alertsEnabled, onStateChange]);
+  }, [results, previousResults, lastScanTime, source, filter, refreshInterval, alertsEnabled, sectorFilter, onStateChange]);
 
   // Watchlist set for quick lookup
   const watchlistSet = useMemo(() => {
@@ -269,7 +274,19 @@ const ANNScanner = ({
 
   // Filter and sort results with delta comparison
   const displayResultsWithDelta = useMemo(() => {
-    let filtered = filterResults(results, filter);
+    // Add sector to each result
+    let resultsWithSector = results.map(item => ({
+      ...item,
+      sector: getSector(item.symbol),
+    }));
+
+    // Apply sector filter first
+    if (sectorFilter !== 'All') {
+      resultsWithSector = resultsWithSector.filter(item => item.sector === sectorFilter);
+    }
+
+    // Apply signal filter (all/long/short)
+    let filtered = filterResults(resultsWithSector, filter);
     let sorted = sortResults(filtered, sortBy, sortDir);
 
     // Add delta comparison data
@@ -289,7 +306,7 @@ const ANNScanner = ({
         previousStreak: prev?.streak || 0,
       };
     });
-  }, [results, filter, sortBy, sortDir, previousResults]);
+  }, [results, filter, sortBy, sortDir, previousResults, sectorFilter]);
 
   // Handle sort click
   const handleSortClick = useCallback((column) => {
@@ -492,6 +509,25 @@ const ANNScanner = ({
         >
           Short
         </button>
+      </div>
+
+      {/* Sector Filter */}
+      <div className={styles.sectorFilter}>
+        <select
+          className={styles.sectorSelect}
+          value={sectorFilter}
+          onChange={(e) => setSectorFilter(e.target.value)}
+          disabled={isScanning}
+        >
+          {SECTORS.map(sector => (
+            <option key={sector} value={sector}>{sector}</option>
+          ))}
+        </select>
+        {sectorFilter !== 'All' && (
+          <span className={styles.sectorCount}>
+            {displayResultsWithDelta.length} in {sectorFilter}
+          </span>
+        )}
       </div>
 
       {/* Progress Bar */}
