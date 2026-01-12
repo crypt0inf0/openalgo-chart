@@ -3,7 +3,7 @@ import classNames from 'classnames';
 import { RefreshCw, Brain, AlertCircle, Bell, BellOff } from 'lucide-react';
 import styles from './ANNScanner.module.css';
 import ANNScannerItem from './ANNScannerItem';
-import { scanStocks, sortResults, filterResults } from '../../services/annScannerService';
+import { sortResults, filterResults } from '../../services/annScannerService';
 import { getStockList, STOCK_LIST_OPTIONS } from '../../data/stockLists';
 import { SECTORS, getSector } from '../PositionTracker/sectorMapping';
 
@@ -28,17 +28,6 @@ const REFRESH_INTERVALS = [
   { id: '1h', label: '1h', ms: 60 * 60 * 1000 },
 ];
 
-// Sound manager - try to play alert sound
-const playAlertSound = () => {
-  try {
-    const audio = new Audio('/sounds/alert.mp3');
-    audio.volume = 0.5;
-    audio.play().catch(() => {});
-  } catch (e) {
-    // Silently fail if audio not available
-  }
-};
-
 const ANNScanner = ({
   watchlistSymbols = [],
   onSymbolSelect,
@@ -48,6 +37,9 @@ const ANNScanner = ({
   // Persistence props - state survives tab switches
   persistedState = {},
   onStateChange,
+  // Background scan props - scan runs in App.jsx
+  onStartScan,
+  onCancelScan,
 }) => {
   // State - use persisted values if available
   const [source, setSource] = useState(persistedState.source ?? 'watchlist');
@@ -55,9 +47,10 @@ const ANNScanner = ({
   const [sortBy, setSortBy] = useState('streak');
   const [sortDir, setSortDir] = useState('desc');
   const [results, setResults] = useState(persistedState.results ?? []);
-  const [isScanning, setIsScanning] = useState(false);
-  const [progress, setProgress] = useState({ current: 0, total: 0 });
-  const [error, setError] = useState(null);
+  // isScanning and progress now come from persistedState (managed by App.jsx)
+  const isScanning = persistedState.isScanning ?? false;
+  const progress = persistedState.progress ?? { current: 0, total: 0 };
+  const [error, setError] = useState(persistedState.scanError ?? null);
   const [lastScanTime, setLastScanTime] = useState(persistedState.lastScanTime ?? null);
   const [columnWidths, setColumnWidths] = useState(DEFAULT_COLUMN_WIDTHS);
   const [resizing, setResizing] = useState(null);
@@ -78,7 +71,6 @@ const ANNScanner = ({
   const [sectorFilter, setSectorFilter] = useState(persistedState.sectorFilter ?? 'All');
 
   // Refs
-  const abortControllerRef = useRef(null);
   const listRef = useRef(null);
   const startXRef = useRef(0);
   const startWidthRef = useRef(0);
@@ -125,102 +117,25 @@ const ANNScanner = ({
     return getStockList(source);
   }, [source, watchlistSymbols]);
 
-  // Detect signal changes for alerts
-  const detectSignalChanges = useCallback((newResults, oldResults) => {
-    if (!oldResults || oldResults.length === 0) return [];
-
-    const oldMap = new Map(oldResults.map(r => [r.symbol, r]));
-    const changes = [];
-
-    newResults.forEach(newItem => {
-      const oldItem = oldMap.get(newItem.symbol);
-      if (oldItem && oldItem.direction !== newItem.direction) {
-        if (oldItem.direction && newItem.direction) {
-          changes.push({
-            symbol: newItem.symbol,
-            from: oldItem.direction,
-            to: newItem.direction,
-          });
-        }
-      }
-    });
-
-    return changes;
-  }, []);
-
-  // Handle scan
-  const handleScan = useCallback(async () => {
+  // Handle scan - delegates to App.jsx for background scanning
+  const handleScan = useCallback(() => {
     if (stocksToScan.length === 0) {
       setError('No stocks to scan. Add stocks to your watchlist or select a different source.');
       return;
     }
 
-    // Cancel any existing scan
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort();
-    }
-    abortControllerRef.current = new AbortController();
-
-    setIsScanning(true);
     setError(null);
-    setProgress({ current: 0, total: stocksToScan.length });
 
-    // Save previous results before clearing
-    setPreviousResults(results);
-    setResults([]);
-
-    try {
-      const scanResults = await scanStocks(
-        stocksToScan,
-        { threshold: 0.0014, daysToFetch: 60, delayMs: 100 },
-        (current, total, result) => {
-          setProgress({ current, total });
-          // Update results incrementally
-          setResults(prev => [...prev, result]);
-        },
-        abortControllerRef.current.signal
-      );
-
-      setLastScanTime(new Date());
-
-      // Check for signal changes and trigger alerts
-      const changes = detectSignalChanges(scanResults, previousResults);
-      if (changes.length > 0 && alertsEnabled) {
-        playAlertSound();
-
-        // Browser notification
-        if (notificationPermission === 'granted') {
-          changes.forEach(change => {
-            new Notification('ANN Signal Change', {
-              body: `${change.symbol}: ${change.from} → ${change.to}`,
-              icon: '/favicon.ico',
-            });
-          });
-        }
-
-        // Toast notification
-        if (showToast) {
-          const msg = changes.length === 1
-            ? `${changes[0].symbol} flipped to ${changes[0].to}`
-            : `${changes.length} stocks changed signals`;
-          showToast(msg, 'warning');
-        }
-      }
-    } catch (err) {
-      if (err.name !== 'AbortError') {
-        setError('Scan failed: ' + (err.message || 'Unknown error'));
-      }
-    } finally {
-      setIsScanning(false);
+    // Delegate scan to App.jsx - scan continues even if this component unmounts
+    if (onStartScan) {
+      onStartScan(stocksToScan, alertsEnabled, showToast);
     }
-  }, [stocksToScan, results, previousResults, alertsEnabled, notificationPermission, showToast, detectSignalChanges]);
+  }, [stocksToScan, alertsEnabled, showToast, onStartScan]);
 
-  // Cancel scan on unmount
+  // Cleanup intervals on unmount (scan continues in background via App.jsx)
   useEffect(() => {
     return () => {
-      if (abortControllerRef.current) {
-        abortControllerRef.current.abort();
-      }
+      // Note: We don't abort scan here - it runs in App.jsx and continues in background
       if (intervalRef.current) clearInterval(intervalRef.current);
       if (countdownRef.current) clearInterval(countdownRef.current);
     };
