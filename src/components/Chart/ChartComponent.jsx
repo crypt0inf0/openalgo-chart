@@ -35,6 +35,7 @@ import { calculateFirstCandle } from '../../utils/indicators/firstCandle';
 import { calculatePriceActionRange } from '../../utils/indicators/priceActionRange';
 import { calculateRangeBreakout } from '../../utils/indicators/rangeBreakout';
 import { calculateANNStrategy } from '../../utils/indicators/annStrategy';
+import { calculateHilengaMilenga } from '../../utils/indicators/hilengaMilenga';
 import { TPOProfilePrimitive } from '../../plugins/tpo-profile/TPOProfilePrimitive';
 import { calculateHeikinAshi } from '../../utils/chartUtils';
 import { calculateRenko } from '../../utils/renkoUtils';
@@ -2534,6 +2535,27 @@ const ChartComponent = forwardRef(({
                         // other indicators' markers. Real-time updates only refresh prediction and background.
                         break;
                     }
+                    case 'hilengaMilenga': {
+                        // Hilenga-Milenga real-time update
+                        const hmResult = calculateHilengaMilenga(
+                            data,
+                            ind.rsiLength || 9,
+                            ind.emaLength || 3,
+                            ind.wmaLength || 21
+                        );
+
+                        if (hmResult.rsiLine && hmResult.rsiLine.length > 0) {
+                            if (series.rsi) series.rsi.setData(hmResult.rsiLine);
+                            if (series.baseline) series.baseline.setData(hmResult.rsiLine);
+                        }
+                        if (hmResult.emaLine && hmResult.emaLine.length > 0 && series.ema) {
+                            series.ema.setData(hmResult.emaLine);
+                        }
+                        if (hmResult.wmaLine && hmResult.wmaLine.length > 0 && series.wma) {
+                            series.wma.setData(hmResult.wmaLine);
+                        }
+                        break;
+                    }
                 }
             });
         }
@@ -2704,6 +2726,62 @@ const ChartComponent = forwardRef(({
                                 annStrategyPaneRef.current = pane;
                                 indicatorPanesMap.current.set(id, pane);
                                 series = { prediction: annArea, bgLong: annBgLong, bgShort: annBgShort };
+                                break;
+                            case 'hilengaMilenga':
+                                // Hilenga-Milenga: Create pane with RSI, EMA, WMA lines and fill
+                                pane = chartRef.current.addPane({ height: 120 });
+
+                                // RSI line (black/dark)
+                                const hmRsi = pane.addSeries(LineSeries, {
+                                    color: ind.rsiColor || '#131722',
+                                    lineWidth: 2,
+                                    priceLineVisible: false,
+                                    lastValueVisible: true
+                                });
+
+                                // EMA line (green - Price/Signal)
+                                const hmEma = pane.addSeries(LineSeries, {
+                                    color: ind.emaColor || '#26A69A',
+                                    lineWidth: 2,
+                                    priceLineVisible: false,
+                                    lastValueVisible: false
+                                });
+
+                                // WMA line (red - Strength)
+                                const hmWma = pane.addSeries(LineSeries, {
+                                    color: ind.wmaColor || '#EF5350',
+                                    lineWidth: 2,
+                                    priceLineVisible: false,
+                                    lastValueVisible: false
+                                });
+
+                                // Baseline series at 50 for fill effect
+                                const hmBaseline = pane.addSeries(BaselineSeries, {
+                                    baseValue: { type: 'price', price: 50 },
+                                    topLineColor: 'transparent',
+                                    topFillColor1: ind.bullFillColor || 'rgba(255, 107, 107, 0.7)',
+                                    topFillColor2: ind.bullFillColor || 'rgba(255, 107, 107, 0.7)',
+                                    bottomLineColor: 'transparent',
+                                    bottomFillColor1: ind.bearFillColor || 'rgba(78, 205, 196, 0.7)',
+                                    bottomFillColor2: ind.bearFillColor || 'rgba(78, 205, 196, 0.7)',
+                                    lineWidth: 0,
+                                    priceLineVisible: false,
+                                    lastValueVisible: false,
+                                    crosshairMarkerVisible: false
+                                });
+
+                                // Add midline at 50
+                                hmRsi._midline = hmRsi.createPriceLine({
+                                    price: 50,
+                                    color: ind.midlineColor || '#787B86',
+                                    lineWidth: 1,
+                                    lineStyle: 0,
+                                    axisLabelVisible: false,
+                                    title: ''
+                                });
+
+                                indicatorPanesMap.current.set(id, pane);
+                                series = { rsi: hmRsi, ema: hmEma, wma: hmWma, baseline: hmBaseline };
                                 break;
                             // Add other types as needed
                         }
@@ -4280,6 +4358,10 @@ const ChartComponent = forwardRef(({
             if (ind.kPeriod) params += `${ind.kPeriod} `;
             if (ind.dPeriod) params += `${ind.dPeriod} `;
             if (ind.smooth) params += `${ind.smooth} `;
+            // Hilenga-Milenga params
+            if (ind.rsiLength) params += `${ind.rsiLength} `;
+            if (ind.emaLength) params += `${ind.emaLength} `;
+            if (ind.wmaLength) params += `${ind.wmaLength} `;
 
             if (ind.source && ind.source !== 'close') params += `${ind.source} `;
 
