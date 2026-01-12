@@ -4,7 +4,7 @@ import styles from './IndicatorLegend.module.css';
 /**
  * IndicatorRow - Renders a single indicator with name, params, value, and action buttons
  */
-const IndicatorRow = ({ indicator, onVisibilityToggle, onRemove, onSettings }) => (
+const IndicatorRow = ({ indicator, onVisibilityToggle, onRemove, onSettings, onPaneMenu, isPaneIndicator }) => (
     <div
         className={`${styles.indicatorRow} ${indicator.isHidden ? styles.indicatorHidden : ''}`}
     >
@@ -12,6 +12,25 @@ const IndicatorRow = ({ indicator, onVisibilityToggle, onRemove, onSettings }) =
         <span className={styles.indicatorName}>
             {indicator.name} {indicator.params}
         </span>
+
+        {/* Pane Menu Button - only for pane indicators */}
+        {isPaneIndicator && onPaneMenu && (
+            <button
+                className={styles.paneMenuBtn}
+                onClick={(e) => {
+                    e.stopPropagation();
+                    const rect = e.currentTarget.getBoundingClientRect();
+                    onPaneMenu(indicator.id || indicator.type, rect.left, rect.bottom + 4);
+                }}
+                title="Pane options"
+            >
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 18 18" width="18" height="18">
+                    <circle fill="currentColor" cx="9" cy="4" r="1.5"/>
+                    <circle fill="currentColor" cx="9" cy="9" r="1.5"/>
+                    <circle fill="currentColor" cx="9" cy="14" r="1.5"/>
+                </svg>
+            </button>
+        )}
 
         {/* Action buttons - hidden by default, visible on hover */}
         <div className={styles.indicatorActions}>
@@ -88,7 +107,7 @@ const IndicatorRow = ({ indicator, onVisibilityToggle, onRemove, onSettings }) =
 
 /**
  * IndicatorLegend - Main component that renders legends for all indicators
- * 
+ *
  * @param {Array} indicators - Array of indicator objects
  * @param {Object} panePositions - Object mapping pane types (or IDs) to vertical positions
  * @param {boolean} isToolbarVisible - Whether toolbar is visible (affects left offset)
@@ -96,6 +115,7 @@ const IndicatorRow = ({ indicator, onVisibilityToggle, onRemove, onSettings }) =
  * @param {function} onToggleCollapse - Callback for collapse/expand toggle
  * @param {function} onVisibilityToggle - Callback when eye icon is clicked
  * @param {function} onRemove - Callback when delete icon is clicked
+ * @param {function} onPaneMenu - Callback when pane menu button is clicked (paneId, x, y)
  */
 const IndicatorLegend = ({
     indicators = [],
@@ -106,6 +126,7 @@ const IndicatorLegend = ({
     onVisibilityToggle,
     onRemove,
     onSettings,
+    onPaneMenu,
 }) => {
     // Separate indicators into main chart and pane indicators
     const mainIndicators = indicators.filter(ind => ind.pane === 'main');
@@ -165,6 +186,8 @@ const IndicatorLegend = ({
                                 onVisibilityToggle={onVisibilityToggle}
                                 onRemove={onRemove}
                                 onSettings={onSettings}
+                                onPaneMenu={onPaneMenu}
+                                isPaneIndicator={true}
                             />
                         </div>
                     </div>

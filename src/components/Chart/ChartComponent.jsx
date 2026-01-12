@@ -6,10 +6,12 @@ import {
     LineSeries,
     AreaSeries,
     BaselineSeries,
-    HistogramSeries
+    HistogramSeries,
+    createSeriesMarkers
 } from 'lightweight-charts';
 import styles from './ChartComponent.module.css';
 import IndicatorLegend from './IndicatorLegend';
+import PaneContextMenu from './PaneContextMenu';
 import IndicatorSettingsDialog from '../IndicatorSettings/IndicatorSettingsDialog';
 import { getIndicatorConfig } from '../IndicatorSettings/indicatorConfigs';
 import { getKlines, getHistoricalKlines, subscribeToTicker, saveDrawings, loadDrawings } from '../../services/openalgo';
@@ -22,6 +24,7 @@ import {
     calculateMACD,
     calculateBollingerBands,
     calculateVolume,
+    calculateEnhancedVolume,
     calculateATR,
     calculateStochastic,
     calculateVWAP,
@@ -31,6 +34,7 @@ import { calculateTPO } from '../../utils/indicators/tpo';
 import { calculateFirstCandle } from '../../utils/indicators/firstCandle';
 import { calculatePriceActionRange } from '../../utils/indicators/priceActionRange';
 import { calculateRangeBreakout } from '../../utils/indicators/rangeBreakout';
+import { calculateANNStrategy } from '../../utils/indicators/annStrategy';
 import { TPOProfilePrimitive } from '../../plugins/tpo-profile/TPOProfilePrimitive';
 import { calculateHeikinAshi } from '../../utils/chartUtils';
 import { calculateRenko } from '../../utils/renkoUtils';
@@ -145,6 +149,9 @@ const ChartComponent = forwardRef(({
     const chartContainerRef = useRef();
     const [isLoading, setIsLoading] = useState(true);
     const [contextMenu, setContextMenu] = useState({ show: false, x: 0, y: 0 });
+    const [paneContextMenu, setPaneContextMenu] = useState({ show: false, x: 0, y: 0, paneId: null });
+    const [maximizedPane, setMaximizedPane] = useState(null); // ID of currently maximized pane
+    const [collapsedPanes, setCollapsedPanes] = useState(new Set()); // Set of collapsed pane IDs
     const [priceScaleMenu, setPriceScaleMenu] = useState({ visible: false, x: 0, y: 0, price: null });
     const [indicatorSettingsOpen, setIndicatorSettingsOpen] = useState(null); // which indicator's settings are open
     const [indicatorValues, setIndicatorValues] = useState({}); // Current value under cursor for each indicator { id: value }
@@ -168,6 +175,7 @@ const ChartComponent = forwardRef(({
     const isActuallyLoadingRef = useRef(true); // Track if we're actually loading data (not just updating indicators) - start as true on mount
     const chartRef = useRef(null);
     const mainSeriesRef = useRef(null);
+    const seriesMarkersRef = useRef(null); // Ref for series markers primitive (lightweight-charts v5)
 
     // Unified Indicator Maps for Multi-Instance Support
     const indicatorSeriesMap = useRef(new Map()); // Map<id, Series | Object>
@@ -185,6 +193,8 @@ const ChartComponent = forwardRef(({
     const firstCandleSeriesRef = useRef([]); // Array of line series for all days' high/low
     const priceActionRangeSeriesRef = useRef([]); // Array of line series for PAR support/resistance
     const rangeBreakoutSeriesRef = useRef([]); // Array of line series for range breakout high/low
+    const annStrategySeriesRef = useRef(null); // ANN Strategy prediction series
+    const annStrategyPaneRef = useRef(null); // ANN Strategy pane reference
     const wsRef = useRef(null);
     const chartTypeRef = useRef(chartType);
     const dataRef = useRef([]);
@@ -1900,6 +1910,7 @@ const ChartComponent = forwardRef(({
 
         const replacementSeries = createSeries(chart, chartType, strategyConfig?.displayName || symbol);
         mainSeriesRef.current = replacementSeries;
+        seriesMarkersRef.current = null; // Reset markers primitive for new series
         initializeLineTools(replacementSeries);
         initializeVisualTrading(replacementSeries);
 
@@ -1999,6 +2010,7 @@ const ChartComponent = forwardRef(({
                     }
                 }
                 mainSeriesRef.current = null;
+                seriesMarkersRef.current = null; // Clear markers primitive
             }
 
             // Cleanup PriceScaleTimer
@@ -2171,6 +2183,7 @@ const ChartComponent = forwardRef(({
                                     high: combinedClose,
                                     low: combinedClose,
                                     close: combinedClose,
+                                    volume: 0,
                                 };
                                 currentData.push(candle);
                             } else {
@@ -2181,6 +2194,7 @@ const ChartComponent = forwardRef(({
                                     high: Math.max(existingCandle.high, combinedClose),
                                     low: Math.min(existingCandle.low, combinedClose),
                                     close: combinedClose,
+                                    volume: existingCandle.volume || 0,
                                 };
                                 currentData[lastIndex] = candle;
                             }
@@ -2214,8 +2228,9 @@ const ChartComponent = forwardRef(({
                         wsRef.current = subscribeToTicker(symbol, exchange, interval, (ticker) => {
                             if (cancelled || !ticker) return;
 
-                            // Only need close price - that's the real-time tick data
+                            // Extract price and volume from real-time tick data
                             const closePrice = Number(ticker.close);
+                            const tickVolume = Number(ticker.volume) || 0;
                             if (!Number.isFinite(closePrice) || closePrice <= 0) {
                                 console.warn('Received invalid close price:', ticker);
                                 return;
@@ -2250,6 +2265,7 @@ const ChartComponent = forwardRef(({
                                     high: closePrice,
                                     low: closePrice,
                                     close: closePrice,
+                                    volume: tickVolume,
                                 };
                                 currentData.push(candle);
                                 logger.debug('[WebSocket] Created new candle at time:', currentCandleTime, 'price:', closePrice);
@@ -2263,6 +2279,7 @@ const ChartComponent = forwardRef(({
                                     high: Math.max(existingCandle.high, closePrice),
                                     low: Math.min(existingCandle.low, closePrice),
                                     close: closePrice,
+                                    volume: tickVolume,
                                 };
                                 currentData[lastIndex] = candle;
                             }
@@ -2438,8 +2455,21 @@ const ChartComponent = forwardRef(({
                         break;
                     }
                     case 'volume': {
-                        const val = calculateVolume(data, ind.colorUp, ind.colorDown);
-                        if (val && val.length > 0) series.setData(val);
+                        const result = calculateEnhancedVolume(data, {
+                            maPeriod: ind.maPeriod || 20,
+                            upColor: ind.colorUp || '#26A69A',
+                            downColor: ind.colorDown || '#EF5350',
+                            highVolumeUpColor: ind.highVolumeUpColor || '#00E676',
+                            highVolumeDownColor: ind.highVolumeDownColor || '#FF1744',
+                            highVolumeThreshold: ind.highVolumeThreshold || 1.5,
+                            showMA: ind.showMA !== false
+                        });
+                        if (result.bars && result.bars.length > 0 && series.bars) {
+                            series.bars.setData(result.bars);
+                        }
+                        if (result.ma && result.ma.length > 0 && series.ma) {
+                            series.ma.setData(result.ma);
+                        }
                         break;
                     }
                     case 'vwap': {
@@ -2465,6 +2495,45 @@ const ChartComponent = forwardRef(({
                         // For now skip TPO on every tick or handle if efficient.
                         break;
                     }
+                    case 'annStrategy': {
+                        // ANN Strategy real-time update
+                        const result = calculateANNStrategy(data, {
+                            threshold: ind.threshold || 0.0014,
+                            longColor: ind.longColor || '#26A69A',
+                            shortColor: ind.shortColor || '#EF5350',
+                            showSignals: ind.showSignals !== false,
+                            showBackground: ind.showBackground !== false
+                        });
+
+                        if (result.predictions && result.predictions.length > 0 && series.prediction) {
+                            series.prediction.setData(result.predictions);
+                        }
+
+                        // Update background area series on main chart
+                        if ((series.bgLong || series.bgShort) && result.signals && result.signals.length > 0 && ind.showBackground !== false) {
+                            const priceMax = Math.max(...data.map(d => d.high));
+                            const priceMin = Math.min(...data.map(d => d.low));
+                            const padding = (priceMax - priceMin) * 0.1;
+                            const bgTop = priceMax + padding;
+                            const bgBottom = priceMin - padding;
+
+                            const longBgData = result.signals.map(sig => ({
+                                time: sig.time,
+                                value: sig.buying === true ? bgTop : bgBottom
+                            }));
+                            const shortBgData = result.signals.map(sig => ({
+                                time: sig.time,
+                                value: sig.buying === false ? bgTop : bgBottom
+                            }));
+
+                            if (series.bgLong) series.bgLong.setData(longBgData);
+                            if (series.bgShort) series.bgShort.setData(shortBgData);
+                        }
+
+                        // Note: Markers are handled collectively in updateIndicators to avoid overwriting
+                        // other indicators' markers. Real-time updates only refresh prediction and background.
+                        break;
+                    }
                 }
             });
         }
@@ -2474,6 +2543,9 @@ const ChartComponent = forwardRef(({
 
         const canAddSeries = chartReadyRef.current;
         const validIds = new Set();
+
+        // Collect all markers from all indicators to set them together at the end
+        const allMarkers = [];
 
         if (Array.isArray(indicatorsArray)) {
             indicatorsArray.forEach(ind => {
@@ -2541,14 +2613,97 @@ const ChartComponent = forwardRef(({
                                 series = chartRef.current.addSeries(LineSeries, { lineWidth: 2, priceLineVisible: false, lastValueVisible: isVisible, crosshairMarkerVisible: true });
                                 break;
                             case 'volume':
-                                // Volume usually at bottom overlay
-                                series = chartRef.current.addSeries(HistogramSeries, {
+                                // Enhanced Volume with histogram bars and MA line
+                                const volumeBars = chartRef.current.addSeries(HistogramSeries, {
                                     priceFormat: { type: 'volume' },
-                                    priceScaleId: 'volume', // Shared scale for all volumes? Or unique? 'volume' ID shares scale.
+                                    priceScaleId: 'volume',
                                     priceLineVisible: false,
                                     lastValueVisible: false
                                 });
-                                series.priceScale().applyOptions({ scaleMargins: { top: 0.85, bottom: 0 } });
+                                volumeBars.priceScale().applyOptions({ scaleMargins: { top: 0.85, bottom: 0 } });
+
+                                // Volume MA line (if showMA is enabled)
+                                const volumeMA = chartRef.current.addSeries(LineSeries, {
+                                    color: ind.maColor || '#FFD700',
+                                    lineWidth: 2,
+                                    priceScaleId: 'volume',
+                                    priceLineVisible: false,
+                                    lastValueVisible: false,
+                                    crosshairMarkerVisible: false
+                                });
+
+                                series = { bars: volumeBars, ma: volumeMA };
+                                break;
+                            case 'annStrategy':
+                                // ANN Strategy: Create separate pane for prediction plot
+                                pane = chartRef.current.addPane({ height: 100 });
+
+                                // Area series for prediction visualization
+                                const annArea = pane.addSeries(AreaSeries, {
+                                    lineColor: ind.predictionColor || '#00BCD4',
+                                    topColor: 'rgba(0, 188, 212, 0.3)',
+                                    bottomColor: 'rgba(0, 188, 212, 0.0)',
+                                    lineWidth: 2,
+                                    priceLineVisible: false,
+                                    lastValueVisible: true
+                                });
+
+                                // Add threshold lines at ±0.0014
+                                const thresholdValue = ind.threshold || 0.0014;
+                                annArea._upperThreshold = annArea.createPriceLine({
+                                    price: thresholdValue,
+                                    color: ind.longColor || '#26A69A',
+                                    lineWidth: 1,
+                                    lineStyle: 2,
+                                    axisLabelVisible: false,
+                                    title: ''
+                                });
+                                annArea._lowerThreshold = annArea.createPriceLine({
+                                    price: -thresholdValue,
+                                    color: ind.shortColor || '#EF5350',
+                                    lineWidth: 1,
+                                    lineStyle: 2,
+                                    axisLabelVisible: false,
+                                    title: ''
+                                });
+                                annArea._zeroLine = annArea.createPriceLine({
+                                    price: 0,
+                                    color: '#666666',
+                                    lineWidth: 1,
+                                    lineStyle: 2,
+                                    axisLabelVisible: false,
+                                    title: ''
+                                });
+
+                                // Background Area series on MAIN chart for signal coloring
+                                // We create TWO area series - one for LONG (green), one for SHORT (red)
+                                // IMPORTANT: Use autoscaleInfoProvider: () => null to prevent affecting chart scale
+                                const annBgLong = chartRef.current.addSeries(AreaSeries, {
+                                    priceScaleId: 'right', // Use main price scale
+                                    lineColor: 'transparent',
+                                    topColor: (ind.longColor || '#26A69A') + '40', // 25% opacity
+                                    bottomColor: (ind.longColor || '#26A69A') + '40',
+                                    lineWidth: 0,
+                                    priceLineVisible: false,
+                                    lastValueVisible: false,
+                                    crosshairMarkerVisible: false,
+                                    autoscaleInfoProvider: () => null // Exclude from autoscale calculation
+                                });
+                                const annBgShort = chartRef.current.addSeries(AreaSeries, {
+                                    priceScaleId: 'right', // Use main price scale
+                                    lineColor: 'transparent',
+                                    topColor: (ind.shortColor || '#EF5350') + '40', // 25% opacity
+                                    bottomColor: (ind.shortColor || '#EF5350') + '40',
+                                    lineWidth: 0,
+                                    priceLineVisible: false,
+                                    lastValueVisible: false,
+                                    crosshairMarkerVisible: false,
+                                    autoscaleInfoProvider: () => null // Exclude from autoscale calculation
+                                });
+
+                                annStrategyPaneRef.current = pane;
+                                indicatorPanesMap.current.set(id, pane);
+                                series = { prediction: annArea, bgLong: annBgLong, bgShort: annBgShort };
                                 break;
                             // Add other types as needed
                         }
@@ -2634,9 +2789,93 @@ const ChartComponent = forwardRef(({
                             series.setData(colored);
                         }
                     } else if (type === 'volume') {
-                        series.applyOptions({ visible: isVisible });
-                        const val = calculateVolume(data, ind.colorUp || '#26A69A', ind.colorDown || '#EF5350');
-                        if (val) series.setData(val);
+                        // Enhanced volume with bars and MA
+                        if (series.bars) series.bars.applyOptions({ visible: isVisible });
+                        if (series.ma) series.ma.applyOptions({
+                            visible: isVisible && (ind.showMA !== false),
+                            color: ind.maColor || '#FFD700'
+                        });
+                        const result = calculateEnhancedVolume(data, {
+                            maPeriod: ind.maPeriod || 20,
+                            upColor: ind.colorUp || '#26A69A',
+                            downColor: ind.colorDown || '#EF5350',
+                            highVolumeUpColor: ind.highVolumeUpColor || '#00E676',
+                            highVolumeDownColor: ind.highVolumeDownColor || '#FF1744',
+                            highVolumeThreshold: ind.highVolumeThreshold || 1.5,
+                            showMA: ind.showMA !== false
+                        });
+                        if (result.bars && series.bars) series.bars.setData(result.bars);
+                        if (result.ma && series.ma) series.ma.setData(result.ma);
+                    } else if (type === 'annStrategy') {
+                        // ANN Strategy update
+                        if (series.prediction) {
+                            series.prediction.applyOptions({
+                                visible: isVisible,
+                                lineColor: ind.predictionColor || '#00BCD4'
+                            });
+
+                            // Update threshold lines
+                            const thresholdValue = ind.threshold || 0.0014;
+                            if (series.prediction._upperThreshold) {
+                                series.prediction._upperThreshold.applyOptions({
+                                    price: thresholdValue,
+                                    color: ind.longColor || '#26A69A'
+                                });
+                            }
+                            if (series.prediction._lowerThreshold) {
+                                series.prediction._lowerThreshold.applyOptions({
+                                    price: -thresholdValue,
+                                    color: ind.shortColor || '#EF5350'
+                                });
+                            }
+
+                            // Calculate ANN predictions
+                            const result = calculateANNStrategy(data, {
+                                threshold: ind.threshold || 0.0014,
+                                longColor: ind.longColor || '#26A69A',
+                                shortColor: ind.shortColor || '#EF5350',
+                                showSignals: ind.showSignals !== false,
+                                showBackground: ind.showBackground !== false
+                            });
+
+                            // Set prediction data
+                            if (result.predictions && result.predictions.length > 0) {
+                                series.prediction.setData(result.predictions);
+                            }
+
+                            // Set background area data for signal coloring on main chart
+                            if ((series.bgLong || series.bgShort) && result.signals && result.signals.length > 0 && ind.showBackground !== false && isVisible) {
+                                // Calculate price range for background
+                                const priceMax = Math.max(...data.map(d => d.high));
+                                const priceMin = Math.min(...data.map(d => d.low));
+                                const padding = (priceMax - priceMin) * 0.1;
+                                const bgTop = priceMax + padding;
+                                const bgBottom = priceMin - padding;
+
+                                // Create data for LONG background (only show when buying=true)
+                                const longBgData = result.signals.map(sig => ({
+                                    time: sig.time,
+                                    value: sig.buying === true ? bgTop : bgBottom
+                                }));
+
+                                // Create data for SHORT background (only show when buying=false)
+                                const shortBgData = result.signals.map(sig => ({
+                                    time: sig.time,
+                                    value: sig.buying === false ? bgTop : bgBottom
+                                }));
+
+                                if (series.bgLong) series.bgLong.setData(longBgData);
+                                if (series.bgShort) series.bgShort.setData(shortBgData);
+                            } else {
+                                if (series.bgLong) series.bgLong.setData([]);
+                                if (series.bgShort) series.bgShort.setData([]);
+                            }
+
+                            // Collect markers for buy/sell signals (will be set together with all other indicator markers)
+                            if (result.markers && result.markers.length > 0 && isVisible) {
+                                allMarkers.push(...result.markers);
+                            }
+                        }
                     }
                 }
             });
@@ -2715,6 +2954,11 @@ const ChartComponent = forwardRef(({
                     seriesIndex++;
                 }
             }
+
+            // Add First Candle markers to allMarkers for display on main chart
+            if (result.allMarkers && result.allMarkers.length > 0) {
+                allMarkers.push(...result.allMarkers);
+            }
         } else if (!firstCandleEnabled) {
             // Remove first candle series when disabled
             for (const series of firstCandleSeriesRef.current) {
@@ -2787,13 +3031,9 @@ const ChartComponent = forwardRef(({
                 }
             }
 
-            // Set markers on the main candlestick series for breakout/breakdown signals
-            if (result.markers && result.markers.length > 0 && mainSeriesRef.current) {
-                try {
-                    mainSeriesRef.current.setMarkers(result.markers);
-                } catch (e) {
-                    console.warn('[RangeBreakout] Error setting markers:', e);
-                }
+            // Collect markers for breakout/breakdown signals (will be set together with all other indicator markers)
+            if (result.markers && result.markers.length > 0) {
+                allMarkers.push(...result.markers);
             }
         } else if (!rangeBreakoutEnabled) {
             // Remove range breakout series when disabled
@@ -2801,10 +3041,7 @@ const ChartComponent = forwardRef(({
                 try { chartRef.current.removeSeries(series); } catch (e) { /* ignore */ }
             }
             rangeBreakoutSeriesRef.current = [];
-            // Clear markers
-            if (mainSeriesRef.current) {
-                try { mainSeriesRef.current.setMarkers([]); } catch (e) { /* ignore */ }
-            }
+            // Note: markers are handled collectively at the end of updateIndicators
         }
 
         // --- CLEANUP LOGIC ---
@@ -2844,6 +3081,26 @@ const ChartComponent = forwardRef(({
 
             indicatorSeriesMap.current.delete(id);
         });
+
+        // Set all collected markers on the main candlestick series using lightweight-charts v5 API
+        // This ensures markers from all indicators (ANN Strategy, Range Breakout, etc.) are displayed together
+        if (mainSeriesRef.current) {
+            try {
+                // Sort markers by time to ensure proper display order
+                allMarkers.sort((a, b) => a.time - b.time);
+
+                // In lightweight-charts v5, markers are handled via createSeriesMarkers
+                if (!seriesMarkersRef.current) {
+                    // Create the markers primitive if it doesn't exist
+                    seriesMarkersRef.current = createSeriesMarkers(mainSeriesRef.current, allMarkers);
+                } else {
+                    // Update existing markers primitive
+                    seriesMarkersRef.current.setMarkers(allMarkers);
+                }
+            } catch (e) {
+                console.warn('[Markers] Error setting markers:', e);
+            }
+        }
 
     }, []);
 
@@ -3883,6 +4140,125 @@ const ChartComponent = forwardRef(({
         }
     }, [interval, symbol, exchange, tpoSettingsHash]);
 
+    // ==================== PANE CONTEXT MENU HANDLERS ====================
+
+    // Show pane context menu
+    const handlePaneMenu = useCallback((paneId, x, y) => {
+        setPaneContextMenu({ show: true, x, y, paneId });
+    }, []);
+
+    // Close pane context menu
+    const closePaneMenu = useCallback(() => {
+        setPaneContextMenu({ show: false, x: 0, y: 0, paneId: null });
+    }, []);
+
+    // Maximize/Restore pane
+    const handleMaximizePane = useCallback((paneId) => {
+        if (!chartRef.current) return;
+
+        try {
+            const allPanes = chartRef.current.panes ? chartRef.current.panes() : [];
+            if (allPanes.length <= 1) return; // Only main pane, nothing to maximize
+
+            if (maximizedPane === paneId) {
+                // Restore all panes to their default heights
+                allPanes.forEach((pane, index) => {
+                    if (index === 0) return; // Skip main pane
+                    try {
+                        pane.setHeight(100); // Default height
+                    } catch (e) { /* ignore */ }
+                });
+                setMaximizedPane(null);
+            } else {
+                // Maximize this pane, minimize others
+                const targetPane = indicatorPanesMap.current.get(paneId);
+                if (!targetPane) return;
+
+                allPanes.forEach((pane, index) => {
+                    if (index === 0) return; // Skip main pane
+                    try {
+                        if (pane === targetPane) {
+                            pane.setHeight(300); // Maximized height
+                        } else {
+                            pane.setHeight(0); // Hide other panes
+                        }
+                    } catch (e) { /* ignore */ }
+                });
+                setMaximizedPane(paneId);
+            }
+        } catch (e) {
+            console.warn('Error maximizing pane:', e);
+        }
+    }, [maximizedPane]);
+
+    // Collapse/Expand pane
+    const handleCollapsePane = useCallback((paneId) => {
+        if (!chartRef.current) return;
+
+        try {
+            const pane = indicatorPanesMap.current.get(paneId);
+            if (!pane) return;
+
+            const newCollapsed = new Set(collapsedPanes);
+            if (collapsedPanes.has(paneId)) {
+                // Expand
+                pane.setHeight(100);
+                newCollapsed.delete(paneId);
+            } else {
+                // Collapse
+                pane.setHeight(20); // Collapsed height (just header)
+                newCollapsed.add(paneId);
+            }
+            setCollapsedPanes(newCollapsed);
+        } catch (e) {
+            console.warn('Error collapsing pane:', e);
+        }
+    }, [collapsedPanes]);
+
+    // Move pane up
+    const handleMovePaneUp = useCallback((paneId) => {
+        if (!chartRef.current) return;
+
+        try {
+            const allPanes = chartRef.current.panes ? chartRef.current.panes() : [];
+            const pane = indicatorPanesMap.current.get(paneId);
+            if (!pane) return;
+
+            const currentIndex = allPanes.indexOf(pane);
+            if (currentIndex <= 1) return; // Can't move above main pane or already at top
+
+            // Swap pane with the one above it using movePane API
+            if (chartRef.current.movePane) {
+                chartRef.current.movePane(currentIndex, currentIndex - 1);
+            }
+        } catch (e) {
+            console.warn('Error moving pane:', e);
+        }
+    }, []);
+
+    // Delete pane (uses existing onIndicatorRemove)
+    const handleDeletePane = useCallback((paneId) => {
+        if (onIndicatorRemove) {
+            onIndicatorRemove(paneId);
+        }
+    }, [onIndicatorRemove]);
+
+    // Check if pane can move up (not first pane after main)
+    const canPaneMoveUp = useCallback((paneId) => {
+        if (!chartRef.current) return false;
+        try {
+            const allPanes = chartRef.current.panes ? chartRef.current.panes() : [];
+            const pane = indicatorPanesMap.current.get(paneId);
+            if (!pane) return false;
+            const currentIndex = allPanes.indexOf(pane);
+            return currentIndex > 1; // Index 0 is main, index 1 is first indicator pane
+        } catch (e) {
+            return false;
+        }
+    }, []);
+
+    // ==================== END PANE CONTEXT MENU HANDLERS ====================
+
     // Helper to prepare indicators for the legend
     const getActiveIndicators = useCallback(() => {
         if (!Array.isArray(indicators)) return [];
@@ -3978,6 +4354,23 @@ const ChartComponent = forwardRef(({
                 onVisibilityToggle={onIndicatorVisibilityToggle}
                 onRemove={onIndicatorRemove}
                 onSettings={(indicatorType) => setIndicatorSettingsOpen(indicatorType)}
+                onPaneMenu={handlePaneMenu}
+            />
+
+            {/* Pane Context Menu - TradingView style */}
+            <PaneContextMenu
+                show={paneContextMenu.show}
+                x={paneContextMenu.x}
+                y={paneContextMenu.y}
+                paneId={paneContextMenu.paneId}
+                isMaximized={maximizedPane === paneContextMenu.paneId}
+                isCollapsed={collapsedPanes.has(paneContextMenu.paneId)}
+                canMoveUp={canPaneMoveUp(paneContextMenu.paneId)}
+                onMaximize={handleMaximizePane}
+                onCollapse={handleCollapsePane}
+                onMoveUp={handleMovePaneUp}
+                onDelete={handleDeletePane}
+                onClose={closePaneMenu}
             />
 
             {/* Per-Indicator Settings Dialog */}

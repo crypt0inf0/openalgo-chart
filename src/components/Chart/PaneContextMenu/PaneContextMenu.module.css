@@ -1,0 +1,80 @@
+.contextMenu {
+    position: fixed;
+    z-index: 10000;
+    min-width: 220px;
+    background-color: #2a2e39;
+    border: 1px solid #434651;
+    border-radius: 4px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+    padding: 4px 0;
+    font-family: -apple-system, BlinkMacSystemFont, 'Trebuchet MS', Roboto, Ubuntu, sans-serif;
+    font-size: 13px;
+}
+
+.menuItem {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    padding: 8px 12px;
+    border: none;
+    background: transparent;
+    color: #d1d4dc;
+    cursor: pointer;
+    text-align: left;
+    gap: 8px;
+    transition: background-color 0.1s ease;
+}
+
+.menuItem:hover:not(.disabled) {
+    background-color: #3d4351;
+}
+
+.menuItem:active:not(.disabled) {
+    background-color: #4c5264;
+}
+
+.menuItem.disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+.menuItem.deleteItem:hover:not(.disabled) {
+    background-color: rgba(242, 54, 69, 0.15);
+    color: #f23645;
+}
+
+.menuIcon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 16px;
+    height: 16px;
+    flex-shrink: 0;
+    color: #787b86;
+}
+
+.menuItem:hover:not(.disabled) .menuIcon {
+    color: #d1d4dc;
+}
+
+.menuItem.deleteItem:hover:not(.disabled) .menuIcon {
+    color: #f23645;
+}
+
+.menuLabel {
+    flex: 1;
+    white-space: nowrap;
+}
+
+.menuShortcut {
+    color: #787b86;
+    font-size: 11px;
+    margin-left: auto;
+    padding-left: 16px;
+}
+
+.menuDivider {
+    height: 1px;
+    background-color: #434651;
+    margin: 4px 0;
+}
