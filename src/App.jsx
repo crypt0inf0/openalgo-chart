@@ -3017,6 +3017,24 @@ function AppContent({ isAuthenticated, setIsAuthenticated }) {
                 ));
               }}
               isAuthenticated={isAuthenticated}
+              onAddToWatchlist={(symbolData) => {
+                const { symbol, exchange } = symbolData;
+                const existsInWatchlist = watchlistSymbols.some(s => {
+                  if (typeof s === 'string') return s === symbol;
+                  return s.symbol === symbol && s.exchange === exchange;
+                });
+                if (!existsInWatchlist) {
+                  setWatchlistsState(prev => ({
+                    ...prev,
+                    lists: prev.lists.map(wl =>
+                      wl.id === prev.activeListId
+                        ? { ...wl, symbols: [...wl.symbols, { symbol, exchange: exchange || 'NSE' }] }
+                        : wl
+                    ),
+                  }));
+                }
+              }}
+              showToast={showToast}
             />
           ) : activeRightPanel === 'dom' ? (
             <DepthOfMarket

@@ -24,6 +24,39 @@
   font-size: 13px;
 }
 
+.headerControls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.intervalSelect {
+  padding: 4px 6px;
+  border: 1px solid var(--tv-color-border, #363a45);
+  border-radius: 4px;
+  background: var(--tv-color-platform-background, #1e222d);
+  color: var(--tv-color-text-secondary, #787b86);
+  font-size: 10px;
+  cursor: pointer;
+  min-width: 40px;
+}
+
+.intervalSelect:focus {
+  outline: none;
+  border-color: var(--tv-color-brand, #2962ff);
+}
+
+.countdown {
+  font-size: 10px;
+  font-family: monospace;
+  color: var(--tv-color-brand, #2962ff);
+  padding: 3px 6px;
+  background: rgba(41, 98, 255, 0.1);
+  border-radius: 3px;
+  min-width: 32px;
+  text-align: center;
+}
+
 .refreshBtn {
   display: flex;
   align-items: center;
@@ -216,6 +249,17 @@
   text-align: right;
 }
 
+.colStrength {
+  flex-shrink: 0;
+  text-align: center;
+}
+
+.colAction {
+  flex-shrink: 0;
+  text-align: center;
+  cursor: default;
+}
+
 /* Resize Handle */
 .resizeHandle {
   width: 8px;
@@ -310,6 +354,9 @@
 
 /* Footer */
 .footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   padding: 8px 12px;
   border-top: 1px solid var(--tv-color-border, #363a45);
 }
@@ -317,4 +364,31 @@
 .lastScan {
   font-size: 10px;
   color: var(--tv-color-text-secondary, #787b86);
+}
+
+.alertToggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--tv-color-text-secondary, #787b86);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.alertToggle:hover {
+  background: var(--tv-color-toolbar-button-background-hover, #2a2e39);
+  color: var(--tv-color-text-primary, #d1d4dc);
+}
+
+.alertToggle.alertsOn {
+  color: #26A69A;
+}
+
+.alertToggle.alertsOn:hover {
+  color: #26A69A;
 }

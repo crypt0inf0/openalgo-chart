@@ -25,6 +25,9 @@
 .colSymbol {
   flex-shrink: 0;
   overflow: hidden;
+  display: flex;
+  align-items: center;
+  gap: 4px;
 }
 
 .symbolText {
@@ -34,6 +37,33 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+/* Delta Badges */
+.badges {
+  display: flex;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.newBadge {
+  font-size: 8px;
+  padding: 1px 3px;
+  border-radius: 2px;
+  background: rgba(41, 98, 255, 0.2);
+  color: #2962ff;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.flipBadge {
+  font-size: 8px;
+  padding: 1px 3px;
+  border-radius: 2px;
+  background: rgba(255, 152, 0, 0.2);
+  color: #ff9800;
+  font-weight: 600;
+  line-height: 1.2;
 }
 
 /* Signal Column */
@@ -124,4 +154,79 @@
 
 .nnNegative {
   color: #EF5350;
+}
+
+/* Signal Strength Column */
+.colStrength {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  padding: 0 4px;
+}
+
+.strengthBar {
+  width: 100%;
+  height: 4px;
+  background: var(--tv-color-border, #363a45);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.strengthFill {
+  height: 100%;
+  transition: width 0.3s ease;
+  border-radius: 2px;
+}
+
+/* Streak Delta Arrows */
+.deltaUp {
+  color: #26A69A;
+  font-size: 10px;
+  margin-left: 2px;
+}
+
+.deltaDown {
+  color: #EF5350;
+  font-size: 10px;
+  margin-left: 2px;
+}
+
+/* Action Column - Add to Watchlist */
+.colAction {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.addBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border: none;
+  background: transparent;
+  color: var(--tv-color-text-secondary, #787b86);
+  cursor: pointer;
+  border-radius: 3px;
+  transition: all 0.15s ease;
+}
+
+.addBtn:hover {
+  background: var(--tv-color-toolbar-button-background-hover, #2a2e39);
+  color: var(--tv-color-text-primary, #d1d4dc);
+}
+
+.addBtn:active {
+  transform: scale(0.95);
+}
+
+.inWatchlist {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  color: #26A69A;
 }

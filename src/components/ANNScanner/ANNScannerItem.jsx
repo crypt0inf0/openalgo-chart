@@ -1,15 +1,28 @@
 import React, { memo } from 'react';
 import classNames from 'classnames';
-import { TrendingUp, TrendingDown, Minus } from 'lucide-react';
+import { TrendingUp, TrendingDown, Minus, Plus, Check } from 'lucide-react';
 import styles from './ANNScannerItem.module.css';
+import { calculateSignalStrength, getStrengthColor } from '../../services/annScannerService';
 
 const ANNScannerItem = memo(({
   item,
   isFocused,
   onClick,
   columnWidths,
+  // Delta/Comparison props
+  isNew = false,
+  signalFlipped = false,
+  streakChange = 'same',
+  previousStreak = 0,
+  // Watchlist props
+  isInWatchlist = false,
+  onAddToWatchlist,
 }) => {
   const { symbol, direction, streak, nnOutput, error } = item;
+
+  // Calculate signal strength
+  const signalStrength = calculateSignalStrength(nnOutput);
+  const strengthColor = getStrengthColor(signalStrength);
 
   // Format NN output
   const formatNnOutput = (value) => {
@@ -32,6 +45,17 @@ const ANNScannerItem = memo(({
     return <Minus size={12} />;
   };
 
+  // Handle add to watchlist click
+  const handleAddClick = (e) => {
+    e.stopPropagation();
+    if (onAddToWatchlist) {
+      onAddToWatchlist({ symbol: item.symbol, exchange: item.exchange });
+    }
+  };
+
+  // Calculate streak difference
+  const streakDiff = streak - previousStreak;
+
   return (
     <div
       className={classNames(styles.item, {
@@ -47,6 +71,11 @@ const ANNScannerItem = memo(({
         title={item.name || symbol}
       >
         <span className={styles.symbolText}>{symbol}</span>
+        {/* Delta badges */}
+        <div className={styles.badges}>
+          {isNew && <span className={styles.newBadge}>NEW</span>}
+          {signalFlipped && <span className={styles.flipBadge}>FLIP</span>}
+        </div>
       </div>
 
       {/* Signal */}
@@ -64,6 +93,25 @@ const ANNScannerItem = memo(({
         )}
       </div>
 
+      {/* Signal Strength */}
+      <div
+        className={styles.colStrength}
+        style={{ width: columnWidths.strength }}
+        title={`Strength: ${signalStrength}%`}
+      >
+        {!error && (
+          <div className={styles.strengthBar}>
+            <div
+              className={styles.strengthFill}
+              style={{
+                width: `${signalStrength}%`,
+                backgroundColor: strengthColor,
+              }}
+            />
+          </div>
+        )}
+      </div>
+
       {/* Streak */}
       <div
         className={styles.colStreak}
@@ -77,6 +125,13 @@ const ANNScannerItem = memo(({
             [styles.streakShort]: direction === 'SHORT',
           })}>
             {streak}d
+            {/* Streak change arrow */}
+            {streakChange === 'up' && (
+              <span className={styles.deltaUp} title={`+${streakDiff}`}>↑</span>
+            )}
+            {streakChange === 'down' && (
+              <span className={styles.deltaDown} title={`${streakDiff}`}>↓</span>
+            )}
           </span>
         ) : (
           <span className={styles.streakNone}>-</span>
@@ -94,6 +149,26 @@ const ANNScannerItem = memo(({
         })}>
           {formatNnOutput(nnOutput)}
         </span>
+      </div>
+
+      {/* Add to Watchlist */}
+      <div
+        className={styles.colAction}
+        style={{ width: columnWidths.action }}
+      >
+        {isInWatchlist ? (
+          <span className={styles.inWatchlist} title="In watchlist">
+            <Check size={12} />
+          </span>
+        ) : (
+          <button
+            className={styles.addBtn}
+            onClick={handleAddClick}
+            title="Add to watchlist"
+          >
+            <Plus size={12} />
+          </button>
+        )}
       </div>
     </div>
   );

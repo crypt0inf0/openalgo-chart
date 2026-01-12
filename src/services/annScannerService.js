@@ -243,9 +243,35 @@ export const filterResults = (results, filter = 'all') => {
   return results;
 };
 
+/**
+ * Calculate signal strength from NN output (0-100)
+ * Based on typical nnOutput range of -0.01 to +0.01
+ * @param {number} nnOutput - The neural network output value
+ * @returns {number} Signal strength as percentage (0-100)
+ */
+export const calculateSignalStrength = (nnOutput) => {
+  if (nnOutput === null || nnOutput === undefined) return 0;
+  const absValue = Math.abs(nnOutput);
+  // Map 0-0.01 range to 0-100 scale, capping at 0.01
+  return Math.round(Math.min(100, (absValue / 0.01) * 100));
+};
+
+/**
+ * Get color for signal strength
+ * @param {number} strength - Signal strength (0-100)
+ * @returns {string} Hex color code
+ */
+export const getStrengthColor = (strength) => {
+  if (strength >= 70) return '#26A69A'; // Strong - green
+  if (strength >= 40) return '#FFB74D'; // Medium - orange
+  return '#787b86'; // Weak - gray
+};
+
 export default {
   scanStock,
   scanStocks,
   sortResults,
   filterResults,
+  calculateSignalStrength,
+  getStrengthColor,
 };

@@ -1,25 +1,49 @@
 import React, { useState, useCallback, useMemo, useRef, useEffect } from 'react';
 import classNames from 'classnames';
-import { RefreshCw, Brain, AlertCircle } from 'lucide-react';
+import { RefreshCw, Brain, AlertCircle, Bell, BellOff } from 'lucide-react';
 import styles from './ANNScanner.module.css';
 import ANNScannerItem from './ANNScannerItem';
 import { scanStocks, sortResults, filterResults } from '../../services/annScannerService';
 import { getStockList, STOCK_LIST_OPTIONS } from '../../data/stockLists';
 
-// Default column widths
+// Default column widths - updated with new columns
 const DEFAULT_COLUMN_WIDTHS = {
-  symbol: 85,
+  symbol: 80,
   signal: 55,
-  streak: 55,
-  nnOutput: 65,
+  strength: 45,
+  streak: 50,
+  nnOutput: 60,
+  action: 28,
 };
 
-const MIN_COLUMN_WIDTH = 40;
+const MIN_COLUMN_WIDTH = 30;
+
+// Refresh interval options
+const REFRESH_INTERVALS = [
+  { id: 'off', label: 'Off', ms: 0 },
+  { id: '5m', label: '5m', ms: 5 * 60 * 1000 },
+  { id: '15m', label: '15m', ms: 15 * 60 * 1000 },
+  { id: '30m', label: '30m', ms: 30 * 60 * 1000 },
+  { id: '1h', label: '1h', ms: 60 * 60 * 1000 },
+];
+
+// Sound manager - try to play alert sound
+const playAlertSound = () => {
+  try {
+    const audio = new Audio('/sounds/alert.mp3');
+    audio.volume = 0.5;
+    audio.play().catch(() => {});
+  } catch (e) {
+    // Silently fail if audio not available
+  }
+};
 
 const ANNScanner = ({
   watchlistSymbols = [],
   onSymbolSelect,
   isAuthenticated,
+  onAddToWatchlist,
+  showToast,
 }) => {
   // State
   const [source, setSource] = useState('watchlist');
@@ -35,11 +59,36 @@ const ANNScanner = ({
   const [resizing, setResizing] = useState(null);
   const [focusedIndex, setFocusedIndex] = useState(-1);
 
+  // Auto-refresh state
+  const [refreshInterval, setRefreshInterval] = useState('off');
+  const [countdown, setCountdown] = useState(0);
+
+  // Previous results for comparison
+  const [previousResults, setPreviousResults] = useState([]);
+
+  // Alert state
+  const [alertsEnabled, setAlertsEnabled] = useState(true);
+  const [notificationPermission, setNotificationPermission] = useState('default');
+
   // Refs
   const abortControllerRef = useRef(null);
   const listRef = useRef(null);
   const startXRef = useRef(0);
   const startWidthRef = useRef(0);
+  const intervalRef = useRef(null);
+  const countdownRef = useRef(null);
+
+  // Request notification permission on mount
+  useEffect(() => {
+    if ('Notification' in window) {
+      setNotificationPermission(Notification.permission);
+    }
+  }, []);
+
+  // Watchlist set for quick lookup
+  const watchlistSet = useMemo(() => {
+    return new Set(watchlistSymbols.map(s => `${s.symbol}-${s.exchange || 'NSE'}`));
+  }, [watchlistSymbols]);
 
   // Get stocks to scan based on source
   const stocksToScan = useMemo(() => {
@@ -52,6 +101,29 @@ const ANNScanner = ({
     }
     return getStockList(source);
   }, [source, watchlistSymbols]);
+
+  // Detect signal changes for alerts
+  const detectSignalChanges = useCallback((newResults, oldResults) => {
+    if (!oldResults || oldResults.length === 0) return [];
+
+    const oldMap = new Map(oldResults.map(r => [r.symbol, r]));
+    const changes = [];
+
+    newResults.forEach(newItem => {
+      const oldItem = oldMap.get(newItem.symbol);
+      if (oldItem && oldItem.direction !== newItem.direction) {
+        if (oldItem.direction && newItem.direction) {
+          changes.push({
+            symbol: newItem.symbol,
+            from: oldItem.direction,
+            to: newItem.direction,
+          });
+        }
+      }
+    });
+
+    return changes;
+  }, []);
 
   // Handle scan
   const handleScan = useCallback(async () => {
@@ -69,6 +141,9 @@ const ANNScanner = ({
     setIsScanning(true);
     setError(null);
     setProgress({ current: 0, total: stocksToScan.length });
+
+    // Save previous results before clearing
+    setPreviousResults(results);
     setResults([]);
 
     try {
@@ -84,6 +159,30 @@ const ANNScanner = ({
       );
 
       setLastScanTime(new Date());
+
+      // Check for signal changes and trigger alerts
+      const changes = detectSignalChanges(scanResults, previousResults);
+      if (changes.length > 0 && alertsEnabled) {
+        playAlertSound();
+
+        // Browser notification
+        if (notificationPermission === 'granted') {
+          changes.forEach(change => {
+            new Notification('ANN Signal Change', {
+              body: `${change.symbol}: ${change.from} → ${change.to}`,
+              icon: '/favicon.ico',
+            });
+          });
+        }
+
+        // Toast notification
+        if (showToast) {
+          const msg = changes.length === 1
+            ? `${changes[0].symbol} flipped to ${changes[0].to}`
+            : `${changes.length} stocks changed signals`;
+          showToast(msg, 'warning');
+        }
+      }
     } catch (err) {
       if (err.name !== 'AbortError') {
         setError('Scan failed: ' + (err.message || 'Unknown error'));
@@ -91,7 +190,7 @@ const ANNScanner = ({
     } finally {
       setIsScanning(false);
     }
-  }, [stocksToScan]);
+  }, [stocksToScan, results, previousResults, alertsEnabled, notificationPermission, showToast, detectSignalChanges]);
 
   // Cancel scan on unmount
   useEffect(() => {
@@ -99,14 +198,80 @@ const ANNScanner = ({
       if (abortControllerRef.current) {
         abortControllerRef.current.abort();
       }
+      if (intervalRef.current) clearInterval(intervalRef.current);
+      if (countdownRef.current) clearInterval(countdownRef.current);
     };
   }, []);
 
-  // Filter and sort results
-  const displayResults = useMemo(() => {
+  // Auto-refresh interval management
+  useEffect(() => {
+    // Clear existing intervals
+    if (intervalRef.current) clearInterval(intervalRef.current);
+    if (countdownRef.current) clearInterval(countdownRef.current);
+
+    const config = REFRESH_INTERVALS.find(i => i.id === refreshInterval);
+    if (!config || config.ms === 0) {
+      setCountdown(0);
+      return;
+    }
+
+    // Set initial countdown
+    setCountdown(Math.floor(config.ms / 1000));
+
+    // Countdown ticker (every second)
+    countdownRef.current = setInterval(() => {
+      setCountdown(prev => Math.max(0, prev - 1));
+    }, 1000);
+
+    // Scan interval
+    intervalRef.current = setInterval(() => {
+      if (!isScanning && isAuthenticated) {
+        handleScan();
+        setCountdown(Math.floor(config.ms / 1000));
+      }
+    }, config.ms);
+
+    return () => {
+      clearInterval(intervalRef.current);
+      clearInterval(countdownRef.current);
+    };
+  }, [refreshInterval, isScanning, isAuthenticated, handleScan]);
+
+  // Format countdown display
+  const formatCountdown = (seconds) => {
+    const m = Math.floor(seconds / 60);
+    const s = seconds % 60;
+    return `${m}:${s.toString().padStart(2, '0')}`;
+  };
+
+  // Clear previous results when source changes
+  useEffect(() => {
+    setPreviousResults([]);
+  }, [source]);
+
+  // Filter and sort results with delta comparison
+  const displayResultsWithDelta = useMemo(() => {
     let filtered = filterResults(results, filter);
-    return sortResults(filtered, sortBy, sortDir);
-  }, [results, filter, sortBy, sortDir]);
+    let sorted = sortResults(filtered, sortBy, sortDir);
+
+    // Add delta comparison data
+    const prevMap = new Map(previousResults.map(r => [`${r.symbol}-${r.exchange}`, r]));
+
+    return sorted.map(item => {
+      const key = `${item.symbol}-${item.exchange}`;
+      const prev = prevMap.get(key);
+
+      return {
+        ...item,
+        isNew: !prev && previousResults.length > 0,
+        signalFlipped: prev && prev.direction !== item.direction && prev.direction && item.direction,
+        streakChange: prev
+          ? (item.streak > prev.streak ? 'up' : item.streak < prev.streak ? 'down' : 'same')
+          : 'same',
+        previousStreak: prev?.streak || 0,
+      };
+    });
+  }, [results, filter, sortBy, sortDir, previousResults]);
 
   // Handle sort click
   const handleSortClick = useCallback((column) => {
@@ -154,26 +319,52 @@ const ANNScanner = ({
 
   // Keyboard navigation
   const handleKeyDown = useCallback((e) => {
-    if (displayResults.length === 0) return;
+    if (displayResultsWithDelta.length === 0) return;
 
     if (e.key === 'ArrowDown') {
       e.preventDefault();
-      setFocusedIndex(prev => prev < 0 ? 0 : Math.min(prev + 1, displayResults.length - 1));
+      setFocusedIndex(prev => prev < 0 ? 0 : Math.min(prev + 1, displayResultsWithDelta.length - 1));
     } else if (e.key === 'ArrowUp') {
       e.preventDefault();
       setFocusedIndex(prev => prev < 0 ? 0 : Math.max(prev - 1, 0));
     } else if (e.key === 'Enter' && focusedIndex >= 0) {
       e.preventDefault();
-      const item = displayResults[focusedIndex];
+      const item = displayResultsWithDelta[focusedIndex];
       if (item) onSymbolSelect({ symbol: item.symbol, exchange: item.exchange });
     }
-  }, [displayResults, focusedIndex, onSymbolSelect]);
+  }, [displayResultsWithDelta, focusedIndex, onSymbolSelect]);
 
   // Handle row click
   const handleRowClick = useCallback((item, index) => {
     setFocusedIndex(index);
     onSymbolSelect({ symbol: item.symbol, exchange: item.exchange });
   }, [onSymbolSelect]);
+
+  // Handle add to watchlist
+  const handleAddToWatchlist = useCallback((symbolData) => {
+    if (onAddToWatchlist) {
+      onAddToWatchlist(symbolData);
+      if (showToast) {
+        showToast(`${symbolData.symbol} added to watchlist`, 'success');
+      }
+    }
+  }, [onAddToWatchlist, showToast]);
+
+  // Request notification permission
+  const requestNotificationPermission = useCallback(async () => {
+    if ('Notification' in window && notificationPermission !== 'granted') {
+      const permission = await Notification.requestPermission();
+      setNotificationPermission(permission);
+    }
+  }, [notificationPermission]);
+
+  // Toggle alerts
+  const toggleAlerts = useCallback(() => {
+    if (!alertsEnabled && notificationPermission === 'default') {
+      requestNotificationPermission();
+    }
+    setAlertsEnabled(prev => !prev);
+  }, [alertsEnabled, notificationPermission, requestNotificationPermission]);
 
   // Get sort indicator
   const getSortIndicator = (column) => {
@@ -186,10 +377,11 @@ const ANNScanner = ({
     <div className={styles.skeletonContainer}>
       {[1, 2, 3, 4, 5].map((i) => (
         <div key={i} className={styles.skeletonRow}>
-          <div className={styles.skeletonCell} style={{ width: '85px' }} />
+          <div className={styles.skeletonCell} style={{ width: '80px' }} />
           <div className={styles.skeletonCell} style={{ width: '55px' }} />
-          <div className={styles.skeletonCell} style={{ width: '55px' }} />
-          <div className={styles.skeletonCell} style={{ width: '65px' }} />
+          <div className={styles.skeletonCell} style={{ width: '45px' }} />
+          <div className={styles.skeletonCell} style={{ width: '50px' }} />
+          <div className={styles.skeletonCell} style={{ width: '60px' }} />
         </div>
       ))}
     </div>
@@ -214,14 +406,35 @@ const ANNScanner = ({
           <Brain size={16} />
           <span>ANN Scanner</span>
         </div>
-        <button
-          className={classNames(styles.refreshBtn, { [styles.spinning]: isScanning })}
-          onClick={handleScan}
-          disabled={isScanning || !isAuthenticated}
-          title={isScanning ? 'Scanning...' : 'Scan stocks'}
-        >
-          <RefreshCw size={14} />
-        </button>
+        <div className={styles.headerControls}>
+          {/* Auto-refresh interval selector */}
+          <select
+            className={styles.intervalSelect}
+            value={refreshInterval}
+            onChange={(e) => setRefreshInterval(e.target.value)}
+            disabled={isScanning}
+            title="Auto-refresh interval"
+          >
+            {REFRESH_INTERVALS.map(opt => (
+              <option key={opt.id} value={opt.id}>{opt.label}</option>
+            ))}
+          </select>
+          {/* Countdown display */}
+          {refreshInterval !== 'off' && countdown > 0 && (
+            <span className={styles.countdown} title="Time until next scan">
+              {formatCountdown(countdown)}
+            </span>
+          )}
+          {/* Refresh button */}
+          <button
+            className={classNames(styles.refreshBtn, { [styles.spinning]: isScanning })}
+            onClick={handleScan}
+            disabled={isScanning || !isAuthenticated}
+            title={isScanning ? 'Scanning...' : 'Scan stocks'}
+          >
+            <RefreshCw size={14} />
+          </button>
+        </div>
       </div>
 
       {/* Source Selector */}
@@ -305,11 +518,19 @@ const ANNScanner = ({
         </span>
         <div className={styles.resizeHandle} onMouseDown={(e) => handleResizeStart(e, 'signal')} />
         <span
+          className={styles.colStrength}
+          style={{ width: columnWidths.strength, minWidth: MIN_COLUMN_WIDTH }}
+          title="Signal strength based on NN output magnitude"
+        >
+          Str
+        </span>
+        <div className={styles.resizeHandle} onMouseDown={(e) => handleResizeStart(e, 'strength')} />
+        <span
           className={styles.colStreak}
           style={{ width: columnWidths.streak, minWidth: MIN_COLUMN_WIDTH }}
           onClick={() => handleSortClick('streak')}
         >
-          Streak{getSortIndicator('streak')}
+          Days{getSortIndicator('streak')}
         </span>
         <div className={styles.resizeHandle} onMouseDown={(e) => handleResizeStart(e, 'streak')} />
         <span
@@ -317,7 +538,14 @@ const ANNScanner = ({
           style={{ width: columnWidths.nnOutput, minWidth: MIN_COLUMN_WIDTH }}
           onClick={() => handleSortClick('nnOutput')}
         >
-          NN Out{getSortIndicator('nnOutput')}
+          NN{getSortIndicator('nnOutput')}
+        </span>
+        <span
+          className={styles.colAction}
+          style={{ width: columnWidths.action }}
+          title="Add to watchlist"
+        >
+          +
         </span>
       </div>
 
@@ -333,7 +561,7 @@ const ANNScanner = ({
           </div>
         ) : isScanning && results.length === 0 ? (
           renderSkeleton()
-        ) : displayResults.length === 0 && !isScanning ? (
+        ) : displayResultsWithDelta.length === 0 && !isScanning ? (
           renderEmptyState()
         ) : (
           <div
@@ -342,13 +570,19 @@ const ANNScanner = ({
             tabIndex={0}
             onKeyDown={handleKeyDown}
           >
-            {displayResults.map((item, index) => (
+            {displayResultsWithDelta.map((item, index) => (
               <ANNScannerItem
                 key={`${item.symbol}-${item.exchange}`}
                 item={item}
                 isFocused={index === focusedIndex}
                 onClick={() => handleRowClick(item, index)}
                 columnWidths={columnWidths}
+                isNew={item.isNew}
+                signalFlipped={item.signalFlipped}
+                streakChange={item.streakChange}
+                previousStreak={item.previousStreak}
+                isInWatchlist={watchlistSet.has(`${item.symbol}-${item.exchange}`)}
+                onAddToWatchlist={handleAddToWatchlist}
               />
             ))}
           </div>
@@ -356,13 +590,20 @@ const ANNScanner = ({
       </div>
 
       {/* Footer */}
-      {lastScanTime && !isScanning && (
-        <div className={styles.footer}>
+      <div className={styles.footer}>
+        {lastScanTime && !isScanning && (
           <span className={styles.lastScan}>
-            Last scan: {lastScanTime.toLocaleTimeString()}
+            Last: {lastScanTime.toLocaleTimeString()}
           </span>
-        </div>
-      )}
+        )}
+        <button
+          className={classNames(styles.alertToggle, { [styles.alertsOn]: alertsEnabled })}
+          onClick={toggleAlerts}
+          title={alertsEnabled ? 'Alerts enabled - click to disable' : 'Alerts disabled - click to enable'}
+        >
+          {alertsEnabled ? <Bell size={14} /> : <BellOff size={14} />}
+        </button>
+      </div>
     </div>
   );
 };
