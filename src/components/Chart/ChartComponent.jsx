@@ -2887,43 +2887,8 @@ const ChartComponent = forwardRef(({
     }, [onModifyOrder, onCancelOrder]);
 
     // --- VISUAL TRADING EVENT LISTENERS ---
-    useEffect(() => {
-        const container = chartContainerRef.current;
-        if (!container) return;
-
-        const handleMouseDown = (e) => {
-            if (visualTradingRef.current) {
-                const rect = container.getBoundingClientRect();
-                const handled = visualTradingRef.current.handleMouseDown(e.clientX - rect.left, e.clientY - rect.top);
-                if (handled) {
-                    e.preventDefault();
-                    e.stopPropagation();
-                }
-            }
-        };
-        const handleMouseMove = (e) => {
-            if (visualTradingRef.current) {
-                const rect = container.getBoundingClientRect();
-                visualTradingRef.current.handleMouseMove(e.clientX - rect.left, e.clientY - rect.top);
-            }
-        };
-        const handleMouseUp = (e) => {
-            if (visualTradingRef.current) {
-                const rect = container.getBoundingClientRect();
-                visualTradingRef.current.handleMouseUp(e.clientX - rect.left, e.clientY - rect.top);
-            }
-        };
-
-        container.addEventListener('mousedown', handleMouseDown, true); // Use capture to ensure we get event before chart swallows it
-        window.addEventListener('mousemove', handleMouseMove); // Window for drag continuation
-        window.addEventListener('mouseup', handleMouseUp);
-
-        return () => {
-            container.removeEventListener('mousedown', handleMouseDown, true);
-            window.removeEventListener('mousemove', handleMouseMove);
-            window.removeEventListener('mouseup', handleMouseUp);
-        };
-    }, []);
+    // NOTE: VisualTrading handles its own mouse events internally via attached() method.
+    // No need for manual event forwarding here.
 
     // ========== OI LINES EFFECT (Max Call OI, Max Put OI, Max Pain) ==========
     useEffect(() => {

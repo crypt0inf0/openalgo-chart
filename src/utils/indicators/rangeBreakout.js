@@ -136,6 +136,10 @@ export const calculateRangeBreakout = (data, options = {}) => {
     const rangeEndCandle = postRangeCandles[0];
     const lastCandle = marketCandles[marketCandles.length - 1];
 
+    // Skip if start and end times are the same (only one candle after range)
+    // This prevents duplicate timestamp errors in lightweight-charts
+    if (rangeEndCandle.time === lastCandle.time) continue;
+
     // Store level info
     const levels = {
       high: rangeHigh,

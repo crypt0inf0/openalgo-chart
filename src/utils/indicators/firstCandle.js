@@ -94,6 +94,10 @@ export const calculateFirstCandle = (data, options = {}) => {
     // Get last candle of the day for line end time
     const lastCandle = marketCandles[marketCandles.length - 1];
 
+    // Skip if start and end times are the same (first red candle is also the last candle)
+    // This prevents duplicate timestamp errors in lightweight-charts
+    if (firstRedCandle.time === lastCandle.time) continue;
+
     // Create levels from FIRST RED CANDLE (not 9:15 candle)
     const levels = {
       high: firstRedCandle.high,
