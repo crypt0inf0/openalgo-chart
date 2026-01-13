@@ -17,6 +17,8 @@ import {
     getApiKey,
     convertInterval
 } from './apiConfig';
+// Re-export drawings service for backwards compatibility
+export { saveDrawings, loadDrawings } from './drawingsService';
 
 // Re-export config utilities for backwards compatibility
 export { getHostUrl, shouldUseProxy, getApiBase, getLoginUrl, checkAuth, getApiKey };
@@ -1631,134 +1633,8 @@ export const fetchExpiryDates = async (symbol, exchange = 'NFO', instrumenttype 
     }
 };
 
-/**
- * ============================================
- * CHART DRAWINGS API
- * ============================================
- */
-
-/**
- * Save chart drawings to backend
- * Uses the existing /api/v1/chart preferences endpoint
- * @param {string} symbol - Trading symbol
- * @param {string} exchange - Exchange code  
- * @param {string} interval - Chart interval
- * @param {Array} drawings - Array of drawing objects from LineToolManager.exportDrawings()
- */
-export const saveDrawings = async (symbol, exchange = 'NSE', interval = '1d', drawings) => {
-    try {
-        const apiKey = getApiKey();
-        if (!apiKey) {
-            logger.warn('[OpenAlgo] saveDrawings: No API key');
-            return false;
-        }
-
-        // Create a unique key for this symbol/exchange/interval combination
-        const drawingsKey = `drawings_${symbol}_${exchange}_${interval}`;
-
-        const response = await fetch(`${getApiBase()}/chart`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            credentials: 'include',
-            body: JSON.stringify({
-                apikey: apiKey,
-                [drawingsKey]: JSON.stringify(drawings)
-            })
-        });
-
-        if (!response.ok) {
-            console.error('[OpenAlgo] saveDrawings error:', response.status);
-            return false;
-        }
-
-        const data = await response.json();
-        logger.debug('[OpenAlgo] saveDrawings success:', { symbol, exchange, interval, count: drawings.length });
-        return data.status === 'success';
-    } catch (error) {
-        console.error('[OpenAlgo] Error saving drawings:', error);
-        return false;
-    }
-};
-
-/**
- * Load chart drawings from backend
- * @param {string} symbol - Trading symbol
- * @param {string} exchange - Exchange code
- * @param {string} interval - Chart interval
- * @returns {Array|null} Array of drawing objects or null if not found
- */
-export const loadDrawings = async (symbol, exchange = 'NSE', interval = '1d') => {
-    const drawingsKey = `drawings_${symbol}_${exchange}_${interval}`;
-
-    // First, check if CloudSync has already loaded data (stored in global cache)
-    if (window._chartPrefsCache && window._chartPrefsCache[drawingsKey]) {
-        try {
-            const drawings = typeof window._chartPrefsCache[drawingsKey] === 'string'
-                ? JSON.parse(window._chartPrefsCache[drawingsKey])
-                : window._chartPrefsCache[drawingsKey];
-            console.log('[OpenAlgo] loadDrawings from cache:', { symbol, exchange, interval, count: drawings.length });
-            return drawings;
-        } catch (parseError) {
-            console.warn('[OpenAlgo] Failed to parse cached drawings:', parseError);
-        }
-    }
-
-    // Fallback: make API call
-    try {
-        const apiKey = getApiKey();
-        if (!apiKey) {
-            logger.debug('[OpenAlgo] loadDrawings: No API key, skipping');
-            return null;
-        }
-
-        const response = await fetch(`${getApiBase()}/chart?apikey=${encodeURIComponent(apiKey)}`, {
-            method: 'GET',
-            credentials: 'include',
-        });
-
-        // 400 likely means no data saved yet - treat as empty result
-        if (response.status === 400) {
-            logger.debug('[OpenAlgo] loadDrawings: No saved preferences yet');
-            return null;
-        }
-
-        if (!response.ok) {
-            if (response.status === 401) {
-                return null;
-            }
-            logger.debug('[OpenAlgo] loadDrawings status:', response.status);
-            return null;
-        }
-
-        const data = await response.json();
-
-        if (data.status === 'success' && data.data) {
-            // Store in cache for future use
-            if (!window._chartPrefsCache) window._chartPrefsCache = {};
-            Object.assign(window._chartPrefsCache, data.data);
-
-            const drawingsJson = data.data[drawingsKey];
-
-            if (drawingsJson) {
-                try {
-                    const drawings = JSON.parse(drawingsJson);
-                    console.log('[OpenAlgo] loadDrawings success:', { symbol, exchange, interval, count: drawings.length });
-                    return drawings;
-                } catch (parseError) {
-                    console.warn('[OpenAlgo] Failed to parse drawings JSON:', parseError);
-                    return null;
-                }
-            }
-        }
-
-        return null;
-    } catch (error) {
-        logger.debug('[OpenAlgo] loadDrawings error:', error.message);
-        return null;
-    }
-};
+// Note: saveDrawings and loadDrawings are now in drawingsService.js
+// They are re-exported at the top of this file for backwards compatibility
 
 export default {
     checkAuth,
