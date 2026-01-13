@@ -57,63 +57,8 @@ import { useChartResize } from '../../hooks/useChartResize';
 import { useChartDrawings } from '../../hooks/useChartDrawings';
 import { useChartAlerts } from '../../hooks/useChartAlerts';
 import { getChartTheme, getThemeType } from '../../utils/chartTheme';
-
-const TOOL_MAP = {
-    'cursor': 'None',
-    'eraser': 'Eraser',
-    'trendline': 'TrendLine',
-    'arrow': 'Arrow',
-    'ray': 'Ray',
-    'extended_line': 'ExtendedLine',
-    'horizontal': 'HorizontalLine',
-    'horizontal_ray': 'HorizontalRay',
-    'vertical': 'VerticalLine',
-    'cross_line': 'CrossLine',
-    'parallel_channel': 'ParallelChannel',
-    'fibonacci': 'FibRetracement',
-    'fib_extension': 'FibExtension',
-    'pitchfork': 'Pitchfork',
-    'brush': 'Brush',
-    'highlighter': 'Highlighter',
-    'rectangle': 'Rectangle',
-    'circle': 'Circle',
-    'arc': 'Arc',
-    'path': 'Path',
-    'text': 'Text',
-    'callout': 'Callout',
-    'price_label': 'PriceLabel',
-    'pattern': 'Pattern',
-    'triangle': 'Triangle',
-    'abcd': 'ABCD',
-    'xabcd': 'XABCD',
-    'elliott_impulse': 'ElliottImpulseWave',
-    'elliott_correction': 'ElliottCorrectionWave',
-    'head_and_shoulders': 'HeadAndShoulders',
-    'prediction': 'LongPosition',
-    'prediction_short': 'ShortPosition',
-    'date_range': 'DateRange',
-    'price_range': 'PriceRange',
-    'date_price_range': 'DatePriceRange',
-    'measure': 'Measure',
-    'zoom_in': 'None', // Zoom handled separately via click handler
-    'zoom_out': 'None', // Zoom handled separately via click handler
-    'remove': 'None'
-};
-
-// Helper to convert hex color to rgba
-const hexToRgba = (hex, alpha) => {
-    const r = parseInt(hex.slice(1, 3), 16);
-    const g = parseInt(hex.slice(3, 5), 16);
-    const b = parseInt(hex.slice(5, 7), 16);
-    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
-};
-
-// Helper to normalize symbols for comparison (handle exchange suffixes)
-const areSymbolsEquivalent = (s1, s2) => {
-    if (!s1 || !s2) return false;
-    const normalize = (s) => s.split(':')[0].trim().toUpperCase();
-    return normalize(s1) === normalize(s2);
-};
+import { TOOL_MAP, hexToRgba, areSymbolsEquivalent } from './utils/chartHelpers';
+import { saveAlertsForSymbol, loadAlertsForSymbol } from '../../services/alertService';
 
 const ChartComponent = forwardRef(({
     data: initialData = [],
@@ -262,42 +207,7 @@ const ChartComponent = forwardRef(({
     // Track previous symbol for alert persistence
     const prevSymbolRef = useRef({ symbol: null, exchange: null });
 
-    // === Alert Persistence Helpers ===
-    // Use separate key from App.jsx which uses 'tv_alerts' with different format
-    const CHART_ALERTS_STORAGE_KEY = 'tv_chart_alerts';
-
-    /**
-     * Save alerts for a symbol to localStorage
-     */
-    const saveAlertsForSymbol = useCallback((sym, exch, alerts) => {
-        if (!sym || !alerts) return;
-        try {
-            const key = `${sym}:${exch || 'NSE'}`;
-            const stored = JSON.parse(localStorage.getItem(CHART_ALERTS_STORAGE_KEY) || '{}');
-            stored[key] = alerts;
-            localStorage.setItem(CHART_ALERTS_STORAGE_KEY, JSON.stringify(stored));
-            console.log('[Alerts] Saved', alerts.length, 'alerts for', key, alerts);
-        } catch (err) {
-            console.warn('[Alerts] Failed to save alerts:', err);
-        }
-    }, []);
-
-    /**
-     * Load alerts for a symbol from localStorage
-     */
-    const loadAlertsForSymbol = useCallback((sym, exch) => {
-        if (!sym) return [];
-        try {
-            const key = `${sym}:${exch || 'NSE'}`;
-            const stored = JSON.parse(localStorage.getItem(CHART_ALERTS_STORAGE_KEY) || '{}');
-            const alerts = stored[key] || [];
-            console.log('[Alerts] Loaded', alerts.length, 'alerts for', key, alerts);
-            return alerts;
-        } catch (err) {
-            console.warn('[Alerts] Failed to load alerts:', err);
-            return [];
-        }
-    }, []);
+    // Alert persistence now handled by alertService (imported above)
 
     // Sync interval changes with LineToolManager for drawing visibility filtering
     useEffect(() => {
