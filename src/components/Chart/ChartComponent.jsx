@@ -65,6 +65,7 @@ import {
     EXTENDED_VIEW_WINDOW
 } from './utils/chartConfig';
 import { saveAlertsForSymbol, loadAlertsForSymbol } from '../../services/alertService';
+import { usePaneMenu } from './hooks/usePaneMenu';
 
 const ChartComponent = forwardRef(({
     data: initialData = [],
@@ -105,9 +106,6 @@ const ChartComponent = forwardRef(({
     const chartContainerRef = useRef();
     const [isLoading, setIsLoading] = useState(true);
     const [contextMenu, setContextMenu] = useState({ show: false, x: 0, y: 0 });
-    const [paneContextMenu, setPaneContextMenu] = useState({ show: false, x: 0, y: 0, paneId: null });
-    const [maximizedPane, setMaximizedPane] = useState(null); // ID of currently maximized pane
-    const [collapsedPanes, setCollapsedPanes] = useState(new Set()); // Set of collapsed pane IDs
     const [priceScaleMenu, setPriceScaleMenu] = useState({ visible: false, x: 0, y: 0, price: null });
     const [indicatorSettingsOpen, setIndicatorSettingsOpen] = useState(null); // which indicator's settings are open
     const [indicatorValues, setIndicatorValues] = useState({}); // Current value under cursor for each indicator { id: value }
@@ -156,6 +154,24 @@ const ChartComponent = forwardRef(({
     const dataRef = useRef([]);
     const comparisonSeriesRefs = useRef(new Map());
     const visualTradingRef = useRef(null);
+
+    // Pane context menu hook
+    const {
+        paneContextMenu,
+        maximizedPane,
+        collapsedPanes,
+        handlePaneMenu,
+        closePaneMenu,
+        handleMaximizePane,
+        handleCollapsePane,
+        handleMovePaneUp,
+        handleDeletePane,
+        canPaneMoveUp
+    } = usePaneMenu({
+        chartRef,
+        indicatorPanesMap,
+        onIndicatorRemove
+    });
 
     // Multi-leg strategy mode refs
     const strategyWsRefs = useRef({}); // Map: legId -> WebSocket
@@ -4167,125 +4183,6 @@ const ChartComponent = forwardRef(({
             }
         }
     }, [interval, symbol, exchange, tpoSettingsHash]);
-
-    // ==================== PANE CONTEXT MENU HANDLERS ====================
-
-    // Show pane context menu
-    const handlePaneMenu = useCallback((paneId, x, y) => {
-        setPaneContextMenu({ show: true, x, y, paneId });
-    }, []);
-
-    // Close pane context menu
-    const closePaneMenu = useCallback(() => {
-        setPaneContextMenu({ show: false, x: 0, y: 0, paneId: null });
-    }, []);
-
-    // Maximize/Restore pane
-    const handleMaximizePane = useCallback((paneId) => {
-        if (!chartRef.current) return;
-
-        try {
-            const allPanes = chartRef.current.panes ? chartRef.current.panes() : [];
-            if (allPanes.length <= 1) return; // Only main pane, nothing to maximize
-
-            if (maximizedPane === paneId) {
-                // Restore all panes to their default heights
-                allPanes.forEach((pane, index) => {
-                    if (index === 0) return; // Skip main pane
-                    try {
-                        pane.setHeight(100); // Default height
-                    } catch (e) { /* ignore */ }
-                });
-                setMaximizedPane(null);
-            } else {
-                // Maximize this pane, minimize others
-                const targetPane = indicatorPanesMap.current.get(paneId);
-                if (!targetPane) return;
-
-                allPanes.forEach((pane, index) => {
-                    if (index === 0) return; // Skip main pane
-                    try {
-                        if (pane === targetPane) {
-                            pane.setHeight(300); // Maximized height
-                        } else {
-                            pane.setHeight(0); // Hide other panes
-                        }
-                    } catch (e) { /* ignore */ }
-                });
-                setMaximizedPane(paneId);
-            }
-        } catch (e) {
-            console.warn('Error maximizing pane:', e);
-        }
-    }, [maximizedPane]);
-
-    // Collapse/Expand pane
-    const handleCollapsePane = useCallback((paneId) => {
-        if (!chartRef.current) return;
-
-        try {
-            const pane = indicatorPanesMap.current.get(paneId);
-            if (!pane) return;
-
-            const newCollapsed = new Set(collapsedPanes);
-            if (collapsedPanes.has(paneId)) {
-                // Expand
-                pane.setHeight(100);
-                newCollapsed.delete(paneId);
-            } else {
-                // Collapse
-                pane.setHeight(20); // Collapsed height (just header)
-                newCollapsed.add(paneId);
-            }
-            setCollapsedPanes(newCollapsed);
-        } catch (e) {
-            console.warn('Error collapsing pane:', e);
-        }
-    }, [collapsedPanes]);
-
-    // Move pane up
-    const handleMovePaneUp = useCallback((paneId) => {
-        if (!chartRef.current) return;
-
-        try {
-            const allPanes = chartRef.current.panes ? chartRef.current.panes() : [];
-            const pane = indicatorPanesMap.current.get(paneId);
-            if (!pane) return;
-
-            const currentIndex = allPanes.indexOf(pane);
-            if (currentIndex <= 1) return; // Can't move above main pane or already at top
-
-            // Swap pane with the one above it using movePane API
-            if (chartRef.current.movePane) {
-                chartRef.current.movePane(currentIndex, currentIndex - 1);
-            }
-        } catch (e) {
-            console.warn('Error moving pane:', e);
-        }
-    }, []);
-
-    // Delete pane (uses existing onIndicatorRemove)
-    const handleDeletePane = useCallback((paneId) => {
-        if (onIndicatorRemove) {
-            onIndicatorRemove(paneId);
-        }
-    }, [onIndicatorRemove]);
-
-    // Check if pane can move up (not first pane after main)
-    const canPaneMoveUp = useCallback((paneId) => {
-        if (!chartRef.current) return false;
-        try {
-            const allPanes = chartRef.current.panes ? chartRef.current.panes() : [];
-            const pane = indicatorPanesMap.current.get(paneId);
-            if (!pane) return false;
-            const currentIndex = allPanes.indexOf(pane);
-            return currentIndex > 1; // Index 0 is main, index 1 is first indicator pane
-        } catch (e) {
-            return false;
-        }
-    }, []);
-
-    // ==================== END PANE CONTEXT MENU HANDLERS ====================
 
     // Helper to prepare indicators for the legend
     const getActiveIndicators = useCallback(() => {
