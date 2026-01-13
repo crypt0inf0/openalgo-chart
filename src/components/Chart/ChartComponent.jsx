@@ -12,6 +12,7 @@ import IndicatorLegend from './IndicatorLegend';
 import PaneContextMenu from './PaneContextMenu';
 import MeasureOverlay from './MeasureOverlay';
 import OHLCHeader from './OHLCHeader';
+import ChartContextMenu from './ChartContextMenu';
 import IndicatorSettingsDialog from '../IndicatorSettings/IndicatorSettingsDialog';
 import { getIndicatorConfig } from '../IndicatorSettings/indicatorConfigs';
 import { getKlines, getHistoricalKlines, subscribeToTicker, saveDrawings, loadDrawings } from '../../services/openalgo';
@@ -57,6 +58,7 @@ import { useChartAlerts } from '../../hooks/useChartAlerts';
 import { getChartTheme, getThemeType } from '../../utils/chartTheme';
 import { TOOL_MAP, hexToRgba, areSymbolsEquivalent, addFutureWhitespacePoints, formatTimeDiff } from './utils/chartHelpers';
 import { createSeries, transformData } from './utils/seriesFactories';
+import { createIndicatorSeries } from './utils/indicatorCreators';
 import {
     DEFAULT_CANDLE_WINDOW,
     DEFAULT_RIGHT_OFFSET,
@@ -2365,341 +2367,18 @@ const ChartComponent = forwardRef(({
                 // --- CREATION LOGIC ---
                 if (!series && canAddSeries) {
                     try {
-                        switch (type) {
-                            case 'sma':
-                            case 'ema':
-                            case 'vwap':
-                            case 'atr': // ATR overlay? No, ATR is usually separate pane. Check config.
-                                // If ATR is overlay, use addSeries. If pane, user addPane.
-                                // Previous code put ATR in a Pane.
-                                if (type === 'atr') {
-                                    pane = chartRef.current.addPane({ height: 100 });
-                                    series = pane.addSeries(LineSeries, { lineWidth: 2, priceLineVisible: false, lastValueVisible: true });
-                                    indicatorPanesMap.current.set(id, pane);
-                                } else {
-                                    // SMA, EMA, VWAP are overlays
-                                    series = chartRef.current.addSeries(LineSeries, { lineWidth: 2, priceLineVisible: false, lastValueVisible: false });
+                        const result = createIndicatorSeries(chartRef.current, ind, isVisible);
+                        if (result) {
+                            series = result.series;
+                            if (result.pane) {
+                                pane = result.pane;
+                                indicatorPanesMap.current.set(id, pane);
+                                // Special case for ANN Strategy pane ref
+                                if (type === 'annStrategy') {
+                                    annStrategyPaneRef.current = pane;
                                 }
-                                break;
-                            case 'rsi':
-                                pane = chartRef.current.addPane({ height: 100 });
-                                series = pane.addSeries(LineSeries, { lineWidth: 2, priceLineVisible: false, lastValueVisible: true });
-                                // Add OB/OS lines for RSI
-                                series._obLine = series.createPriceLine({ price: ind.overbought || 70, color: ind.overboughtColor || '#F23645', lineWidth: 1, lineStyle: 2, axisLabelVisible: false, title: '' });
-                                series._osLine = series.createPriceLine({ price: ind.oversold || 30, color: ind.oversoldColor || '#089981', lineWidth: 1, lineStyle: 2, axisLabelVisible: false, title: '' });
-                                indicatorPanesMap.current.set(id, pane);
-                                break;
-                            case 'stochastic':
-                                pane = chartRef.current.addPane({ height: 100 });
-                                series = {
-                                    k: pane.addSeries(LineSeries, { lineWidth: 2, priceLineVisible: false, lastValueVisible: true, title: '%K' }),
-                                    d: pane.addSeries(LineSeries, { lineWidth: 2, priceLineVisible: false, lastValueVisible: true, title: '%D' })
-                                };
-                                indicatorPanesMap.current.set(id, pane);
-                                break;
-                            case 'macd':
-                                pane = chartRef.current.addPane({ height: 120 });
-                                series = {
-                                    histogram: pane.addSeries(HistogramSeries, { priceLineVisible: false, lastValueVisible: false }),
-                                    macd: pane.addSeries(LineSeries, { lineWidth: 2, priceLineVisible: false, lastValueVisible: true, title: 'MACD' }),
-                                    signal: pane.addSeries(LineSeries, { lineWidth: 2, priceLineVisible: false, lastValueVisible: true, title: 'Signal' })
-                                };
-                                indicatorPanesMap.current.set(id, pane);
-                                break;
-                            case 'bollingerBands':
-                                series = {
-                                    upper: chartRef.current.addSeries(LineSeries, { lineWidth: 1, priceLineVisible: false, lastValueVisible: false }),
-                                    middle: chartRef.current.addSeries(LineSeries, { lineWidth: 1, lineStyle: 2, priceLineVisible: false, lastValueVisible: false }),
-                                    lower: chartRef.current.addSeries(LineSeries, { lineWidth: 1, priceLineVisible: false, lastValueVisible: false })
-                                };
-                                break;
-                            case 'supertrend':
-                                series = chartRef.current.addSeries(LineSeries, { lineWidth: 2, priceLineVisible: false, lastValueVisible: isVisible, crosshairMarkerVisible: true });
-                                break;
-                            case 'volume':
-                                // Enhanced Volume with histogram bars and MA line
-                                const volumeBars = chartRef.current.addSeries(HistogramSeries, {
-                                    priceFormat: { type: 'volume' },
-                                    priceScaleId: 'volume',
-                                    priceLineVisible: false,
-                                    lastValueVisible: false
-                                });
-                                volumeBars.priceScale().applyOptions({ scaleMargins: { top: 0.85, bottom: 0 } });
-
-                                // Volume MA line (if showMA is enabled)
-                                const volumeMA = chartRef.current.addSeries(LineSeries, {
-                                    color: ind.maColor || '#FFD700',
-                                    lineWidth: 2,
-                                    priceScaleId: 'volume',
-                                    priceLineVisible: false,
-                                    lastValueVisible: false,
-                                    crosshairMarkerVisible: false
-                                });
-
-                                series = { bars: volumeBars, ma: volumeMA };
-                                break;
-                            case 'annStrategy':
-                                // ANN Strategy: Create separate pane for prediction plot
-                                pane = chartRef.current.addPane({ height: 100 });
-
-                                // Area series for prediction visualization
-                                const annArea = pane.addSeries(AreaSeries, {
-                                    lineColor: ind.predictionColor || '#00BCD4',
-                                    topColor: 'rgba(0, 188, 212, 0.3)',
-                                    bottomColor: 'rgba(0, 188, 212, 0.0)',
-                                    lineWidth: 2,
-                                    priceLineVisible: false,
-                                    lastValueVisible: true
-                                });
-
-                                // Add threshold lines at ±0.0014
-                                const thresholdValue = ind.threshold || 0.0014;
-                                annArea._upperThreshold = annArea.createPriceLine({
-                                    price: thresholdValue,
-                                    color: ind.longColor || '#26A69A',
-                                    lineWidth: 1,
-                                    lineStyle: 2,
-                                    axisLabelVisible: false,
-                                    title: ''
-                                });
-                                annArea._lowerThreshold = annArea.createPriceLine({
-                                    price: -thresholdValue,
-                                    color: ind.shortColor || '#EF5350',
-                                    lineWidth: 1,
-                                    lineStyle: 2,
-                                    axisLabelVisible: false,
-                                    title: ''
-                                });
-                                annArea._zeroLine = annArea.createPriceLine({
-                                    price: 0,
-                                    color: '#666666',
-                                    lineWidth: 1,
-                                    lineStyle: 2,
-                                    axisLabelVisible: false,
-                                    title: ''
-                                });
-
-                                // Background Area series on MAIN chart for signal coloring
-                                // We create TWO area series - one for LONG (green), one for SHORT (red)
-                                // IMPORTANT: Use autoscaleInfoProvider: () => null to prevent affecting chart scale
-                                const annBgLong = chartRef.current.addSeries(AreaSeries, {
-                                    priceScaleId: 'right', // Use main price scale
-                                    lineColor: 'transparent',
-                                    topColor: (ind.longColor || '#26A69A') + '40', // 25% opacity
-                                    bottomColor: (ind.longColor || '#26A69A') + '40',
-                                    lineWidth: 0,
-                                    priceLineVisible: false,
-                                    lastValueVisible: false,
-                                    crosshairMarkerVisible: false,
-                                    autoscaleInfoProvider: () => null // Exclude from autoscale calculation
-                                });
-                                const annBgShort = chartRef.current.addSeries(AreaSeries, {
-                                    priceScaleId: 'right', // Use main price scale
-                                    lineColor: 'transparent',
-                                    topColor: (ind.shortColor || '#EF5350') + '40', // 25% opacity
-                                    bottomColor: (ind.shortColor || '#EF5350') + '40',
-                                    lineWidth: 0,
-                                    priceLineVisible: false,
-                                    lastValueVisible: false,
-                                    crosshairMarkerVisible: false,
-                                    autoscaleInfoProvider: () => null // Exclude from autoscale calculation
-                                });
-
-                                annStrategyPaneRef.current = pane;
-                                indicatorPanesMap.current.set(id, pane);
-                                series = { prediction: annArea, bgLong: annBgLong, bgShort: annBgShort };
-                                break;
-                            case 'hilengaMilenga':
-                                // Hilenga-Milenga: Create pane with RSI, EMA, WMA lines and fill
-                                pane = chartRef.current.addPane({ height: 120 });
-
-                                // RSI line (black/dark)
-                                const hmRsi = pane.addSeries(LineSeries, {
-                                    color: ind.rsiColor || '#131722',
-                                    lineWidth: 2,
-                                    priceLineVisible: false,
-                                    lastValueVisible: true
-                                });
-
-                                // EMA line (green - Price/Signal)
-                                const hmEma = pane.addSeries(LineSeries, {
-                                    color: ind.emaColor || '#26A69A',
-                                    lineWidth: 2,
-                                    priceLineVisible: false,
-                                    lastValueVisible: false
-                                });
-
-                                // WMA line (red - Strength)
-                                const hmWma = pane.addSeries(LineSeries, {
-                                    color: ind.wmaColor || '#EF5350',
-                                    lineWidth: 2,
-                                    priceLineVisible: false,
-                                    lastValueVisible: false
-                                });
-
-                                // Baseline series at 50 for fill effect
-                                const hmBaseline = pane.addSeries(BaselineSeries, {
-                                    baseValue: { type: 'price', price: 50 },
-                                    topLineColor: 'transparent',
-                                    topFillColor1: ind.bullFillColor || 'rgba(255, 107, 107, 0.7)',
-                                    topFillColor2: ind.bullFillColor || 'rgba(255, 107, 107, 0.7)',
-                                    bottomLineColor: 'transparent',
-                                    bottomFillColor1: ind.bearFillColor || 'rgba(78, 205, 196, 0.7)',
-                                    bottomFillColor2: ind.bearFillColor || 'rgba(78, 205, 196, 0.7)',
-                                    lineWidth: 0,
-                                    priceLineVisible: false,
-                                    lastValueVisible: false,
-                                    crosshairMarkerVisible: false
-                                });
-
-                                // Add midline at 50
-                                hmRsi._midline = hmRsi.createPriceLine({
-                                    price: 50,
-                                    color: ind.midlineColor || '#787B86',
-                                    lineWidth: 1,
-                                    lineStyle: 0,
-                                    axisLabelVisible: false,
-                                    title: ''
-                                });
-
-                                indicatorPanesMap.current.set(id, pane);
-                                series = { rsi: hmRsi, ema: hmEma, wma: hmWma, baseline: hmBaseline };
-                                break;
-                            case 'adx':
-                                // ADX in separate pane with 3 lines
-                                pane = chartRef.current.addPane({ height: 100 });
-                                series = {
-                                    adx: pane.addSeries(LineSeries, {
-                                        color: ind.adxColor || '#FF9800',
-                                        lineWidth: ind.lineWidth || 2,
-                                        priceLineVisible: false,
-                                        lastValueVisible: true,
-                                        title: 'ADX'
-                                    }),
-                                    plusDI: pane.addSeries(LineSeries, {
-                                        color: ind.plusDIColor || '#26A69A',
-                                        lineWidth: 1,
-                                        priceLineVisible: false,
-                                        lastValueVisible: false,
-                                        title: '+DI'
-                                    }),
-                                    minusDI: pane.addSeries(LineSeries, {
-                                        color: ind.minusDIColor || '#EF5350',
-                                        lineWidth: 1,
-                                        priceLineVisible: false,
-                                        lastValueVisible: false,
-                                        title: '-DI'
-                                    })
-                                };
-                                // Add reference lines at 20 and 25
-                                series.adx._line20 = series.adx.createPriceLine({ price: 20, color: '#555', lineWidth: 1, lineStyle: 2, axisLabelVisible: false, title: '' });
-                                series.adx._line25 = series.adx.createPriceLine({ price: 25, color: '#777', lineWidth: 1, lineStyle: 2, axisLabelVisible: false, title: '' });
-                                indicatorPanesMap.current.set(id, pane);
-                                break;
-                            case 'ichimoku':
-                                // Ichimoku Cloud - 5 lines overlaid on main chart
-                                series = {
-                                    tenkan: chartRef.current.addSeries(LineSeries, {
-                                        color: ind.tenkanColor || '#2962FF',
-                                        lineWidth: 1,
-                                        priceLineVisible: false,
-                                        lastValueVisible: false,
-                                        title: 'Tenkan'
-                                    }),
-                                    kijun: chartRef.current.addSeries(LineSeries, {
-                                        color: ind.kijunColor || '#EF5350',
-                                        lineWidth: 1,
-                                        priceLineVisible: false,
-                                        lastValueVisible: false,
-                                        title: 'Kijun'
-                                    }),
-                                    senkouA: chartRef.current.addSeries(LineSeries, {
-                                        color: ind.senkouAColor || '#26A69A',
-                                        lineWidth: 1,
-                                        priceLineVisible: false,
-                                        lastValueVisible: false,
-                                        title: 'Senkou A'
-                                    }),
-                                    senkouB: chartRef.current.addSeries(LineSeries, {
-                                        color: ind.senkouBColor || '#EF5350',
-                                        lineWidth: 1,
-                                        priceLineVisible: false,
-                                        lastValueVisible: false,
-                                        title: 'Senkou B'
-                                    }),
-                                    chikou: chartRef.current.addSeries(LineSeries, {
-                                        color: ind.chikouColor || '#9C27B0',
-                                        lineWidth: 1,
-                                        priceLineVisible: false,
-                                        lastValueVisible: false,
-                                        title: 'Chikou'
-                                    })
-                                };
-                                break;
-                            case 'pivotPoints':
-                                // Pivot Points - 7 lines overlaid on main chart
-                                series = {
-                                    pivot: chartRef.current.addSeries(LineSeries, {
-                                        color: ind.pivotColor || '#FF9800',
-                                        lineWidth: ind.lineWidth || 1,
-                                        lineStyle: 2,
-                                        priceLineVisible: false,
-                                        lastValueVisible: false,
-                                        title: 'PP'
-                                    }),
-                                    r1: chartRef.current.addSeries(LineSeries, {
-                                        color: ind.resistanceColor || '#EF5350',
-                                        lineWidth: ind.lineWidth || 1,
-                                        lineStyle: 2,
-                                        priceLineVisible: false,
-                                        lastValueVisible: false,
-                                        title: 'R1'
-                                    }),
-                                    r2: chartRef.current.addSeries(LineSeries, {
-                                        color: ind.resistanceColor || '#EF5350',
-                                        lineWidth: ind.lineWidth || 1,
-                                        lineStyle: 2,
-                                        priceLineVisible: false,
-                                        lastValueVisible: false,
-                                        title: 'R2'
-                                    }),
-                                    r3: chartRef.current.addSeries(LineSeries, {
-                                        color: ind.resistanceColor || '#EF5350',
-                                        lineWidth: ind.lineWidth || 1,
-                                        lineStyle: 2,
-                                        priceLineVisible: false,
-                                        lastValueVisible: false,
-                                        title: 'R3'
-                                    }),
-                                    s1: chartRef.current.addSeries(LineSeries, {
-                                        color: ind.supportColor || '#26A69A',
-                                        lineWidth: ind.lineWidth || 1,
-                                        lineStyle: 2,
-                                        priceLineVisible: false,
-                                        lastValueVisible: false,
-                                        title: 'S1'
-                                    }),
-                                    s2: chartRef.current.addSeries(LineSeries, {
-                                        color: ind.supportColor || '#26A69A',
-                                        lineWidth: ind.lineWidth || 1,
-                                        lineStyle: 2,
-                                        priceLineVisible: false,
-                                        lastValueVisible: false,
-                                        title: 'S2'
-                                    }),
-                                    s3: chartRef.current.addSeries(LineSeries, {
-                                        color: ind.supportColor || '#26A69A',
-                                        lineWidth: ind.lineWidth || 1,
-                                        lineStyle: 2,
-                                        priceLineVisible: false,
-                                        lastValueVisible: false,
-                                        title: 'S3'
-                                    })
-                                };
-                                break;
-                            // Add other types as needed
+                            }
                         }
-
 
                         if (series) {
                             indicatorSeriesMap.current.set(id, series);
@@ -4390,34 +4069,17 @@ const ChartComponent = forwardRef(({
             />
 
             {/* Right-click Context Menu */}
-            {contextMenu.show && (
-                <div
-                    className={styles.contextMenu}
-                    style={{ left: contextMenu.x, top: contextMenu.y }}
-                    onClick={(e) => e.stopPropagation()}
-                >
-                    {contextMenu.orderId && (
-                        <button
-                            className={styles.contextMenuItem}
-                            onClick={() => {
-                                onCancelOrder?.(contextMenu.orderId);
-                                setContextMenu({ show: false, x: 0, y: 0 });
-                            }}
-                        >
-                            Cancel Order
-                        </button>
-                    )}
-                    <button
-                        className={styles.contextMenuItem}
-                        onClick={() => {
-                            onOpenOptionChain?.(symbol, exchange);
-                            setContextMenu({ show: false, x: 0, y: 0 });
-                        }}
-                    >
-                        View Option Chain
-                    </button>
-                </div>
-            )}
+            <ChartContextMenu
+                show={contextMenu.show}
+                x={contextMenu.x}
+                y={contextMenu.y}
+                orderId={contextMenu.orderId}
+                symbol={symbol}
+                exchange={exchange}
+                onCancelOrder={onCancelOrder}
+                onOpenOptionChain={onOpenOptionChain}
+                onClose={() => setContextMenu({ show: false, x: 0, y: 0 })}
+            />
 
         </div >
 
