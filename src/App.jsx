@@ -33,6 +33,7 @@ import { useCloudWorkspaceSync } from './hooks/useCloudWorkspaceSync';
 import { useOILines } from './hooks/useOILines';
 import { useTradingData } from './hooks/useTradingData';
 import { useWatchlistHandlers } from './hooks/useWatchlistHandlers';
+import { useIndicatorHandlers } from './hooks/useIndicatorHandlers';
 import { useTheme } from './context/ThemeContext';
 import { useUser } from './context/UserContext';
 import { indicatorConfigs } from './components/IndicatorSettings/indicatorConfigs';
@@ -875,6 +876,18 @@ function AppContent({ isAuthenticated, setIsAuthenticated }) {
     showToast
   });
 
+  // Indicator handlers extracted to hook
+  const {
+    updateIndicatorSettings,
+    handleAddIndicator,
+    handleIndicatorRemove,
+    handleIndicatorVisibilityToggle,
+    handleIndicatorSettings
+  } = useIndicatorHandlers({
+    setCharts,
+    activeChartId
+  });
+
   // Ref to store current watchlist symbols - fixes stale closure in WebSocket callback
   const watchlistSymbolsRef = useRef([]);
 
@@ -1548,105 +1561,7 @@ function AppContent({ isAuthenticated, setIsAuthenticated }) {
     }));
   };
 
-  // Update indicator settings (period, color, etc.)
-  const updateIndicatorSettings = useCallback((newIndicators) => {
-    setCharts(prev => prev.map(chart => {
-      if (chart.id !== activeChartId) return chart;
-      return { ...chart, indicators: newIndicators };
-    }));
-  }, [activeChartId]);
-
-  // Handler for adding a new indicator instance
-  const handleAddIndicator = (type) => {
-    setCharts(prev => prev.map(chart => {
-      if (chart.id !== activeChartId) return chart;
-
-      const config = indicatorConfigs[type];
-      const defaultSettings = {};
-
-      // Merge defaults from config inputs
-      if (config && config.inputs) {
-        config.inputs.forEach(input => {
-          if (input.default !== undefined) {
-            defaultSettings[input.key] = input.default;
-          }
-        });
-      }
-
-      // Merge defaults from config styles
-      if (config && config.style) {
-        config.style.forEach(style => {
-          if (style.default !== undefined) {
-            defaultSettings[style.key] = style.default;
-          }
-        });
-      }
-
-      // Fallback defaults for legacy/hardcoded types if config missing
-      if (!config) {
-        if (type === 'sma') Object.assign(defaultSettings, { period: 20, color: '#2196F3' });
-        if (type === 'ema') Object.assign(defaultSettings, { period: 20, color: '#FF9800' });
-        if (type === 'tpo') Object.assign(defaultSettings, { blockSize: '30m', tickSize: 'auto' });
-      }
-
-      const newIndicator = {
-        ...defaultSettings,
-        id: `${type}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-        type: type,
-        visible: true
-      };
-
-      return {
-        ...chart,
-        indicators: [...(chart.indicators || []), newIndicator]
-      };
-    }));
-  };
-
-  // Handler for removing indicator from pane (called from ChartComponent)
-  const handleIndicatorRemove = (id) => {
-    setCharts(prev => prev.map(chart => {
-      if (chart.id !== activeChartId) return chart;
-      return {
-        ...chart,
-        indicators: (chart.indicators || []).filter(ind => ind.id !== id)
-      };
-    }));
-  };
-
-
-
-  // Handler for toggling indicator visibility (hide/show without removing)
-  const handleIndicatorVisibilityToggle = (id) => {
-    setCharts(prev => prev.map(chart => {
-      if (chart.id !== activeChartId) return chart;
-      return {
-        ...chart,
-        indicators: (chart.indicators || []).map(ind => {
-          if (ind.id === id) {
-            return { ...ind, visible: !ind.visible };
-          }
-          return ind;
-        })
-      };
-    }));
-  };
-
-  // Handler for updating indicator settings from TradingView-style dialog
-  const handleIndicatorSettings = (id, newSettings) => {
-    setCharts(prev => prev.map(chart => {
-      if (chart.id !== activeChartId) return chart;
-      return {
-        ...chart,
-        indicators: (chart.indicators || []).map(ind => {
-          if (ind.id === id) {
-            return { ...ind, ...newSettings };
-          }
-          return ind;
-        })
-      };
-    }));
-  };
+  // Indicator handlers are now provided by useIndicatorHandlers hook
 
   const [activeTool, setActiveTool] = useState(null);
   const [isMagnetMode, setIsMagnetMode] = useState(false);
