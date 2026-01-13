@@ -5,3 +5,4 @@
 
 export * from './chartHelpers';
 export * from './seriesFactories';
+export * from './chartConfig';
