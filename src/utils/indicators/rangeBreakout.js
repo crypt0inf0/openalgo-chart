@@ -8,64 +8,7 @@
  * - Breakdown (below range low) → Sell Call
  */
 
-/**
- * Convert timestamp to IST date components
- * Note: The candle data already has IST offset applied from the API
- * @param {number} timestamp - Unix timestamp in seconds (already in IST)
- * @returns {Object} - { hours, minutes, dateStr }
- */
-const getISTComponents = (timestamp) => {
-  const date = new Date(timestamp * 1000);
-  return {
-    hours: date.getUTCHours(),
-    minutes: date.getUTCMinutes(),
-    dateStr: date.toISOString().split('T')[0] // YYYY-MM-DD
-  };
-};
-
-/**
- * Check if a candle is within the range window
- * @param {number} timestamp - Unix timestamp in seconds
- * @param {number} startHour - Range start hour (default: 9)
- * @param {number} startMinute - Range start minute (default: 30)
- * @param {number} endHour - Range end hour (default: 10)
- * @param {number} endMinute - Range end minute (default: 0)
- * @returns {boolean}
- */
-const isInRangeWindow = (timestamp, startHour, startMinute, endHour, endMinute) => {
-  const { hours, minutes } = getISTComponents(timestamp);
-  const timeInMinutes = hours * 60 + minutes;
-  const rangeStart = startHour * 60 + startMinute;
-  const rangeEnd = endHour * 60 + endMinute;
-  return timeInMinutes >= rangeStart && timeInMinutes < rangeEnd;
-};
-
-/**
- * Check if a candle is after the range window
- * @param {number} timestamp - Unix timestamp in seconds
- * @param {number} endHour - Range end hour
- * @param {number} endMinute - Range end minute
- * @returns {boolean}
- */
-const isAfterRange = (timestamp, endHour, endMinute) => {
-  const { hours, minutes } = getISTComponents(timestamp);
-  const timeInMinutes = hours * 60 + minutes;
-  const rangeEnd = endHour * 60 + endMinute;
-  return timeInMinutes >= rangeEnd;
-};
-
-/**
- * Check if candle is within market hours (9:15 AM - 3:30 PM IST)
- * @param {number} timestamp - Unix timestamp in seconds
- * @returns {boolean}
- */
-const isMarketHours = (timestamp) => {
-  const { hours, minutes } = getISTComponents(timestamp);
-  const timeInMinutes = hours * 60 + minutes;
-  const marketOpen = 9 * 60 + 15;  // 9:15 AM
-  const marketClose = 15 * 60 + 30; // 3:30 PM
-  return timeInMinutes >= marketOpen && timeInMinutes <= marketClose;
-};
+import { getISTComponents, isMarketHours, isInTimeWindow, isAfterTime, groupCandlesByDay } from './timeUtils';
 
 /**
  * Calculate Range Breakout indicator data
@@ -89,15 +32,7 @@ export const calculateRangeBreakout = (data, options = {}) => {
   }
 
   // Group candles by trading day
-  const dayMap = new Map();
-
-  for (const candle of data) {
-    const { dateStr } = getISTComponents(candle.time);
-    if (!dayMap.has(dateStr)) {
-      dayMap.set(dateStr, []);
-    }
-    dayMap.get(dateStr).push(candle);
-  }
+  const dayMap = groupCandlesByDay(data);
 
   const highLines = [];
   const lowLines = [];
@@ -116,7 +51,7 @@ export const calculateRangeBreakout = (data, options = {}) => {
 
     // Find candles within the range window (9:30-10:00)
     const rangeCandles = marketCandles.filter(c =>
-      isInRangeWindow(c.time, rangeStartHour, rangeStartMinute, rangeEndHour, rangeEndMinute)
+      isInTimeWindow(c.time, rangeStartHour, rangeStartMinute, rangeEndHour, rangeEndMinute)
     );
 
     if (rangeCandles.length === 0) continue;
@@ -127,7 +62,7 @@ export const calculateRangeBreakout = (data, options = {}) => {
 
     // Find candles after the range window
     const postRangeCandles = marketCandles.filter(c =>
-      isAfterRange(c.time, rangeEndHour, rangeEndMinute)
+      isAfterTime(c.time, rangeEndHour, rangeEndMinute)
     );
 
     if (postRangeCandles.length === 0) continue;
@@ -179,7 +114,7 @@ export const calculateRangeBreakout = (data, options = {}) => {
             position: 'aboveBar',
             color: highColor,
             shape: 'arrowUp',
-            text: 'BREAKOUT'
+            text: 'RB: Breakout'
           });
           breakoutDetected = true;
         }
@@ -191,7 +126,7 @@ export const calculateRangeBreakout = (data, options = {}) => {
             position: 'belowBar',
             color: lowColor,
             shape: 'arrowDown',
-            text: 'BREAKDOWN'
+            text: 'RB: Breakdown'
           });
           breakdownDetected = true;
         }
