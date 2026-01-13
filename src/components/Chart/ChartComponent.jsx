@@ -53,7 +53,7 @@ import { useChartResize } from '../../hooks/useChartResize';
 import { useChartDrawings } from '../../hooks/useChartDrawings';
 import { useChartAlerts } from '../../hooks/useChartAlerts';
 import { getChartTheme, getThemeType } from '../../utils/chartTheme';
-import { TOOL_MAP, hexToRgba, areSymbolsEquivalent } from './utils/chartHelpers';
+import { TOOL_MAP, hexToRgba, areSymbolsEquivalent, addFutureWhitespacePoints } from './utils/chartHelpers';
 import { createSeries, transformData } from './utils/seriesFactories';
 import { saveAlertsForSymbol, loadAlertsForSymbol } from '../../services/alertService';
 
@@ -223,29 +223,6 @@ const ChartComponent = forwardRef(({
     const DEFAULT_RIGHT_OFFSET = 50;           // Right margin in candle units (~50 for TradingView-like future time display)
     const PREFETCH_THRESHOLD = 126;            // Candles from oldest before prefetching
     const MIN_CANDLES_FOR_SCROLL_BACK = 50;   // Minimum candles before enabling scroll-back
-    const FUTURE_TIME_CANDLES = 120;           // Number of future candles to display time labels for
-
-    // Helper: Generate whitespace points for future time display
-    // Whitespace points are data objects with only 'time' property (no price data)
-    // This allows lightweight-charts to render future time labels on the axis
-    const addFutureWhitespacePoints = useCallback((data, intervalSeconds) => {
-        if (!data || data.length === 0 || !Number.isFinite(intervalSeconds) || intervalSeconds <= 0) {
-            return data;
-        }
-
-        const lastCandle = data[data.length - 1];
-        const lastTime = lastCandle.time;
-        const whitespacePoints = [];
-
-        for (let i = 1; i <= FUTURE_TIME_CANDLES; i++) {
-            whitespacePoints.push({
-                time: lastTime + (i * intervalSeconds)
-            });
-        }
-
-        return [...data, ...whitespacePoints];
-    }, []);
-
     // Loading state for scroll-back (shows subtle indicator)
     const [isLoadingOlderData, setIsLoadingOlderData] = useState(false);
 

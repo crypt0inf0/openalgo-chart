@@ -156,3 +156,30 @@ export const debounce = (func, wait) => {
     timeout = setTimeout(later, wait);
   };
 };
+
+/**
+ * Add future whitespace points for time axis display
+ * Whitespace points are data objects with only 'time' property (no price data)
+ * This allows lightweight-charts to render future time labels on the axis
+ * @param {Array} data - OHLC candle data
+ * @param {number} intervalSeconds - Interval in seconds
+ * @param {number} futureCandles - Number of future candles to add (default 120)
+ * @returns {Array} Data with whitespace points appended
+ */
+export const addFutureWhitespacePoints = (data, intervalSeconds, futureCandles = 120) => {
+  if (!data || data.length === 0 || !Number.isFinite(intervalSeconds) || intervalSeconds <= 0) {
+    return data;
+  }
+
+  const lastCandle = data[data.length - 1];
+  const lastTime = lastCandle.time;
+  const whitespacePoints = [];
+
+  for (let i = 1; i <= futureCandles; i++) {
+    whitespacePoints.push({
+      time: lastTime + (i * intervalSeconds)
+    });
+  }
+
+  return [...data, ...whitespacePoints];
+};
