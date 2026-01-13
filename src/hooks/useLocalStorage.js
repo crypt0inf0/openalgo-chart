@@ -1,11 +1,4 @@
-import { useState, useEffect, useRef, useCallback, Dispatch, SetStateAction } from 'react';
-
-interface UseLocalStorageOptions {
-    debounceMs?: number;
-    serialize?: boolean;
-}
-
-type SetValue<T> = Dispatch<SetStateAction<T>>;
+import { useState, useEffect, useRef, useCallback } from 'react';
 
 /**
  * Custom hook for syncing state with localStorage
@@ -14,19 +7,15 @@ type SetValue<T> = Dispatch<SetStateAction<T>>;
  * - Debounced writes to prevent rapid localStorage updates
  * - Type-safe serialization/deserialization
  */
-export function useLocalStorage<T>(
-    key: string,
-    defaultValue: T,
-    options: UseLocalStorageOptions = {}
-): [T, SetValue<T>] {
+export function useLocalStorage(key, defaultValue, options = {}) {
     const { debounceMs = 300, serialize = typeof defaultValue === 'object' } = options;
 
     // Ref to track if this is the initial mount (skip first write)
     const isInitialMount = useRef(true);
-    const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const timeoutRef = useRef(null);
 
     // Initialize state from localStorage
-    const [value, setValue] = useState<T>(() => {
+    const [value, setValue] = useState(() => {
         try {
             const stored = localStorage.getItem(key);
             if (stored === null) {
@@ -34,21 +23,21 @@ export function useLocalStorage<T>(
             }
 
             // Handle boolean strings specially
-            if (stored === 'true') return true as T;
-            if (stored === 'false') return false as T;
+            if (stored === 'true') return true;
+            if (stored === 'false') return false;
 
             // Try to parse JSON for objects/arrays
             if (serialize) {
                 try {
-                    return JSON.parse(stored) as T;
+                    return JSON.parse(stored);
                 } catch {
-                    return stored as T;
+                    return stored;
                 }
             }
 
-            return stored as T;
+            return stored;
         } catch (error) {
-            console.warn(`[useLocalStorage] Failed to read '${key}':`, (error as Error).message);
+            console.warn(`[useLocalStorage] Failed to read '${key}':`, error.message);
             return defaultValue;
         }
     });
@@ -75,7 +64,7 @@ export function useLocalStorage<T>(
                     localStorage.setItem(key, String(value));
                 }
             } catch (error) {
-                console.warn(`[useLocalStorage] Failed to write '${key}':`, (error as Error).message);
+                console.warn(`[useLocalStorage] Failed to write '${key}':`, error.message);
             }
         }, debounceMs);
 
@@ -88,11 +77,11 @@ export function useLocalStorage<T>(
     }, [key, value, serialize, debounceMs]);
 
     // Memoized setter that matches useState signature
-    const setStoredValue: SetValue<T> = useCallback((newValue) => {
+    const setStoredValue = useCallback((newValue) => {
         setValue((prev) => {
             // Support functional updates like useState
             const valueToStore = typeof newValue === 'function'
-                ? (newValue as (prev: T) => T)(prev)
+                ? newValue(prev)
                 : newValue;
             return valueToStore;
         });
@@ -105,11 +94,8 @@ export function useLocalStorage<T>(
  * Simplified hook for boolean localStorage values
  * Uses immediate writes (no debounce) since toggles are infrequent
  */
-export function useLocalStorageBoolean(
-    key: string,
-    defaultValue: boolean = false
-): [boolean, SetValue<boolean>] {
-    return useLocalStorage<boolean>(key, defaultValue, { debounceMs: 0, serialize: false });
+export function useLocalStorageBoolean(key, defaultValue = false) {
+    return useLocalStorage(key, defaultValue, { debounceMs: 0, serialize: false });
 }
 
 export default useLocalStorage;

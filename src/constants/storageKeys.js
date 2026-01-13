@@ -58,18 +58,12 @@ export const STORAGE_KEYS = {
 
   // Sync
   CLOUD_SYNC_DONE: '_cloud_sync_done',
-} as const;
-
-// Type for storage key names
-export type StorageKeyName = keyof typeof STORAGE_KEYS;
-
-// Type for storage key values
-export type StorageKeyValue = typeof STORAGE_KEYS[StorageKeyName];
+};
 
 /**
  * Helper to get a storage key with optional prefix
  */
-export const getStorageKey = (key: string, prefix: string = ''): string => {
+export const getStorageKey = (key, prefix = '') => {
   return prefix ? `${prefix}_${key}` : key;
 };
 

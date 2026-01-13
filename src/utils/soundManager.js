@@ -3,28 +3,11 @@
  * Handles playing alert sounds with proper browser compatibility
  */
 
-// Types
-export type SoundType = 'default' | 'success' | 'warning' | 'double';
-export type OscillatorType = 'sine' | 'square' | 'sawtooth' | 'triangle';
-
-export interface SoundSettings {
-    enabled: boolean;
-    volume: number;
-    soundType: SoundType;
-}
-
-// Extend Window interface for webkit AudioContext
-declare global {
-    interface Window {
-        webkitAudioContext: typeof AudioContext;
-    }
-}
-
 // Settings stored in localStorage
 const SETTINGS_KEY = 'tv_alert_sound_settings';
 
 // Default settings
-const DEFAULT_SETTINGS: SoundSettings = {
+const DEFAULT_SETTINGS = {
     enabled: true,
     volume: 0.7,
     soundType: 'default',
@@ -33,11 +16,11 @@ const DEFAULT_SETTINGS: SoundSettings = {
 /**
  * Get sound settings from localStorage
  */
-export const getSoundSettings = (): SoundSettings => {
+export const getSoundSettings = () => {
     try {
         const saved = localStorage.getItem(SETTINGS_KEY);
         if (saved) {
-            return JSON.parse(saved) as SoundSettings;
+            return JSON.parse(saved);
         }
     } catch (e) {
         console.warn('[SoundManager] Error reading settings:', e);
@@ -48,7 +31,7 @@ export const getSoundSettings = (): SoundSettings => {
 /**
  * Save sound settings to localStorage
  */
-export const saveSoundSettings = (settings: SoundSettings): void => {
+export const saveSoundSettings = (settings) => {
     try {
         localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
     } catch (e) {
@@ -59,12 +42,8 @@ export const saveSoundSettings = (settings: SoundSettings): void => {
 /**
  * Create a simple beep sound using Web Audio API
  */
-const createBeepSound = (
-    frequency: number = 800,
-    duration: number = 200,
-    type: OscillatorType = 'sine'
-): () => void => {
-    return (): void => {
+const createBeepSound = (frequency = 800, duration = 200, type = 'sine') => {
+    return () => {
         try {
             const AudioContextClass = window.AudioContext || window.webkitAudioContext;
             const audioContext = new AudioContextClass();
@@ -84,7 +63,7 @@ const createBeepSound = (
             oscillator.stop(audioContext.currentTime + duration / 1000);
 
             // Cleanup
-            oscillator.onended = (): void => {
+            oscillator.onended = () => {
                 oscillator.disconnect();
                 gainNode.disconnect();
                 audioContext.close();
@@ -96,11 +75,11 @@ const createBeepSound = (
 };
 
 // Initialize sound generators
-const soundGenerators: Record<SoundType, () => void> = {
+const soundGenerators = {
     default: createBeepSound(800, 200, 'sine'),
     success: createBeepSound(1000, 150, 'sine'),
     warning: createBeepSound(600, 300, 'triangle'),
-    double: (): void => {
+    double: () => {
         createBeepSound(800, 100)();
         setTimeout(() => createBeepSound(1000, 100)(), 150);
     },
@@ -108,10 +87,10 @@ const soundGenerators: Record<SoundType, () => void> = {
 
 /**
  * Play an alert sound
- * @param type - Sound type: 'default', 'success', 'warning', 'double'
- * @returns Whether sound was played
+ * @param {string} type - Sound type: 'default', 'success', 'warning', 'double'
+ * @returns {boolean} - Whether sound was played
  */
-export const playAlertSound = (type: SoundType = 'default'): boolean => {
+export const playAlertSound = (type = 'default') => {
     const settings = getSoundSettings();
 
     if (!settings.enabled) {
@@ -132,7 +111,7 @@ export const playAlertSound = (type: SoundType = 'default'): boolean => {
 /**
  * Test sound playback (for settings UI)
  */
-export const testSound = (): void => {
+export const testSound = () => {
     const settings = getSoundSettings();
     const originalEnabled = settings.enabled;
 
@@ -150,7 +129,7 @@ export const testSound = (): void => {
 /**
  * Set sound enabled/disabled
  */
-export const setSoundEnabled = (enabled: boolean): void => {
+export const setSoundEnabled = (enabled) => {
     const settings = getSoundSettings();
     settings.enabled = enabled;
     saveSoundSettings(settings);
@@ -159,7 +138,7 @@ export const setSoundEnabled = (enabled: boolean): void => {
 /**
  * Set sound volume (0-1)
  */
-export const setSoundVolume = (volume: number): void => {
+export const setSoundVolume = (volume) => {
     const settings = getSoundSettings();
     settings.volume = Math.max(0, Math.min(1, volume));
     saveSoundSettings(settings);

@@ -3,27 +3,10 @@
  * No external dependencies - uses simple string algorithms
  */
 
-// Types
-export interface FuzzyMatchResult {
-    match: boolean;
-    score: number;
-}
-
-export interface HighlightSegment {
-    text: string;
-    highlight: boolean;
-}
-
-export interface SearchResultItem<T> {
-    item: T;
-    score: number;
-    matchedKey: string | null;
-}
-
 /**
  * Calculate Levenshtein distance between two strings
  */
-export const levenshteinDistance = (a: string | null | undefined, b: string | null | undefined): number => {
+export const levenshteinDistance = (a, b) => {
     if (!a || !b) return Math.max(a?.length || 0, b?.length || 0);
 
     const aLen = a.length;
@@ -35,7 +18,7 @@ export const levenshteinDistance = (a: string | null | undefined, b: string | nu
     if (a === b) return 0;
 
     // Create distance matrix
-    const matrix: number[][] = Array(aLen + 1).fill(null).map(() => Array(bLen + 1).fill(0));
+    const matrix = Array(aLen + 1).fill(null).map(() => Array(bLen + 1).fill(0));
 
     // Initialize first column
     for (let i = 0; i <= aLen; i++) {
@@ -65,7 +48,7 @@ export const levenshteinDistance = (a: string | null | undefined, b: string | nu
 /**
  * Calculate similarity ratio between two strings (0-1)
  */
-export const similarity = (a: string | null | undefined, b: string | null | undefined): number => {
+export const similarity = (a, b) => {
     if (!a || !b) return 0;
     if (a === b) return 1;
 
@@ -79,7 +62,7 @@ export const similarity = (a: string | null | undefined, b: string | null | unde
 /**
  * Match a query against a target string with scoring
  */
-export const fuzzyMatch = (query: string | null | undefined, target: string | null | undefined): FuzzyMatchResult => {
+export const fuzzyMatch = (query, target) => {
     if (!query || !target) {
         return { match: false, score: 0 };
     }
@@ -145,21 +128,16 @@ export const fuzzyMatch = (query: string | null | undefined, target: string | nu
 /**
  * Search through items with fuzzy matching
  */
-export const fuzzySearch = <T extends Record<string, unknown>>(
-    query: string | null | undefined,
-    items: T[] | null | undefined,
-    keys: string[] = ['symbol', 'name'],
-    minScore: number = 0.2
-): T[] => {
+export const fuzzySearch = (query, items, keys = ['symbol', 'name'], minScore = 0.2) => {
     if (!query || !items || items.length === 0) {
         return items || [];
     }
 
-    const results: SearchResultItem<T>[] = [];
+    const results = [];
 
     for (const item of items) {
         let bestScore = 0;
-        let matchedKey: string | null = null;
+        let matchedKey = null;
 
         for (const key of keys) {
             const value = item[key];
@@ -190,10 +168,7 @@ export const fuzzySearch = <T extends Record<string, unknown>>(
 /**
  * Highlight matching portions of text
  */
-export const getHighlightSegments = (
-    text: string | null | undefined,
-    query: string | null | undefined
-): HighlightSegment[] => {
+export const getHighlightSegments = (text, query) => {
     if (!text || !query) {
         return [{ text: text || '', highlight: false }];
     }
@@ -207,7 +182,7 @@ export const getHighlightSegments = (
         return [{ text, highlight: false }];
     }
 
-    const segments: HighlightSegment[] = [];
+    const segments = [];
 
     if (index > 0) {
         segments.push({ text: text.substring(0, index), highlight: false });
