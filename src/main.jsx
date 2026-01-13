@@ -9,6 +9,7 @@ import { UIProvider } from './context/UIContext.jsx'
 import { ToolProvider } from './context/ToolContext.jsx'
 import { AlertProvider } from './context/AlertContext.jsx'
 import { ChartProvider } from './context/ChartContext.jsx'
+import { WatchlistProvider } from './context/WatchlistContext.jsx'
 
 // Apply theme immediately to prevent flash of default theme
 // This runs synchronously BEFORE React renders anything
@@ -35,8 +36,10 @@ createRoot(document.getElementById('root')).render(
             <ToolProvider>
               <AlertProvider>
                 <ChartProvider>
-                  <App />
-                </ChartProvider>
+                    <WatchlistProvider>
+                      <App />
+                    </WatchlistProvider>
+                  </ChartProvider>
               </AlertProvider>
             </ToolProvider>
           </UIProvider>
