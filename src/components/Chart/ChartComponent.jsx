@@ -10,6 +10,8 @@ import {
 import styles from './ChartComponent.module.css';
 import IndicatorLegend from './IndicatorLegend';
 import PaneContextMenu from './PaneContextMenu';
+import MeasureOverlay from './MeasureOverlay';
+import OHLCHeader from './OHLCHeader';
 import IndicatorSettingsDialog from '../IndicatorSettings/IndicatorSettingsDialog';
 import { getIndicatorConfig } from '../IndicatorSettings/indicatorConfigs';
 import { getKlines, getHistoricalKlines, subscribeToTicker, saveDrawings, loadDrawings } from '../../services/openalgo';
@@ -4239,39 +4241,15 @@ const ChartComponent = forwardRef(({
             />
             {isLoading && isActuallyLoadingRef.current && <div className={styles.loadingOverlay}><div className={styles.spinner}></div><div>Loading...</div></div>}
 
-            {/* Symbol + OHLC Header Bar - All on one line */}
-            <div className={styles.ohlcHeader} style={{ left: isToolbarVisible ? '55px' : '10px' }}>
-                <span className={styles.ohlcSymbol}>{strategyConfig?.displayName || `${symbol}:${exchange}`}</span>
-                <span className={styles.ohlcInterval}>· {interval.toUpperCase()}</span>
-                {ohlcData && (
-                    <>
-                        <span className={`${styles.ohlcDot} ${ohlcData.isUp ? '' : styles.down}`}></span>
-                        <div className={styles.ohlcValues}>
-                            <span className={styles.ohlcItem}>
-                                <span className={styles.ohlcLabel}>O</span>
-                                <span className={styles.ohlcValue}>{ohlcData.open?.toFixed(2)}</span>
-                            </span>
-                            <span className={styles.ohlcItem}>
-                                <span className={styles.ohlcLabel}>H</span>
-                                <span className={styles.ohlcValue}>{ohlcData.high?.toFixed(2)}</span>
-                            </span>
-                            <span className={styles.ohlcItem}>
-                                <span className={styles.ohlcLabel}>L</span>
-                                <span className={styles.ohlcValue}>{ohlcData.low?.toFixed(2)}</span>
-                            </span>
-                            <span className={styles.ohlcItem}>
-                                <span className={styles.ohlcLabel}>C</span>
-                                <span className={`${styles.ohlcValue} ${ohlcData.isUp ? styles.up : styles.down}`}>{ohlcData.close?.toFixed(2)}</span>
-                            </span>
-                            <span className={styles.ohlcChange}>
-                                <span className={`${styles.ohlcChangeValue} ${ohlcData.change >= 0 ? styles.up : styles.down}`}>
-                                    {ohlcData.change >= 0 ? '+' : ''}{ohlcData.change?.toFixed(2)} ({ohlcData.changePercent >= 0 ? '+' : ''}{ohlcData.changePercent?.toFixed(2)}%)
-                                </span>
-                            </span>
-                        </div>
-                    </>
-                )}
-            </div>
+            {/* Symbol + OHLC Header Bar */}
+            <OHLCHeader
+                symbol={symbol}
+                exchange={exchange}
+                interval={interval}
+                strategyConfig={strategyConfig}
+                ohlcData={ohlcData}
+                isToolbarVisible={isToolbarVisible}
+            />
 
             {/* Indicator Legend - Using reusable component */}
             <IndicatorLegend
@@ -4340,59 +4318,7 @@ const ChartComponent = forwardRef(({
             })()}
 
             {/* Shift+Click Quick Measure Overlay */}
-            {measureData && !measureData.isFirstPoint && (
-                <div
-                    className={styles.measureOverlay}
-                    style={{
-                        left: measureData.position.x,
-                        top: measureData.position.y,
-                    }}
-                >
-                    {/* Dashed line between points */}
-                    <svg
-                        className={styles.measureLine}
-                        style={{
-                            position: 'fixed',
-                            top: 0,
-                            left: 0,
-                            width: '100%',
-                            height: '100%',
-                            pointerEvents: 'none',
-                            zIndex: 99,
-                        }}
-                    >
-                        <line
-                            x1={measureData.line.x1}
-                            y1={measureData.line.y1}
-                            x2={measureData.line.x2}
-                            y2={measureData.line.y2}
-                            stroke={measureData.priceChange >= 0 ? '#26a69a' : '#ef5350'}
-                            strokeWidth="1"
-                            strokeDasharray="4,4"
-                        />
-                    </svg>
-                    <div className={styles.measureBox}>
-                        <div className={measureData.priceChange >= 0 ? styles.measureUp : styles.measureDown}>
-                            {measureData.priceChange >= 0 ? '+' : ''}{measureData.priceChange.toFixed(2)}
-                            {' '}({measureData.percentChange >= 0 ? '+' : ''}{measureData.percentChange.toFixed(2)}%)
-                        </div>
-                        <div className={styles.measureDetails}>
-                            {measureData.barCount} bars · {measureData.timeElapsed}
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {/* First point indicator */}
-            {measureData && measureData.isFirstPoint && (
-                <div
-                    className={styles.measureStartPoint}
-                    style={{
-                        left: measureData.x - 4,
-                        top: measureData.y - 4,
-                    }}
-                />
-            )}
+            <MeasureOverlay measureData={measureData} />
 
             {isReplayMode && (
                 <ReplayControls
