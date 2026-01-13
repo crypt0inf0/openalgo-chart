@@ -1,8 +1,6 @@
 import React, { useEffect, useRef, useState, useImperativeHandle, forwardRef, useCallback, useMemo } from 'react';
 import {
     createChart,
-    CandlestickSeries,
-    BarSeries,
     LineSeries,
     AreaSeries,
     BaselineSeries,
@@ -58,6 +56,7 @@ import { useChartDrawings } from '../../hooks/useChartDrawings';
 import { useChartAlerts } from '../../hooks/useChartAlerts';
 import { getChartTheme, getThemeType } from '../../utils/chartTheme';
 import { TOOL_MAP, hexToRgba, areSymbolsEquivalent } from './utils/chartHelpers';
+import { createSeries } from './utils/seriesFactories';
 import { saveAlertsForSymbol, loadAlertsForSymbol } from '../../services/alertService';
 
 const ChartComponent = forwardRef(({
@@ -1179,99 +1178,6 @@ const ChartComponent = forwardRef(({
         }
     };
 
-    // Create appropriate series based on chart type
-    const createSeries = (chart, type, title = '') => {
-        // Remove title from options to prevent it from showing on the price axis label
-        const commonOptions = { lastValueVisible: true, priceScaleId: 'right', title: '' };
-
-        // Use appearance colors or defaults
-        const upColor = chartAppearance.candleUpColor || '#089981';
-        const downColor = chartAppearance.candleDownColor || '#F23645';
-        const wickUpColor = chartAppearance.wickUpColor || upColor;
-        const wickDownColor = chartAppearance.wickDownColor || downColor;
-
-        switch (type) {
-            case 'candlestick':
-                return chart.addSeries(CandlestickSeries, {
-                    ...commonOptions,
-                    upColor,
-                    downColor,
-                    borderVisible: false,
-                    wickUpColor,
-                    wickDownColor,
-                });
-            case 'bar':
-                return chart.addSeries(BarSeries, {
-                    ...commonOptions,
-                    upColor,
-                    downColor,
-                    thinBars: false,
-                });
-            case 'hollow-candlestick':
-                return chart.addSeries(CandlestickSeries, {
-                    ...commonOptions,
-                    upColor: 'transparent',
-                    downColor,
-                    borderUpColor: upColor,
-                    borderDownColor: downColor,
-                    wickUpColor,
-                    wickDownColor,
-                });
-            case 'line':
-                return chart.addSeries(LineSeries, {
-                    ...commonOptions,
-                    color: '#2962FF',
-                    lineWidth: 2,
-                });
-            case 'area':
-                return chart.addSeries(AreaSeries, {
-                    ...commonOptions,
-                    topColor: 'rgba(41, 98, 255, 0.4)',
-                    bottomColor: 'rgba(41, 98, 255, 0.0)',
-                    lineColor: '#2962FF',
-                    lineWidth: 2,
-                });
-            case 'baseline':
-                return chart.addSeries(BaselineSeries, {
-                    ...commonOptions,
-                    topLineColor: upColor,
-                    topFillColor1: hexToRgba(upColor, 0.28),
-                    topFillColor2: hexToRgba(upColor, 0.05),
-                    bottomLineColor: downColor,
-                    bottomFillColor1: hexToRgba(downColor, 0.05),
-                    bottomFillColor2: hexToRgba(downColor, 0.28),
-                });
-            case 'heikin-ashi':
-                return chart.addSeries(CandlestickSeries, {
-                    ...commonOptions,
-                    upColor,
-                    downColor,
-                    borderVisible: false,
-                    wickUpColor,
-                    wickDownColor,
-                });
-            case 'renko':
-                // Renko bricks don't have wicks, so we hide them by matching body colors
-                return chart.addSeries(CandlestickSeries, {
-                    ...commonOptions,
-                    upColor,
-                    downColor,
-                    borderVisible: false,
-                    wickUpColor: upColor,
-                    wickDownColor: downColor,
-                });
-            default:
-                return chart.addSeries(CandlestickSeries, {
-                    ...commonOptions,
-                    upColor,
-                    downColor,
-                    borderVisible: false,
-                    wickUpColor,
-                    wickDownColor,
-                });
-        }
-    };
-
     // Keep track of active tool for the wrapper
     const activeToolRef = useRef(activeTool);
     useEffect(() => {
@@ -1823,7 +1729,7 @@ const ChartComponent = forwardRef(({
 
         const chart = chartRef.current;
 
-        const replacementSeries = createSeries(chart, chartType, strategyConfig?.displayName || symbol);
+        const replacementSeries = createSeries(chart, chartType, chartAppearance);
         mainSeriesRef.current = replacementSeries;
         seriesMarkersRef.current = null; // Reset markers primitive for new series
         initializeLineTools(replacementSeries);

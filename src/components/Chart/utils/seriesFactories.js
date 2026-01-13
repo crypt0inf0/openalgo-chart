@@ -11,7 +11,8 @@ import {
   BaselineSeries,
 } from 'lightweight-charts';
 import { hexToRgba } from './chartHelpers';
-import { calculateHeikinAshi, calculateRenko } from '../../../utils/chartTypes';
+import { calculateHeikinAshi } from '../../../utils/chartUtils';
+import { calculateRenko } from '../../../utils/renkoUtils';
 
 /**
  * Transform OHLC data based on chart type
