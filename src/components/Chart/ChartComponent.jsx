@@ -55,6 +55,15 @@ import { useChartAlerts } from '../../hooks/useChartAlerts';
 import { getChartTheme, getThemeType } from '../../utils/chartTheme';
 import { TOOL_MAP, hexToRgba, areSymbolsEquivalent, addFutureWhitespacePoints, formatTimeDiff } from './utils/chartHelpers';
 import { createSeries, transformData } from './utils/seriesFactories';
+import {
+    DEFAULT_CANDLE_WINDOW,
+    DEFAULT_RIGHT_OFFSET,
+    PREFETCH_THRESHOLD,
+    MIN_CANDLES_FOR_SCROLL_BACK,
+    IST_OFFSET_SECONDS,
+    DEFAULT_VIEW_WINDOW,
+    EXTENDED_VIEW_WINDOW
+} from './utils/chartConfig';
 import { saveAlertsForSymbol, loadAlertsForSymbol } from '../../services/alertService';
 
 const ChartComponent = forwardRef(({
@@ -216,13 +225,6 @@ const ChartComponent = forwardRef(({
         }
     }, [interval]);
 
-    // ============================================
-    // CONFIGURABLE CHART CONSTANTS
-    // ============================================
-    const DEFAULT_CANDLE_WINDOW = 235;        // Fixed number of candles to show
-    const DEFAULT_RIGHT_OFFSET = 50;           // Right margin in candle units (~50 for TradingView-like future time display)
-    const PREFETCH_THRESHOLD = 126;            // Candles from oldest before prefetching
-    const MIN_CANDLES_FOR_SCROLL_BACK = 50;   // Minimum candles before enabling scroll-back
     // Loading state for scroll-back (shows subtle indicator)
     const [isLoadingOlderData, setIsLoadingOlderData] = useState(false);
 
@@ -1388,7 +1390,6 @@ const ChartComponent = forwardRef(({
                 // Calculate date range for older data
                 // Go back further based on interval type
                 const oldestTime = oldestLoadedTimeRef.current;
-                const IST_OFFSET_SECONDS = 19800; // Same offset used in openalgo.js
                 const oldestDate = new Date((oldestTime - IST_OFFSET_SECONDS) * 1000);
 
                 // End date is 1 day before oldest loaded (to avoid overlap)
@@ -3730,7 +3731,6 @@ const ChartComponent = forwardRef(({
 
                             if (currentTime) {
                                 // Use a reasonable default window that matches typical zoom
-                                const DEFAULT_VIEW_WINDOW = 200; // Larger window to avoid zooming in
                                 const startIndex = Math.max(0, currentIndex - DEFAULT_VIEW_WINDOW / 2);
                                 const endIndex = Math.min(fullDataRef.current.length - 1, currentIndex + DEFAULT_VIEW_WINDOW / 2);
 
@@ -4015,8 +4015,7 @@ const ChartComponent = forwardRef(({
 
                     // If no target range calculated, use a default that doesn't zoom in
                     if (!targetRange && selectedTime) {
-                        const VIEW_WINDOW = 300;
-                        const startIndex = Math.max(0, selectedIndex - VIEW_WINDOW / 2);
+                        const startIndex = Math.max(0, selectedIndex - EXTENDED_VIEW_WINDOW / 2);
                         const endIndex = selectedIndex;
                         const startTime = fullDataRef.current[startIndex]?.time;
                         const endTime = fullDataRef.current[endIndex]?.time;
