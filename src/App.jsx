@@ -1438,7 +1438,7 @@ function AppContent({ isAuthenticated, setIsAuthenticated }) {
     createAlert: handleAlertClick,
     clearDrawings: () => handleToolChange('clear_all'),
     resetChart: handleResetChart,
-  }), [toggleIndicator, handleToolChange, handleUndo, handleRedo, toggleTheme, setTheme, handleFullScreen, handleDownloadImage, handleCopyImage, handleAlertClick, handleResetChart]);
+  }), [toggleIndicator, handleToolChange, handleUndo, handleRedo, toggleTheme, setTheme, handleFullScreen, handleDownloadImage, handleCopyImage, handleAlertClick, handleResetChart, setChartType, setSearchMode, setIsSearchOpen, setIsSettingsOpen, setIsShortcutsDialogOpen]);
 
   const {
     commands,

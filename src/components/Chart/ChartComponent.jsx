@@ -31,6 +31,7 @@ import {
 import { calculateTPO } from '../../utils/indicators/tpo';
 import { calculateFirstCandle } from '../../utils/indicators/firstCandle';
 import { calculateRangeBreakout } from '../../utils/indicators/rangeBreakout';
+import { calculatePriceActionRange } from '../../utils/indicators/priceActionRange';
 import { calculateANNStrategy } from '../../utils/indicators/annStrategy';
 import { calculateHilengaMilenga } from '../../utils/indicators/hilengaMilenga';
 import { TPOProfilePrimitive } from '../../plugins/tpo-profile/TPOProfilePrimitive';
@@ -2397,13 +2398,6 @@ const ChartComponent = forwardRef(({
         const is5MinChart = intervalRef.current === '5' || intervalRef.current === '5m';
         const firstCandleEnabled = firstCandleInd?.visible !== false && is5MinChart;
 
-        console.log('[FirstCandle] updateIndicators:', {
-            firstCandleInd: !!firstCandleInd,
-            is5MinChart,
-            firstCandleEnabled,
-            dataLength: data?.length || 0
-        });
-
         if (firstCandleEnabled && firstCandleInd && data && data.length > 0) {
             const highLineColor = firstCandleInd.highLineColor || '#ef5350';
             const lowLineColor = firstCandleInd.lowLineColor || '#26a69a';
@@ -2412,11 +2406,6 @@ const ChartComponent = forwardRef(({
                 highlightColor: firstCandleInd.highlightColor || '#FFD700',
                 highLineColor: highLineColor,
                 lowLineColor: lowLineColor
-            });
-
-            console.log('[FirstCandle] Calculate result:', {
-                daysCount: result.days?.length || 0,
-                levelsCount: result.allLevels?.length || 0
             });
 
             // Remove old line series if count changed
@@ -2432,11 +2421,9 @@ const ChartComponent = forwardRef(({
 
             // Create/update line series for each day's high and low
             if (result.allLevels && result.allLevels.length > 0 && chartRef.current) {
-                console.log('[FirstCandle] Creating series for', result.allLevels.length, 'days');
                 let seriesIndex = 0;
                 for (const level of result.allLevels) {
                     const { high, low, startTime, endTime } = level;
-                    console.log('[FirstCandle] Level:', { high, low, startTime, endTime });
 
                     // High line
                     if (!firstCandleSeriesRef.current[seriesIndex]) {
@@ -2553,6 +2540,72 @@ const ChartComponent = forwardRef(({
             }
             rangeBreakoutSeriesRef.current = [];
             // Note: markers are handled collectively at the end of updateIndicators
+        }
+
+        // ==================== PRICE ACTION RANGE (PAR) INDICATOR ====================
+        const parIndicator = activeIndicators.find(i => i.type === 'priceActionRange');
+        const parEnabled = parIndicator && parIndicator.visible !== false;
+
+        if (parEnabled && chartRef.current && data.length > 0) {
+            const supportColor = parIndicator.supportColor || '#26a69a';
+            const resistanceColor = parIndicator.resistanceColor || '#ef5350';
+
+            const result = calculatePriceActionRange(data, {
+                supportColor,
+                resistanceColor
+            });
+
+            // Clean up existing PAR series if count changed
+            const existingCount = priceActionRangeSeriesRef.current.length;
+            const neededCount = result.allLevels.length;
+
+            if (existingCount !== neededCount) {
+                for (const series of priceActionRangeSeriesRef.current) {
+                    try { chartRef.current.removeSeries(series); } catch (e) { /* ignore */ }
+                }
+                priceActionRangeSeriesRef.current = [];
+            }
+
+            // Create or update line series for each support/resistance level
+            result.allLevels.forEach((level, idx) => {
+                const lineColor = level.type === 'support' ? supportColor : resistanceColor;
+
+                if (!priceActionRangeSeriesRef.current[idx]) {
+                    priceActionRangeSeriesRef.current[idx] = chartRef.current.addSeries(LineSeries, {
+                        color: lineColor,
+                        lineWidth: 2,
+                        lineStyle: 0, // Solid
+                        priceLineVisible: false,
+                        lastValueVisible: false,
+                    });
+                }
+
+                priceActionRangeSeriesRef.current[idx].setData([
+                    { time: level.startTime, value: level.value },
+                    { time: level.endTime, value: level.value }
+                ]);
+            });
+
+            // Collect breakout/breakdown markers
+            result.days.forEach(day => {
+                if (day.signals && day.signals.length > 0) {
+                    day.signals.forEach(signal => {
+                        allMarkers.push({
+                            time: signal.time,
+                            position: signal.type === 'breakout' ? 'aboveBar' : 'belowBar',
+                            color: signal.type === 'breakout' ? supportColor : resistanceColor,
+                            shape: signal.type === 'breakout' ? 'arrowUp' : 'arrowDown',
+                            text: `PAR: ${signal.type === 'breakout' ? 'Breakout' : 'Breakdown'}`
+                        });
+                    });
+                }
+            });
+        } else if (!parEnabled) {
+            // Remove PAR series when disabled
+            for (const series of priceActionRangeSeriesRef.current) {
+                try { chartRef.current.removeSeries(series); } catch (e) { /* ignore */ }
+            }
+            priceActionRangeSeriesRef.current = [];
         }
 
         // --- CLEANUP LOGIC ---
