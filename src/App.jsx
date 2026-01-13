@@ -40,6 +40,7 @@ import { useSymbolHandlers } from './hooks/useSymbolHandlers';
 import { useLayoutHandlers } from './hooks/useLayoutHandlers';
 import { useAlertHandlers } from './hooks/useAlertHandlers';
 import { useToolHandlers } from './hooks/useToolHandlers';
+import { useUIHandlers } from './hooks/useUIHandlers';
 import { useTheme } from './context/ThemeContext';
 import { useUser } from './context/UserContext';
 import { indicatorConfigs } from './components/IndicatorSettings/indicatorConfigs';
@@ -863,6 +864,57 @@ function AppContent({ isAuthenticated, setIsAuthenticated }) {
     showSnapshotToast
   });
 
+  // UI handlers extracted to hook
+  const {
+    handleRightPanelToggle,
+    handleSettingsClick,
+    handleTemplatesClick,
+    handleChartTemplatesClick,
+    handleLoadChartTemplate,
+    getCurrentChartConfig,
+    handleOptionChainClick,
+    handleOptionSelect,
+    handleOpenOptionChainForSymbol,
+    handleLoadTemplate,
+    handleTimerToggle,
+    handleSessionBreakToggle,
+    handleChartAppearanceChange,
+    handleResetChartAppearance,
+    handleDrawingPropertyChange,
+    handleResetDrawingDefaults,
+    handleResetChart,
+    handleApiKeySaveFromSettings,
+    handleWebsocketUrlSave,
+    handleHostUrlSave,
+    handleUsernameSave
+  } = useUIHandlers({
+    setActiveRightPanel,
+    setUnreadAlertCount,
+    setIsSettingsOpen,
+    setIsTemplateDialogOpen,
+    setIsChartTemplatesOpen,
+    setIsOptionChainOpen,
+    setOptionChainInitialSymbol,
+    setChartType,
+    setCharts,
+    activeChartId,
+    activeChart,
+    chartType,
+    chartAppearance,
+    setChartAppearance,
+    setLayout,
+    setActiveChartId,
+    setTheme,
+    setIsTimerVisible,
+    setIsSessionBreakVisible,
+    setDrawingDefaults,
+    setApiKey,
+    setWebsocketUrl,
+    setHostUrl,
+    setOpenalgoUsername,
+    showToast
+  });
+
   // Ref to store current watchlist symbols - fixes stale closure in WebSocket callback
   const watchlistSymbolsRef = useRef([]);
 
@@ -1480,187 +1532,6 @@ function AppContent({ isAuthenticated, setIsAuthenticated }) {
       return '';
     }
   });
-
-  const handleRightPanelToggle = (panel) => {
-    setActiveRightPanel(panel);
-    if (panel === 'alerts') {
-      setUnreadAlertCount(0); // Clear badge when opening alerts
-    }
-  };
-
-  // Settings handlers
-  const handleSettingsClick = () => {
-    setIsSettingsOpen(true);
-  };
-
-  // Template handlers
-  const handleTemplatesClick = () => {
-    setIsTemplateDialogOpen(true);
-  };
-
-  // Chart Templates handlers (for indicator configurations)
-  const handleChartTemplatesClick = useCallback(() => {
-    setIsChartTemplatesOpen(true);
-  }, []);
-
-  const handleLoadChartTemplate = useCallback((template) => {
-    if (!template) return;
-
-    // Update chart type
-    if (template.chartType) {
-      setChartType(template.chartType);
-    }
-
-    // Update indicators on active chart
-    if (template.indicators && Array.isArray(template.indicators)) {
-      setCharts(prev => prev.map(chart =>
-        chart.id === activeChartId
-          ? { ...chart, indicators: template.indicators }
-          : chart
-      ));
-    }
-
-    // Update appearance settings if present
-    if (template.appearance) {
-      setChartAppearance(prev => ({ ...prev, ...template.appearance }));
-    }
-
-    showToast(`Loaded template: ${template.name}`, 'success');
-  }, [activeChartId, showToast]);
-
-  // Get current chart configuration for saving as template
-  const getCurrentChartConfig = useCallback(() => {
-    return {
-      chartType,
-      indicators: activeChart?.indicators || [],
-      appearance: chartAppearance,
-    };
-  }, [chartType, activeChart, chartAppearance]);
-
-  // Option Chain handlers
-  const handleOptionChainClick = () => {
-    setIsOptionChainOpen(true);
-  };
-
-  const handleOptionSelect = (symbol, exchange) => {
-    // Load the selected option chart in the active chart
-    setCharts(prev => prev.map(chart =>
-      chart.id === activeChartId ? { ...chart, symbol, exchange } : chart
-    ));
-    setIsOptionChainOpen(false);
-  };
-
-  // Open option chain for a specific symbol (from chart right-click)
-  const handleOpenOptionChainForSymbol = useCallback((symbol, exchange) => {
-    setOptionChainInitialSymbol({ symbol, exchange });
-    setIsOptionChainOpen(true);
-  }, []);
-
-  const handleLoadTemplate = useCallback((template) => {
-    if (!template) return;
-
-    // Update layout
-    if (template.layout) {
-      setLayout(template.layout);
-    }
-
-    // Update chart type
-    if (template.chartType) {
-      setChartType(template.chartType);
-    }
-
-    // Update charts state with template charts
-    if (template.charts && Array.isArray(template.charts)) {
-      const defaultIndicators = {
-        sma: false,
-        ema: false,
-        rsi: { enabled: false, period: 14, color: '#7B1FA2' },
-        macd: { enabled: false, fast: 12, slow: 26, signal: 9, macdColor: '#2962FF', signalColor: '#FF6D00' },
-        bollingerBands: { enabled: false, period: 20, stdDev: 2 },
-        volume: { enabled: false, colorUp: '#089981', colorDown: '#F23645' },
-        atr: { enabled: false, period: 14, color: '#FF9800' },
-        stochastic: { enabled: false, kPeriod: 14, dPeriod: 3, smooth: 3, kColor: '#2962FF', dColor: '#FF6D00' },
-        vwap: { enabled: false, color: '#FF9800' },
-        supertrend: { enabled: false, period: 10, multiplier: 3 },
-        tpo: { enabled: false, blockSize: '30m', tickSize: 'auto' },
-        firstCandle: { enabled: false, highlightColor: '#FFD700', highLineColor: '#ef5350', lowLineColor: '#26a69a' },
-        priceActionRange: { enabled: false, supportColor: '#26a69a', resistanceColor: '#ef5350' }
-      };
-
-      const loadedCharts = template.charts.map((chart, index) => ({
-        id: index + 1,
-        symbol: chart.symbol || 'RELIANCE',
-        exchange: chart.exchange || 'NSE',
-        interval: chart.interval || '1d',
-        indicators: { ...defaultIndicators, ...chart.indicators },
-        comparisonSymbols: chart.comparisonSymbols || [],
-      }));
-
-      setCharts(loadedCharts);
-      setActiveChartId(1);
-    }
-
-    // Update appearance settings if present
-    if (template.appearance) {
-      if (template.appearance.chartAppearance) {
-        setChartAppearance(prev => ({ ...prev, ...template.appearance.chartAppearance }));
-      }
-      if (template.appearance.theme) {
-        setTheme(template.appearance.theme);
-      }
-    }
-  }, []);
-
-  const handleTimerToggle = () => {
-    setIsTimerVisible(prev => !prev);
-  };
-
-  const handleSessionBreakToggle = () => {
-    setIsSessionBreakVisible(prev => !prev);
-  };
-
-  const handleChartAppearanceChange = (newAppearance) => {
-    setChartAppearance(prev => ({ ...prev, ...newAppearance }));
-  };
-
-  const handleResetChartAppearance = () => {
-    setChartAppearance(DEFAULT_CHART_APPEARANCE);
-  };
-
-  // Drawing defaults handlers
-  const handleDrawingPropertyChange = useCallback((property, value) => {
-    setDrawingDefaults(prev => ({ ...prev, [property]: value }));
-  }, []);
-
-  const handleResetDrawingDefaults = useCallback(() => {
-    setDrawingDefaults(DEFAULT_DRAWING_OPTIONS);
-  }, []);
-
-  const handleResetChart = useCallback(() => {
-    handleResetChartAppearance();
-    handleResetDrawingDefaults();
-    showToast('Chart settings reset to default', 'success');
-  }, [handleResetDrawingDefaults]);
-
-  const handleApiKeySaveFromSettings = (newApiKey) => {
-    setApiKey(newApiKey);
-    localStorage.setItem('oa_apikey', newApiKey);
-  };
-
-  const handleWebsocketUrlSave = (newUrl) => {
-    setWebsocketUrl(newUrl);
-    localStorage.setItem('oa_ws_url', newUrl);
-  };
-
-  const handleHostUrlSave = (newUrl) => {
-    setHostUrl(newUrl);
-    localStorage.setItem('oa_host_url', newUrl);
-  };
-
-  const handleUsernameSave = (newUsername) => {
-    setOpenalgoUsername(newUsername);
-    localStorage.setItem('oa_username', newUsername);
-  };
 
   // Command Palette (Cmd+K / Ctrl+K)
   const commandPaletteHandlers = React.useMemo(() => ({
