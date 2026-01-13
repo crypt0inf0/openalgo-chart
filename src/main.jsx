@@ -8,6 +8,7 @@ import { UserProvider } from './context/UserContext.jsx'
 import { UIProvider } from './context/UIContext.jsx'
 import { ToolProvider } from './context/ToolContext.jsx'
 import { AlertProvider } from './context/AlertContext.jsx'
+import { ChartProvider } from './context/ChartContext.jsx'
 
 // Apply theme immediately to prevent flash of default theme
 // This runs synchronously BEFORE React renders anything
@@ -33,7 +34,9 @@ createRoot(document.getElementById('root')).render(
           <UIProvider>
             <ToolProvider>
               <AlertProvider>
-                <App />
+                <ChartProvider>
+                  <App />
+                </ChartProvider>
               </AlertProvider>
             </ToolProvider>
           </UIProvider>
