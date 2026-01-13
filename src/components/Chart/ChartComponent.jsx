@@ -3702,8 +3702,8 @@ const ChartComponent = forwardRef(({
         }
     }, [interval, symbol, exchange, tpoSettingsHash]);
 
-    // Helper to prepare indicators for the legend
-    const getActiveIndicators = useCallback(() => {
+    // Memoized active indicators for the legend (prevents recalculation on every render)
+    const activeIndicatorsForLegend = React.useMemo(() => {
         if (!Array.isArray(indicators)) return [];
 
         return indicators.map(ind => {
@@ -3769,7 +3769,7 @@ const ChartComponent = forwardRef(({
 
             {/* Indicator Legend - Using reusable component */}
             <IndicatorLegend
-                indicators={getActiveIndicators()}
+                indicators={activeIndicatorsForLegend}
                 panePositions={panePositions}
                 isToolbarVisible={isToolbarVisible}
                 isCollapsed={indicatorDropdownOpen}
