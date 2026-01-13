@@ -39,8 +39,6 @@ import { calculateRangeBreakout } from '../../utils/indicators/rangeBreakout';
 import { calculateANNStrategy } from '../../utils/indicators/annStrategy';
 import { calculateHilengaMilenga } from '../../utils/indicators/hilengaMilenga';
 import { TPOProfilePrimitive } from '../../plugins/tpo-profile/TPOProfilePrimitive';
-import { calculateHeikinAshi } from '../../utils/chartUtils';
-import { calculateRenko } from '../../utils/renkoUtils';
 import { intervalToSeconds } from '../../utils/timeframes';
 import { logger } from '../../utils/logger.js';
 
@@ -56,7 +54,7 @@ import { useChartDrawings } from '../../hooks/useChartDrawings';
 import { useChartAlerts } from '../../hooks/useChartAlerts';
 import { getChartTheme, getThemeType } from '../../utils/chartTheme';
 import { TOOL_MAP, hexToRgba, areSymbolsEquivalent } from './utils/chartHelpers';
-import { createSeries } from './utils/seriesFactories';
+import { createSeries, transformData } from './utils/seriesFactories';
 import { saveAlertsForSymbol, loadAlertsForSymbol } from '../../services/alertService';
 
 const ChartComponent = forwardRef(({
@@ -1157,26 +1155,6 @@ const ChartComponent = forwardRef(({
             document.removeEventListener('visibilitychange', handleVisibilityChange);
         };
     }, [updateAxisLabel]);
-
-
-
-    // Helper to transform OHLC data based on chart type
-    const transformData = (data, type) => {
-        if (!data || data.length === 0) return [];
-
-        switch (type) {
-            case 'line':
-            case 'area':
-            case 'baseline':
-                return data.map(d => ({ time: d.time, value: d.close }));
-            case 'heikin-ashi':
-                return calculateHeikinAshi(data);
-            case 'renko':
-                return calculateRenko(data);
-            default:
-                return data;
-        }
-    };
 
     // Keep track of active tool for the wrapper
     const activeToolRef = useRef(activeTool);
