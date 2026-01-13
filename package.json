@@ -10,6 +10,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@rollup/rollup-darwin-arm64": "^4.55.1",
     "classnames": "^2.5.1",
     "html2canvas": "^1.4.1",
     "lightweight-charts": "^5.0.9",
@@ -22,7 +23,8 @@
     "@eslint/js": "^9.39.1",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.1",
-    "@types/react": "^19.2.5",
+    "@types/node": "^25.0.7",
+    "@types/react": "^19.2.8",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^5.1.1",
     "eslint": "^9.39.1",
@@ -30,6 +32,7 @@
     "eslint-plugin-react-refresh": "^0.4.24",
     "globals": "^16.5.0",
     "jsdom": "^27.4.0",
+    "typescript": "^5.9.3",
     "vite": "^7.2.4",
     "vitest": "^4.0.16"
   }

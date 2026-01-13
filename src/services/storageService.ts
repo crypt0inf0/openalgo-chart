@@ -12,110 +12,110 @@
 
 import { STORAGE_KEYS } from '../constants/storageKeys';
 
+// Type for storage stats
+interface StorageStats {
+    used: number;
+    total: number;
+    percentage: string;
+    usedKB: string;
+}
+
 /**
  * Safely parses JSON string
- * @param {string} value - JSON string to parse
- * @param {*} fallback - Fallback value if parsing fails
- * @returns {*} Parsed value or fallback
  */
-export const safeParseJSON = (value, fallback) => {
+export const safeParseJSON = <T>(value: string | null | undefined, fallback: T): T => {
     if (value === null || value === undefined) return fallback;
     try {
-        return JSON.parse(value);
+        return JSON.parse(value) as T;
     } catch (error) {
-        console.warn('[Storage] Failed to parse JSON:', error.message);
+        console.warn('[Storage] Failed to parse JSON:', (error as Error).message);
         return fallback;
     }
 };
 
 /**
  * Safely stringifies value to JSON
- * @param {*} value - Value to stringify
- * @returns {string|null} JSON string or null if failed
  */
-export const safeStringifyJSON = (value) => {
+export const safeStringifyJSON = (value: unknown): string | null => {
     try {
         return JSON.stringify(value);
     } catch (error) {
-        console.warn('[Storage] Failed to stringify JSON:', error.message);
+        console.warn('[Storage] Failed to stringify JSON:', (error as Error).message);
         return null;
     }
 };
 
 /**
  * Get raw string value from localStorage
- * @param {string} key - Storage key (use STORAGE_KEYS constant)
- * @param {string} [fallback=''] - Fallback value
- * @returns {string} Stored value or fallback
  */
-export const getString = (key, fallback = '') => {
+export const getString = (key: string, fallback: string = ''): string => {
     try {
         const value = localStorage.getItem(key);
         return value !== null ? value : fallback;
     } catch (error) {
-        console.warn(`[Storage] Failed to get '${key}':`, error.message);
+        console.warn(`[Storage] Failed to get '${key}':`, (error as Error).message);
         return fallback;
     }
 };
 
 /**
  * Get parsed JSON value from localStorage
- * @param {string} key - Storage key (use STORAGE_KEYS constant)
- * @param {*} fallback - Fallback value if key doesn't exist or parse fails
- * @returns {*} Parsed value or fallback
  */
-export const getJSON = (key, fallback = null) => {
+export const getJSON = <T>(key: string, fallback: T): T => {
     try {
         const value = localStorage.getItem(key);
-        return safeParseJSON(value, fallback);
+        return safeParseJSON<T>(value, fallback);
     } catch (error) {
-        console.warn(`[Storage] Failed to get '${key}':`, error.message);
+        console.warn(`[Storage] Failed to get '${key}':`, (error as Error).message);
         return fallback;
     }
 };
 
 /**
  * Get boolean value from localStorage
- * @param {string} key - Storage key (use STORAGE_KEYS constant)
- * @param {boolean} [fallback=false] - Fallback value
- * @returns {boolean} Stored boolean or fallback
  */
-export const getBoolean = (key, fallback = false) => {
+export const getBoolean = (key: string, fallback: boolean = false): boolean => {
     try {
         const value = localStorage.getItem(key);
         if (value === null) return fallback;
         return value === 'true';
     } catch (error) {
-        console.warn(`[Storage] Failed to get '${key}':`, error.message);
+        console.warn(`[Storage] Failed to get '${key}':`, (error as Error).message);
         return fallback;
     }
 };
 
 /**
  * Get number value from localStorage
- * @param {string} key - Storage key (use STORAGE_KEYS constant)
- * @param {number} [fallback=0] - Fallback value
- * @returns {number} Stored number or fallback
  */
-export const getNumber = (key, fallback = 0) => {
+export const getNumber = (key: string, fallback: number = 0): number => {
     try {
         const value = localStorage.getItem(key);
         if (value === null) return fallback;
         const num = parseFloat(value);
         return Number.isFinite(num) ? num : fallback;
     } catch (error) {
-        console.warn(`[Storage] Failed to get '${key}':`, error.message);
+        console.warn(`[Storage] Failed to get '${key}':`, (error as Error).message);
         return fallback;
     }
 };
 
 /**
- * Set string value in localStorage
- * @param {string} key - Storage key (use STORAGE_KEYS constant)
- * @param {string} value - Value to store
- * @returns {boolean} Success status
+ * Handle storage errors (quota exceeded, etc.)
  */
-export const setString = (key, value) => {
+const handleStorageError = (error: unknown, key: string): void => {
+    const err = error as Error & { code?: number };
+    if (err.name === 'QuotaExceededError' || err.code === 22) {
+        console.error(`[Storage] Quota exceeded when writing '${key}'. Consider clearing old data.`);
+    } else {
+        console.warn(`[Storage] Failed to write '${key}':`, err.message);
+    }
+};
+
+/**
+ * Set string value in localStorage
+ */
+export const setString = (key: string, value: string): boolean => {
     try {
         localStorage.setItem(key, String(value));
         return true;
@@ -127,11 +127,8 @@ export const setString = (key, value) => {
 
 /**
  * Set JSON value in localStorage
- * @param {string} key - Storage key (use STORAGE_KEYS constant)
- * @param {*} value - Value to store (will be JSON stringified)
- * @returns {boolean} Success status
  */
-export const setJSON = (key, value) => {
+export const setJSON = (key: string, value: unknown): boolean => {
     try {
         const json = safeStringifyJSON(value);
         if (json === null) return false;
@@ -145,72 +142,47 @@ export const setJSON = (key, value) => {
 
 /**
  * Set boolean value in localStorage
- * @param {string} key - Storage key (use STORAGE_KEYS constant)
- * @param {boolean} value - Boolean value to store
- * @returns {boolean} Success status
  */
-export const setBoolean = (key, value) => {
+export const setBoolean = (key: string, value: boolean): boolean => {
     return setString(key, value ? 'true' : 'false');
 };
 
 /**
  * Set number value in localStorage
- * @param {string} key - Storage key (use STORAGE_KEYS constant)
- * @param {number} value - Number value to store
- * @returns {boolean} Success status
  */
-export const setNumber = (key, value) => {
+export const setNumber = (key: string, value: number): boolean => {
     return setString(key, String(value));
 };
 
 /**
  * Remove item from localStorage
- * @param {string} key - Storage key to remove
- * @returns {boolean} Success status
  */
-export const remove = (key) => {
+export const remove = (key: string): boolean => {
     try {
         localStorage.removeItem(key);
         return true;
     } catch (error) {
-        console.warn(`[Storage] Failed to remove '${key}':`, error.message);
+        console.warn(`[Storage] Failed to remove '${key}':`, (error as Error).message);
         return false;
     }
 };
 
 /**
  * Check if key exists in localStorage
- * @param {string} key - Storage key to check
- * @returns {boolean} Whether key exists
  */
-export const has = (key) => {
+export const has = (key: string): boolean => {
     try {
         return localStorage.getItem(key) !== null;
-    } catch (error) {
+    } catch {
         return false;
-    }
-};
-
-/**
- * Handle storage errors (quota exceeded, etc.)
- * @param {Error} error - The error that occurred
- * @param {string} key - The key being written
- */
-const handleStorageError = (error, key) => {
-    if (error.name === 'QuotaExceededError' || error.code === 22) {
-        console.error(`[Storage] Quota exceeded when writing '${key}'. Consider clearing old data.`);
-        // Could implement LRU eviction here if needed
-    } else {
-        console.warn(`[Storage] Failed to write '${key}':`, error.message);
     }
 };
 
 /**
  * Clear all app-related localStorage keys
  * Only clears keys defined in STORAGE_KEYS
- * @returns {number} Number of keys cleared
  */
-export const clearAppStorage = () => {
+export const clearAppStorage = (): number => {
     let cleared = 0;
     Object.values(STORAGE_KEYS).forEach(key => {
         try {
@@ -218,7 +190,7 @@ export const clearAppStorage = () => {
                 localStorage.removeItem(key);
                 cleared++;
             }
-        } catch (error) {
+        } catch {
             // Ignore errors during clear
         }
     });
@@ -227,14 +199,13 @@ export const clearAppStorage = () => {
 
 /**
  * Get storage usage statistics
- * @returns {Object} Storage stats { used, total, percentage }
  */
-export const getStorageStats = () => {
+export const getStorageStats = (): StorageStats => {
     try {
         let used = 0;
         for (let i = 0; i < localStorage.length; i++) {
             const key = localStorage.key(i);
-            const value = localStorage.getItem(key);
+            const value = localStorage.getItem(key ?? '');
             used += (key?.length || 0) + (value?.length || 0);
         }
         // localStorage typically has 5MB limit
@@ -245,7 +216,7 @@ export const getStorageStats = () => {
             percentage: ((used / total) * 100).toFixed(2),
             usedKB: (used / 1024).toFixed(2),
         };
-    } catch (error) {
+    } catch {
         return { used: 0, total: 0, percentage: '0', usedKB: '0' };
     }
 };
