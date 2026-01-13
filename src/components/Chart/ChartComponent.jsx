@@ -2543,7 +2543,7 @@ const ChartComponent = forwardRef(({
         }
 
         // ==================== PRICE ACTION RANGE (PAR) INDICATOR ====================
-        const parIndicator = activeIndicators.find(i => i.type === 'priceActionRange');
+        const parIndicator = indicatorsArray?.find(i => i.type === 'priceActionRange');
         const parEnabled = parIndicator && parIndicator.visible !== false;
 
         if (parEnabled && chartRef.current && data.length > 0) {
