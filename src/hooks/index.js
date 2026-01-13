@@ -34,3 +34,6 @@ export {
 
 // Global keyboard shortcuts
 export { useGlobalShortcuts } from './useGlobalShortcuts';
+
+// Web Worker hooks
+export { useIndicatorWorker } from './useIndicatorWorker';
