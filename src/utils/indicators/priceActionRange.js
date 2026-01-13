@@ -12,33 +12,7 @@
  * 4. Signal breakout (close above resistance) or breakdown (close below support)
  */
 
-/**
- * Convert timestamp to IST date components
- * Note: The candle data already has IST offset applied from the API
- * @param {number} timestamp - Unix timestamp in seconds (already in IST)
- * @returns {Object} - { hours, minutes, dateStr }
- */
-const getISTComponents = (timestamp) => {
-  const date = new Date(timestamp * 1000);
-  return {
-    hours: date.getUTCHours(),
-    minutes: date.getUTCMinutes(),
-    dateStr: date.toISOString().split('T')[0]
-  };
-};
-
-/**
- * Check if a candle is within market hours (9:15 AM - 3:30 PM IST)
- * @param {number} timestamp - Unix timestamp in seconds
- * @returns {boolean}
- */
-const isMarketHours = (timestamp) => {
-  const { hours, minutes } = getISTComponents(timestamp);
-  const timeInMinutes = hours * 60 + minutes;
-  const marketOpen = 9 * 60 + 15;  // 9:15 AM
-  const marketClose = 15 * 60 + 30; // 3:30 PM
-  return timeInMinutes >= marketOpen && timeInMinutes <= marketClose;
-};
+import { getISTComponents, isMarketHours } from './timeUtils';
 
 /**
  * Check if a candle is green (bullish - close >= open)
