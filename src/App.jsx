@@ -38,6 +38,7 @@ import { useIntervalHandlers } from './hooks/useIntervalHandlers';
 import { useOrderHandlers } from './hooks/useOrderHandlers';
 import { useSymbolHandlers } from './hooks/useSymbolHandlers';
 import { useLayoutHandlers } from './hooks/useLayoutHandlers';
+import { useAlertHandlers } from './hooks/useAlertHandlers';
 import { useTheme } from './context/ThemeContext';
 import { useUser } from './context/UserContext';
 import { indicatorConfigs } from './components/IndicatorSettings/indicatorConfigs';
@@ -810,6 +811,30 @@ function AppContent({ isAuthenticated, setIsAuthenticated }) {
     showToast
   });
 
+  // Alert handlers extracted to hook
+  const {
+    handleAlertClick,
+    handleSaveAlert,
+    handleRemoveAlert,
+    handleRestartAlert,
+    handlePauseAlert,
+    handleChartAlertsSync,
+    handleChartAlertTriggered
+  } = useAlertHandlers({
+    chartRefs,
+    activeChartId,
+    setAlertPrice,
+    setIsAlertOpen,
+    showToast,
+    currentSymbol,
+    currentExchange,
+    alerts,
+    setAlerts,
+    skipNextSyncRef,
+    setAlertLogs,
+    setUnreadAlertCount
+  });
+
   // Ref to store current watchlist symbols - fixes stale closure in WebSocket callback
   const watchlistSymbolsRef = useRef([]);
 
@@ -1578,290 +1603,6 @@ function AppContent({ isAuthenticated, setIsAuthenticated }) {
     if (chartId === activeChartId) {
       setIsReplayMode(isActive);
     }
-  };
-
-  const handleAlertClick = () => {
-    const activeRef = chartRefs.current[activeChartId];
-    if (activeRef) {
-      const price = activeRef.getCurrentPrice();
-      if (price !== null) {
-        if (typeof activeRef.createAlert === 'function') {
-          activeRef.createAlert(price);
-        } else {
-          setAlertPrice(price);
-          setIsAlertOpen(true);
-        }
-      } else {
-        showToast('No price data available', 'error');
-      }
-    }
-  };
-
-  const handleSaveAlert = (alertData) => {
-    const priceDisplay = formatPrice(alertData.value);
-
-    const newAlert = {
-      id: Date.now(),
-      symbol: currentSymbol,
-      exchange: currentExchange,
-      price: priceDisplay,
-      condition: `Crossing ${priceDisplay}`,
-      status: 'Active',
-      created_at: new Date().toISOString(),
-    };
-
-    // Add alert to state so it appears in the Alerts panel
-    setAlerts(prev => [...prev, newAlert]);
-
-    // Toast notification disabled
-    // showToast(`Alert created for ${currentSymbol}:${currentExchange} at ${priceDisplay}`, 'success');
-
-    // Set flag to skip the next sync notification (prevent duplicate toast)
-    skipNextSyncRef.current = { type: 'add', alertId: newAlert.id, chartId: activeChartId };
-
-    // Also create a visual alert on the active chart via the line-tools alerts primitive
-    const activeRef = chartRefs.current[activeChartId];
-    if (activeRef && typeof activeRef.addPriceAlert === 'function') {
-      activeRef.addPriceAlert(newAlert);
-    }
-  };
-
-  const handleRemoveAlert = (id) => {
-    setAlerts(prev => {
-      const target = prev.find(a => a.id === id);
-
-      // If this alert came from the chart-side line-tools primitive, also
-      // remove it from the chart so the marker disappears.
-      if (target && target._source === 'lineTools' && target.chartId != null && target.externalId) {
-        const chartRef = chartRefs.current[target.chartId];
-        if (chartRef && typeof chartRef.removePriceAlert === 'function') {
-          chartRef.removePriceAlert(target.externalId);
-        }
-      }
-
-      return prev.filter(a => a.id !== id);
-    });
-  };
-
-  const handleRestartAlert = (id) => {
-    // Find the alert first (outside setAlerts to access chartRefs)
-    const target = alerts.find(a => a.id === id);
-    if (!target) return;
-
-    // Extract original condition from the alert's condition string
-    let originalCondition = 'crossing';
-    if (target.condition) {
-      const condLower = target.condition.toLowerCase();
-      if (condLower.includes('crossing_down') || condLower.includes('crossing down')) {
-        originalCondition = 'crossing_down';
-      } else if (condLower.includes('crossing_up') || condLower.includes('crossing up')) {
-        originalCondition = 'crossing_up';
-      }
-    }
-
-    // Store the alert ID that is being resumed (sync will update its externalId)
-    skipNextSyncRef.current = { type: 'resume', alertId: id, chartId: target.chartId };
-
-    // Add alert back to chart
-    if (target._source === 'lineTools' && target.chartId != null) {
-      const chartRef = chartRefs.current[target.chartId];
-      if (chartRef && typeof chartRef.restartPriceAlert === 'function') {
-        chartRef.restartPriceAlert(target.price, originalCondition);
-      }
-    }
-
-    // Update status to Active (keep same ID)
-    setAlerts(prev => prev.map(a => a.id === id ? { ...a, status: 'Active' } : a));
-  };
-
-  const handlePauseAlert = (id) => {
-    const target = alerts.find(a => a.id === id);
-    if (!target) return;
-
-    // Set flag to skip next sync (prevents the alert from being deleted)
-    skipNextSyncRef.current = { type: 'pause' };
-
-    // Remove the visual alert from the chart
-    if (target._source === 'lineTools' && target.chartId != null && target.externalId) {
-      const chartRef = chartRefs.current[target.chartId];
-      if (chartRef && typeof chartRef.removePriceAlert === 'function') {
-        chartRef.removePriceAlert(target.externalId);
-      }
-    }
-
-    // Update status to Paused
-    setAlerts(prev => prev.map(a => a.id === id ? { ...a, status: 'Paused' } : a));
-  };
-
-  const handleChartAlertsSync = (chartId, symbol, exchange, chartAlerts) => {
-    const syncInfo = skipNextSyncRef.current;
-
-    // If pausing, skip sync entirely (preserve paused alert in state)
-    if (syncInfo && syncInfo.type === 'pause') {
-      skipNextSyncRef.current = null;
-      return;
-    }
-
-    // If adding via handleSaveAlert, just update the externalId (alert already exists, no new toast)
-    if (syncInfo && syncInfo.type === 'add' && syncInfo.chartId === chartId) {
-      skipNextSyncRef.current = null;
-
-      // Find the new chart alert that was just created
-      const existingForChart = alerts.filter(a => a._source === 'lineTools' && a.chartId === chartId && a.status === 'Active');
-      const existingExternalIds = new Set(existingForChart.map(a => a.externalId));
-      const newChartAlert = (chartAlerts || []).find(a => !existingExternalIds.has(a.id));
-
-      if (newChartAlert) {
-        // Update the dialog-created alert with externalId and mark as lineTools source
-        setAlerts(prev => prev.map(a =>
-          a.id === syncInfo.alertId ? { ...a, externalId: newChartAlert.id, _source: 'lineTools', chartId } : a
-        ));
-      }
-      return;
-    }
-
-    // If resuming, update the externalId of the resumed alert AND set status to Active
-    if (syncInfo && syncInfo.type === 'resume' && syncInfo.chartId === chartId) {
-      skipNextSyncRef.current = null;
-
-      // Find the new chart alert that was just created
-      const existingForChart = alerts.filter(a => a._source === 'lineTools' && a.chartId === chartId && a.status === 'Active');
-      const existingExternalIds = new Set(existingForChart.map(a => a.externalId));
-      const newChartAlert = (chartAlerts || []).find(a => !existingExternalIds.has(a.id));
-
-      if (newChartAlert) {
-        // Update the resumed alert with the new externalId AND ensure status is Active
-        setAlerts(prev => prev.map(a =>
-          a.id === syncInfo.alertId ? { ...a, externalId: newChartAlert.id, status: 'Active' } : a
-        ));
-      }
-      return;
-    }
-
-    setAlerts(prev => {
-      // Create a map of chart alerts by their id for quick lookup
-      const chartAlertMap = new Map((chartAlerts || []).map(a => [a.id, a]));
-      const chartAlertIds = new Set((chartAlerts || []).map(a => a.id));
-
-      // Track existing alerts for this chart
-      const existingForChart = prev.filter(a => a._source === 'lineTools' && a.chartId === chartId);
-      const existingExternalIds = new Set(existingForChart.map(a => a.externalId));
-
-      // Keep alerts that:
-      // - Are NOT lineTools for this chart
-      // - Are Triggered or Paused
-      // - Are Active and still exist in chart
-      // Also UPDATE price for existing alerts that were moved
-      const remaining = prev.filter(a => {
-        if (a._source !== 'lineTools' || a.chartId !== chartId) return true;
-        if (a.status === 'Triggered' || a.status === 'Paused') return true;
-        return chartAlertIds.has(a.externalId);
-      }).map(a => {
-        // If this is a lineTools alert for this chart and still exists, update its price
-        if (a._source === 'lineTools' && a.chartId === chartId && a.status === 'Active') {
-          const chartAlert = chartAlertMap.get(a.externalId);
-          if (chartAlert) {
-            const priceDisplay = formatPrice(chartAlert.price);
-            let conditionDisplay = `Crossing ${priceDisplay}`;
-            if (chartAlert.condition === 'crossing_up') {
-              conditionDisplay = `Crossing Up ${priceDisplay}`;
-            } else if (chartAlert.condition === 'crossing_down') {
-              conditionDisplay = `Crossing Down ${priceDisplay}`;
-            } else if (chartAlert.condition && chartAlert.condition !== 'crossing') {
-              conditionDisplay = chartAlert.condition;
-            }
-            return { ...a, price: priceDisplay, condition: conditionDisplay };
-          }
-        }
-        return a;
-      });
-
-      // Find NEW chart alerts (not in existing externalIds)
-      const newChartAlerts = (chartAlerts || []).filter(a => !existingExternalIds.has(a.id));
-
-      // Create entries for truly new alerts
-      const newMapped = newChartAlerts.map(a => {
-        const priceDisplay = formatPrice(a.price);
-
-        // Format condition display
-        let conditionDisplay = `Crossing ${priceDisplay}`;
-        if (a.condition === 'crossing_up') {
-          conditionDisplay = `Crossing Up ${priceDisplay}`;
-        } else if (a.condition === 'crossing_down') {
-          conditionDisplay = `Crossing Down ${priceDisplay}`;
-        } else if (a.condition && a.condition !== 'crossing') {
-          conditionDisplay = a.condition;
-        }
-
-        // Toast notification disabled
-        // showToast(`Alert created for ${symbol}:${exchange} at ${priceDisplay}`, 'success');
-
-        return {
-          id: `lt-${chartId}-${a.id}`,
-          externalId: a.id,
-          symbol,
-          exchange,
-          price: priceDisplay,
-          condition: conditionDisplay,
-          status: 'Active',
-          created_at: new Date().toISOString(),
-          _source: 'lineTools',
-          chartId,
-        };
-      });
-
-      return [...remaining, ...newMapped];
-    });
-  };
-
-  const handleChartAlertTriggered = (chartId, symbol, exchange, evt) => {
-    const displayPrice = formatPrice(evt.price ?? evt.alertPrice);
-    const timestamp = evt.timestamp ? new Date(evt.timestamp).toISOString() : new Date().toISOString();
-
-    // Log entry for the Logs tab
-    const logEntry = {
-      id: Date.now(),
-      alertId: evt.externalId || evt.alertId,
-      symbol,
-      exchange,
-      message: `Alert triggered: ${symbol}:${exchange} crossed ${displayPrice}`,
-      time: timestamp,
-    };
-    setAlertLogs(prev => [logEntry, ...prev]);
-    setUnreadAlertCount(prev => prev + 1);
-    // Toast notification disabled for price alerts (user prefers bottom-left only)
-    // showToast(alertMsg, 'info');
-
-    // Bottom-left visual alerts are now handled internally by alert-notification.ts (restored to original state)
-
-    // Mark corresponding alert as Triggered in the Alerts tab, or add a new history row
-    setAlerts(prev => {
-      let updated = false;
-      const next = prev.map(a => {
-        if (a._source === 'lineTools' && a.chartId === chartId && a.externalId === (evt.externalId || evt.alertId)) {
-          updated = true;
-          return { ...a, status: 'Triggered' };
-        }
-        return a;
-      });
-
-      if (!updated) {
-        next.unshift({
-          id: `lt-${chartId}-${evt.externalId || evt.alertId}-triggered-${Date.now()}`,
-          externalId: evt.externalId || evt.alertId,
-          symbol,
-          exchange,
-          price: displayPrice,
-          condition: evt.condition || `Crossing ${displayPrice}`,
-          status: 'Triggered',
-          created_at: timestamp,
-          _source: 'lineTools',
-          chartId,
-        });
-      }
-
-      return next;
-    });
   };
 
   const handleRightPanelToggle = (panel) => {
