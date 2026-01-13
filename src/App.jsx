@@ -39,6 +39,7 @@ import { useOrderHandlers } from './hooks/useOrderHandlers';
 import { useSymbolHandlers } from './hooks/useSymbolHandlers';
 import { useLayoutHandlers } from './hooks/useLayoutHandlers';
 import { useAlertHandlers } from './hooks/useAlertHandlers';
+import { useToolHandlers } from './hooks/useToolHandlers';
 import { useTheme } from './context/ThemeContext';
 import { useUser } from './context/UserContext';
 import { indicatorConfigs } from './components/IndicatorSettings/indicatorConfigs';
@@ -835,6 +836,33 @@ function AppContent({ isAuthenticated, setIsAuthenticated }) {
     setUnreadAlertCount
   });
 
+  // Tool handlers extracted to hook
+  const {
+    toggleDrawingToolbar,
+    handleToolChange,
+    handleToolUsed,
+    handleUndo,
+    handleRedo,
+    handleDownloadImage,
+    handleCopyImage,
+    handleFullScreen,
+    handleReplayClick,
+    handleReplayModeChange
+  } = useToolHandlers({
+    chartRefs,
+    activeChartId,
+    setActiveTool,
+    setIsMagnetMode,
+    setIsDrawingsHidden,
+    setIsDrawingsLocked,
+    setIsTimerVisible,
+    setShowDrawingToolbar,
+    setIsReplayMode,
+    currentSymbol,
+    showToast,
+    showSnapshotToast
+  });
+
   // Ref to store current watchlist symbols - fixes stale closure in WebSocket callback
   const watchlistSymbolsRef = useRef([]);
 
@@ -1452,158 +1480,6 @@ function AppContent({ isAuthenticated, setIsAuthenticated }) {
       return '';
     }
   });
-
-  const toggleDrawingToolbar = () => {
-    setShowDrawingToolbar(prev => !prev);
-  };
-
-  const handleToolChange = (tool) => {
-    if (tool === 'magnet') {
-      setIsMagnetMode(prev => !prev);
-    } else if (tool === 'undo') {
-      const activeRef = chartRefs.current[activeChartId];
-      if (activeRef) {
-        activeRef.undo();
-      }
-      setActiveTool(null); // Reset active tool after undo
-    } else if (tool === 'redo') {
-      const activeRef = chartRefs.current[activeChartId];
-      if (activeRef) {
-        activeRef.redo();
-      }
-      setActiveTool(null); // Reset active tool after redo
-    } else if (tool === 'clear') { // Renamed from 'remove' to 'clear' based on new logic
-      const activeRef = chartRefs.current[activeChartId];
-      if (activeRef) {
-        activeRef.clearTools();
-      }
-      setActiveTool(null); // Reset active tool after clear
-    } else if (tool === 'clear_all') { // Clear All Drawings button
-      const activeRef = chartRefs.current[activeChartId];
-      if (activeRef) {
-        activeRef.clearTools();
-      }
-      setIsDrawingsHidden(false); // Reset hidden state when all cleared
-      setIsDrawingsLocked(false); // Reset locked state when all cleared
-      setActiveTool(null); // Reset active tool after clearing all
-    } else if (tool === 'lock_all') { // Lock All Drawings toggle
-      setIsDrawingsLocked(prev => !prev);
-      setActiveTool(tool); // Pass to ChartComponent to call toggleDrawingsLock
-    } else if (tool === 'hide_drawings') { // Hide All Drawings toggle
-      setIsDrawingsHidden(prev => !prev);
-      setActiveTool(tool); // Pass to ChartComponent to call toggleDrawingsVisibility
-    } else if (tool === 'show_timer') { // Show Timer toggle
-      setIsTimerVisible(prev => !prev);
-      setActiveTool(tool); // Pass to ChartComponent to toggle timer visibility
-    } else {
-      setActiveTool(tool);
-    }
-  };
-
-  const handleToolUsed = React.useCallback(() => {
-    setActiveTool(null);
-  }, []);
-
-  // Layout handlers are now provided by useLayoutHandlers hook
-
-  // handleUndo and handleRedo are now integrated into handleToolChange, but we need wrappers for Topbar
-  const handleUndo = () => handleToolChange('undo');
-  const handleRedo = () => handleToolChange('redo');
-
-  const handleDownloadImage = async () => {
-    const activeRef = chartRefs.current[activeChartId];
-    if (activeRef) {
-      const chartContainer = activeRef.getChartContainer();
-      if (chartContainer) {
-        try {
-          const canvas = await html2canvas(chartContainer, {
-            useCORS: true,
-            allowTaint: true,
-            backgroundColor: '#131722', // Match chart background
-          });
-
-          const image = canvas.toDataURL('image/png');
-          const link = document.createElement('a');
-
-          // Format filename: SYMBOL_YYYY-MM-DD_HH-MM-SS
-          const now = new Date();
-          const dateStr = now.toISOString().split('T')[0];
-          const timeStr = now.toTimeString().split(' ')[0].replace(/:/g, '-');
-          const filename = `${currentSymbol}_${dateStr}_${timeStr}.png`;
-
-          link.href = image;
-          link.download = filename;
-          link.click();
-        } catch (error) {
-          console.error('Screenshot failed:', error);
-          showToast('Failed to download image', 'error');
-        }
-      }
-    }
-  };
-
-  const handleCopyImage = async () => {
-    const activeRef = chartRefs.current[activeChartId];
-    if (activeRef) {
-      const chartContainer = activeRef.getChartContainer();
-      if (chartContainer) {
-        try {
-          const canvas = await html2canvas(chartContainer, {
-            useCORS: true,
-            allowTaint: true,
-            backgroundColor: '#131722', // Match chart background
-          });
-
-          canvas.toBlob(async (blob) => {
-            try {
-              await navigator.clipboard.write([
-                new ClipboardItem({
-                  'image/png': blob
-                })
-              ]);
-              showSnapshotToast('Link to the chart image copied to clipboard');
-            } catch (err) {
-              console.error('Failed to copy to clipboard:', err);
-              showToast('Failed to copy to clipboard', 'error');
-            }
-          });
-        } catch (error) {
-          console.error('Screenshot failed:', error);
-          showToast('Failed to capture image', 'error');
-        }
-      }
-    }
-  };
-
-  const handleFullScreen = () => {
-    const activeRef = chartRefs.current[activeChartId];
-    if (activeRef) {
-      const chartContainer = activeRef.getChartContainer();
-      if (chartContainer) {
-        if (chartContainer.requestFullscreen) {
-          chartContainer.requestFullscreen();
-        } else if (chartContainer.webkitRequestFullscreen) { /* Safari */
-          chartContainer.webkitRequestFullscreen();
-        } else if (chartContainer.msRequestFullscreen) { /* IE11 */
-          chartContainer.msRequestFullscreen();
-        }
-      }
-    }
-  };
-
-  const handleReplayClick = () => {
-    const activeRef = chartRefs.current[activeChartId];
-    if (activeRef) {
-      activeRef.toggleReplay();
-    }
-  };
-
-  const handleReplayModeChange = (chartId, isActive) => {
-    // Only track active chart's replay mode for the topbar toggle
-    if (chartId === activeChartId) {
-      setIsReplayMode(isActive);
-    }
-  };
 
   const handleRightPanelToggle = (panel) => {
     setActiveRightPanel(panel);
