@@ -311,17 +311,18 @@ export const getOptionChain = async (underlying, exchange = 'NFO', expiryDate = 
         const underlyingConfig = UNDERLYINGS.find(u => u.symbol === underlying);
         const indexExchange = underlyingConfig?.indexExchange || (exchange === 'BFO' ? 'BSE' : 'NSE');
 
-        // The option chain API expects the F&O exchange (NFO/BFO), not the underlying exchange
-        // The 'exchange' parameter passed to this function should already be NFO or BFO
-        const optionExchange = exchange; // NFO or BFO
+        // The option chain API expects the underlying's exchange:
+        // - NSE_INDEX for index options (NIFTY, BANKNIFTY, etc.)
+        // - BSE_INDEX for BSE index options (SENSEX, BANKEX)
+        // - NSE/BSE for stock options (RELIANCE, etc.)
 
-        console.log('[OptionChain] Fetching fresh chain:', { underlying, optionExchange, indexExchange, expiryDate, strikeCount });
+        console.log('[OptionChain] Fetching fresh chain:', { underlying, exchange: indexExchange, expiryDate, strikeCount });
 
         // Update last API call time
         lastApiCallTime = Date.now();
 
-        // Call OpenAlgo Option Chain API with the F&O exchange (NFO/BFO)
-        const result = await fetchOptionChainAPI(underlying, optionExchange, expiryDate, strikeCount);
+        // Call OpenAlgo Option Chain API with the correct exchange (NSE_INDEX/BSE_INDEX for indices, NSE/BSE for stocks)
+        const result = await fetchOptionChainAPI(underlying, indexExchange, expiryDate, strikeCount);
 
         if (!result) {
             console.error('[OptionChain] API returned null');

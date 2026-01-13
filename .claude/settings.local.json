@@ -31,7 +31,12 @@
       "WebFetch(domain:raw.githubusercontent.com)",
       "Bash(git rm:*)",
       "WebFetch(domain:in.tradingview.com)",
-      "Bash(nc:*)"
+      "Bash(nc:*)",
+      "mcp__plugin_playwright_playwright__browser_navigate",
+      "mcp__plugin_playwright_playwright__browser_click",
+      "mcp__plugin_playwright_playwright__browser_take_screenshot",
+      "mcp__plugin_playwright_playwright__browser_run_code",
+      "mcp__plugin_playwright_playwright__browser_wait_for"
     ]
   }
 }
