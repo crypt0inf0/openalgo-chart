@@ -41,6 +41,7 @@ import { useLayoutHandlers } from './hooks/useLayoutHandlers';
 import { useAlertHandlers } from './hooks/useAlertHandlers';
 import { useToolHandlers } from './hooks/useToolHandlers';
 import { useUIHandlers } from './hooks/useUIHandlers';
+import { useANNScanner } from './hooks/useANNScanner';
 import { useTheme } from './context/ThemeContext';
 import { useUser } from './context/UserContext';
 import { indicatorConfigs } from './components/IndicatorSettings/indicatorConfigs';
@@ -52,7 +53,6 @@ import DepthOfMarket from './components/DepthOfMarket';
 import AccountPanel from './components/AccountPanel';
 import TradingPanel from './components/TradingPanel/TradingPanel';
 import ANNScanner from './components/ANNScanner';
-import { scanStocks } from './services/annScannerService';
 import ChartTemplatesDialog from './components/ChartTemplates/ChartTemplatesDialog';
 import ShortcutsSettings from './components/ShortcutsSettings/ShortcutsSettings';
 import {
@@ -367,124 +367,8 @@ function AppContent({ isAuthenticated, setIsAuthenticated }) {
     scanError: null,
   });
 
-  // AbortController ref for background ANN scan
-  const annScanAbortRef = useRef(null);
-
-  // Background scan function - runs even when ANNScanner tab is not visible
-  const startAnnScan = useCallback(async (stocksToScan, alertsEnabled = true, showToastFn = null) => {
-    if (annScannerState.isScanning) return;
-
-    // Cancel any existing scan
-    if (annScanAbortRef.current) {
-      annScanAbortRef.current.abort();
-    }
-    annScanAbortRef.current = new AbortController();
-
-    // Save previous results, start scanning
-    setAnnScannerState(prev => ({
-      ...prev,
-      isScanning: true,
-      scanError: null,
-      progress: { current: 0, total: stocksToScan.length },
-      previousResults: prev.results,
-      results: [],
-    }));
-
-    try {
-      const scanResults = await scanStocks(
-        stocksToScan,
-        { threshold: 0.0014, daysToFetch: 60, delayMs: 100 },
-        (current, total, result) => {
-          // Update progress and results incrementally
-          setAnnScannerState(prev => ({
-            ...prev,
-            progress: { current, total },
-            results: [...prev.results, result],
-          }));
-        },
-        annScanAbortRef.current.signal
-      );
-
-      // Scan completed - update state
-      setAnnScannerState(prev => {
-        // Detect signal changes for alerts
-        const oldMap = new Map(prev.previousResults.map(r => [r.symbol, r]));
-        const changes = [];
-        scanResults.forEach(newItem => {
-          const oldItem = oldMap.get(newItem.symbol);
-          if (oldItem && oldItem.direction !== newItem.direction) {
-            if (oldItem.direction && newItem.direction) {
-              changes.push({
-                symbol: newItem.symbol,
-                from: oldItem.direction,
-                to: newItem.direction,
-              });
-            }
-          }
-        });
-
-        // Handle alerts if enabled
-        if (changes.length > 0 && alertsEnabled) {
-          // Play alert sound
-          try {
-            const audio = new Audio('/sounds/alert.mp3');
-            audio.volume = 0.5;
-            audio.play().catch(() => {});
-          } catch (e) {}
-
-          // Browser notification
-          if ('Notification' in window && Notification.permission === 'granted') {
-            changes.forEach(change => {
-              new Notification('ANN Signal Change', {
-                body: `${change.symbol}: ${change.from} → ${change.to}`,
-                icon: '/favicon.ico',
-              });
-            });
-          }
-
-          // Toast notification
-          if (showToastFn) {
-            const msg = changes.length === 1
-              ? `${changes[0].symbol} flipped to ${changes[0].to}`
-              : `${changes.length} stocks changed signals`;
-            showToastFn(msg, 'warning');
-          }
-        }
-
-        return {
-          ...prev,
-          isScanning: false,
-          lastScanTime: new Date(),
-        };
-      });
-
-    } catch (err) {
-      if (err.name !== 'AbortError') {
-        setAnnScannerState(prev => ({
-          ...prev,
-          isScanning: false,
-          scanError: err.message || 'Scan failed',
-        }));
-      } else {
-        // Scan was cancelled - just mark as not scanning
-        setAnnScannerState(prev => ({
-          ...prev,
-          isScanning: false,
-        }));
-      }
-    }
-  }, [annScannerState.isScanning]);
-
-  // Cancel scan function
-  const cancelAnnScan = useCallback(() => {
-    if (annScanAbortRef.current) {
-      annScanAbortRef.current.abort();
-    }
-    setAnnScannerState(prev => ({
-      ...prev,
-      isScanning: false,
-    }));
-  }, []);
+  // ANN Scanner background scan handlers
+  const { startAnnScan, cancelAnnScan } = useANNScanner(annScannerState, setAnnScannerState);
 
   // Sector Heatmap Modal State
   const [isSectorHeatmapOpen, setIsSectorHeatmapOpen] = useState(false);
