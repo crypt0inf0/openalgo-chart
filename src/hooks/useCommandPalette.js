@@ -1,20 +1,9 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { fuzzySearch } from '../utils/fuzzySearch';
 import { THEMES } from '../styles/themes';
+import { getJSON, setJSON, STORAGE_KEYS } from '../services/storageService';
 
 const MAX_RECENT = 5;
-const RECENT_KEY = 'tv_recent_commands';
-
-/**
- * Safe JSON parse helper
- */
-const safeParseJSON = (str, fallback) => {
-    try {
-        return str ? JSON.parse(str) : fallback;
-    } catch {
-        return fallback;
-    }
-};
 
 /**
  * Command categories
@@ -271,7 +260,7 @@ const buildCommands = (handlers) => {
 export const useCommandPalette = (handlers) => {
     // Recent commands state
     const [recentCommandIds, setRecentCommandIds] = useState(() => {
-        const saved = safeParseJSON(localStorage.getItem(RECENT_KEY), []);
+        const saved = getJSON(STORAGE_KEYS.RECENT_COMMANDS, []);
         return Array.isArray(saved) ? saved : [];
     });
 
@@ -280,11 +269,7 @@ export const useCommandPalette = (handlers) => {
 
     // Persist recent commands to localStorage
     useEffect(() => {
-        try {
-            localStorage.setItem(RECENT_KEY, JSON.stringify(recentCommandIds));
-        } catch (error) {
-            console.error('Failed to persist recent commands:', error);
-        }
+        setJSON(STORAGE_KEYS.RECENT_COMMANDS, recentCommandIds);
     }, [recentCommandIds]);
 
     /**

@@ -47,6 +47,14 @@ export const STORAGE_KEYS = {
 
   // Templates
   TEMPLATE_FAVORITES: 'tv_template_favorites',
+  LAYOUT_TEMPLATES: 'tv_layout_templates',
+
+  // Command Palette
+  RECENT_COMMANDS: 'tv_recent_commands',
+
+  // Symbol History
+  SYMBOL_FAVORITES: 'tv_symbol_favorites',
+  RECENT_SYMBOLS: 'tv_recent_symbols',
 
   // Sync
   CLOUD_SYNC_DONE: '_cloud_sync_done',

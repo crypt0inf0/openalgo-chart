@@ -56,21 +56,8 @@ export const sanitizeCustomIntervals = (raw) => {
 
 // ============== JSON/Storage Utilities ==============
 
-/**
- * Safely parses JSON from a string
- * @param {string} value - JSON string to parse
- * @param {*} fallback - Fallback value if parsing fails
- * @returns {*} Parsed value or fallback
- */
-export const safeParseJSON = (value, fallback) => {
-    if (!value) return fallback;
-    try {
-        return JSON.parse(value);
-    } catch (error) {
-        console.error('Failed to parse JSON from localStorage:', error);
-        return fallback;
-    }
-};
+// Re-export from centralized storage service
+export { safeParseJSON } from '../services/storageService';
 
 // ============== Alert Constants ==============
 

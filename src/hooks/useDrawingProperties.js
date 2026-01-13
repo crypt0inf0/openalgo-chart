@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { getJSON, setJSON, STORAGE_KEYS } from '../services/storageService';
 
 /**
  * Default drawing options for line tools
@@ -39,19 +40,6 @@ export const PRESET_COLORS = [
     '#FFFFFF', // White
 ];
 
-const STORAGE_KEY = 'tv_drawing_defaults';
-
-/**
- * Safe JSON parse helper
- */
-const safeParseJSON = (str, fallback) => {
-    try {
-        return str ? JSON.parse(str) : fallback;
-    } catch {
-        return fallback;
-    }
-};
-
 /**
  * Hook for managing drawing tool properties
  * @param {string|null} activeTool - Currently active drawing tool name
@@ -78,13 +66,13 @@ export const useDrawingProperties = (activeTool = null) => {
 
     // Load defaults from localStorage
     const [defaults, setDefaults] = useState(() => {
-        const saved = safeParseJSON(localStorage.getItem(STORAGE_KEY), null);
+        const saved = getJSON(STORAGE_KEYS.DRAWING_DEFAULTS, null);
         return saved ? { ...DEFAULT_DRAWING_OPTIONS, ...saved } : DEFAULT_DRAWING_OPTIONS;
     });
 
     // Persist to localStorage when defaults change
     useEffect(() => {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(defaults));
+        setJSON(STORAGE_KEYS.DRAWING_DEFAULTS, defaults);
     }, [defaults]);
 
     // Check if panel should be visible

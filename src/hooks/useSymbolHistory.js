@@ -1,19 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
+import { getJSON, setJSON, STORAGE_KEYS } from '../services/storageService';
 
 const MAX_RECENT = 10;
-const FAVORITES_KEY = 'tv_symbol_favorites';
-const RECENT_KEY = 'tv_recent_symbols';
-
-/**
- * Safe JSON parse helper
- */
-const safeParseJSON = (str, fallback) => {
-    try {
-        return str ? JSON.parse(str) : fallback;
-    } catch {
-        return fallback;
-    }
-};
 
 /**
  * Normalize symbol data to consistent format
@@ -52,32 +40,24 @@ const isSameSymbol = (a, b) => {
 export const useSymbolHistory = () => {
     // Favorites state
     const [favorites, setFavorites] = useState(() => {
-        const saved = safeParseJSON(localStorage.getItem(FAVORITES_KEY), []);
+        const saved = getJSON(STORAGE_KEYS.SYMBOL_FAVORITES, []);
         return Array.isArray(saved) ? saved : [];
     });
 
     // Recent symbols state
     const [recentSymbols, setRecentSymbols] = useState(() => {
-        const saved = safeParseJSON(localStorage.getItem(RECENT_KEY), []);
+        const saved = getJSON(STORAGE_KEYS.RECENT_SYMBOLS, []);
         return Array.isArray(saved) ? saved : [];
     });
 
     // Persist favorites to localStorage
     useEffect(() => {
-        try {
-            localStorage.setItem(FAVORITES_KEY, JSON.stringify(favorites));
-        } catch (error) {
-            console.error('Failed to persist favorites:', error);
-        }
+        setJSON(STORAGE_KEYS.SYMBOL_FAVORITES, favorites);
     }, [favorites]);
 
     // Persist recent symbols to localStorage
     useEffect(() => {
-        try {
-            localStorage.setItem(RECENT_KEY, JSON.stringify(recentSymbols));
-        } catch (error) {
-            console.error('Failed to persist recent symbols:', error);
-        }
+        setJSON(STORAGE_KEYS.RECENT_SYMBOLS, recentSymbols);
     }, [recentSymbols]);
 
     /**

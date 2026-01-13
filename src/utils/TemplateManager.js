@@ -1,21 +1,5 @@
 // Template Manager for saving and loading drawing configurations
-const safeParseJSON = (value, fallback) => {
-    if (!value) return fallback;
-    try {
-        return JSON.parse(value);
-    } catch (error) {
-        console.error('TemplateManager: Failed to parse JSON from localStorage', error);
-        return fallback;
-    }
-};
-
-const safeSetItem = (key, data) => {
-    try {
-        localStorage.setItem(key, data);
-    } catch (error) {
-        console.error(`TemplateManager: Failed to persist ${key}`, error);
-    }
-};
+import { getJSON, setJSON, STORAGE_KEYS } from '../services/storageService';
 
 export class TemplateManager {
     constructor() {
@@ -24,7 +8,7 @@ export class TemplateManager {
 
     // Load templates from localStorage
     loadTemplates() {
-        const saved = safeParseJSON(localStorage.getItem('tv_drawing_templates'), null);
+        const saved = getJSON(STORAGE_KEYS.DRAWING_TEMPLATES, null);
         if (saved && typeof saved === 'object') {
             return saved;
         }
@@ -183,7 +167,7 @@ export class TemplateManager {
 
     // Persist templates to localStorage
     persist() {
-        safeSetItem('tv_drawing_templates', JSON.stringify(this.templates));
+        setJSON(STORAGE_KEYS.DRAWING_TEMPLATES, this.templates);
     }
 
     // Export templates as JSON file
@@ -230,7 +214,7 @@ export class TemplateManager {
 
     // Get favorite templates (stored separately)
     getFavorites() {
-        const saved = safeParseJSON(localStorage.getItem('tv_template_favorites'), []);
+        const saved = getJSON(STORAGE_KEYS.TEMPLATE_FAVORITES, []);
         return Array.isArray(saved) ? saved : [];
     }
 
@@ -245,7 +229,7 @@ export class TemplateManager {
             favorites.splice(index, 1);
         }
 
-        safeSetItem('tv_template_favorites', JSON.stringify(favorites));
+        setJSON(STORAGE_KEYS.TEMPLATE_FAVORITES, favorites);
         return favorites;
     }
 }

@@ -3,6 +3,8 @@
  * URL configuration and utilities for OpenAlgo API
  */
 
+import { getString, STORAGE_KEYS } from './storageService';
+
 const DEFAULT_HOST = 'http://127.0.0.1:5000';
 const DEFAULT_WS_HOST = '127.0.0.1:8765';
 
@@ -10,7 +12,7 @@ const DEFAULT_WS_HOST = '127.0.0.1:8765';
  * Get Host URL from localStorage settings or use default
  */
 export const getHostUrl = () => {
-    return localStorage.getItem('oa_host_url') || DEFAULT_HOST;
+    return getString(STORAGE_KEYS.OA_HOST_URL, DEFAULT_HOST);
 };
 
 /**
@@ -51,7 +53,7 @@ export const getLoginUrl = () => {
  * Uses Vite proxy in development for localhost
  */
 export const getWebSocketUrl = () => {
-    const wsHost = localStorage.getItem('oa_ws_url') || DEFAULT_WS_HOST;
+    const wsHost = getString(STORAGE_KEYS.OA_WS_URL, DEFAULT_WS_HOST);
 
     // Check if we're in local development with default WebSocket host
     const isDefaultWsHost = wsHost === DEFAULT_WS_HOST || wsHost === '127.0.0.1:8765' || wsHost === 'localhost:8765';
@@ -77,7 +79,7 @@ export const getWebSocketUrl = () => {
 export const checkAuth = async () => {
     try {
         // Check if API key exists in localStorage (set by OpenAlgo after login)
-        const apiKey = localStorage.getItem('oa_apikey');
+        const apiKey = getString(STORAGE_KEYS.OA_API_KEY, '');
 
         if (!apiKey || apiKey.trim() === '') {
             // No API key means not logged in
@@ -96,7 +98,7 @@ export const checkAuth = async () => {
  * Get API key from localStorage (set by OpenAlgo after login)
  */
 export const getApiKey = () => {
-    return localStorage.getItem('oa_apikey') || '';
+    return getString(STORAGE_KEYS.OA_API_KEY, '');
 };
 
 /**

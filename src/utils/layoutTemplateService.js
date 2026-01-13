@@ -3,20 +3,10 @@
  * Handles CRUD operations for layout templates with localStorage persistence
  */
 
-const TEMPLATES_KEY = 'tv_layout_templates';
+import { getJSON, setJSON, STORAGE_KEYS } from '../services/storageService';
+
 const MAX_TEMPLATES = 50;
 const EXPORT_VERSION = '1.0';
-
-/**
- * Safe JSON parse helper
- */
-const safeParseJSON = (str, fallback) => {
-    try {
-        return str ? JSON.parse(str) : fallback;
-    } catch {
-        return fallback;
-    }
-};
 
 /**
  * Generate unique template ID
@@ -28,7 +18,7 @@ const generateId = () => `template_${Date.now()}_${Math.random().toString(36).su
  * @returns {Array} Array of template objects
  */
 export const getAll = () => {
-    const saved = safeParseJSON(localStorage.getItem(TEMPLATES_KEY), []);
+    const saved = getJSON(STORAGE_KEYS.LAYOUT_TEMPLATES, []);
     return Array.isArray(saved) ? saved : [];
 };
 
@@ -47,13 +37,7 @@ export const getById = (id) => {
  * @param {Array} templates - Array of templates
  */
 const saveAll = (templates) => {
-    try {
-        localStorage.setItem(TEMPLATES_KEY, JSON.stringify(templates));
-        return true;
-    } catch (error) {
-        console.error('Failed to save templates:', error);
-        return false;
-    }
+    return setJSON(STORAGE_KEYS.LAYOUT_TEMPLATES, templates);
 };
 
 /**
