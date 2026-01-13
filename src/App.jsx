@@ -37,6 +37,7 @@ import { useIndicatorHandlers } from './hooks/useIndicatorHandlers';
 import { useIntervalHandlers } from './hooks/useIntervalHandlers';
 import { useOrderHandlers } from './hooks/useOrderHandlers';
 import { useSymbolHandlers } from './hooks/useSymbolHandlers';
+import { useLayoutHandlers } from './hooks/useLayoutHandlers';
 import { useTheme } from './context/ThemeContext';
 import { useUser } from './context/UserContext';
 import { indicatorConfigs } from './components/IndicatorSettings/indicatorConfigs';
@@ -789,6 +790,26 @@ function AppContent({ isAuthenticated, setIsAuthenticated }) {
     setSearchMode
   });
 
+  // Layout handlers extracted to hook
+  const {
+    handleLayoutChange,
+    handleMaximizeChart,
+    handleSaveLayout
+  } = useLayoutHandlers({
+    layout,
+    setLayout,
+    charts,
+    setCharts,
+    activeChart,
+    activeChartId,
+    setActiveChartId,
+    isMaximized,
+    setIsMaximized,
+    prevLayoutRef,
+    showSnapshotToast,
+    showToast
+  });
+
   // Ref to store current watchlist symbols - fixes stale closure in WebSocket callback
   const watchlistSymbolsRef = useRef([]);
 
@@ -1458,94 +1479,7 @@ function AppContent({ isAuthenticated, setIsAuthenticated }) {
     setActiveTool(null);
   }, []);
 
-  // const chartComponentRef = React.useRef(null); // Removed in favor of chartRefs
-
-  const handleLayoutChange = (newLayout) => {
-    setLayout(newLayout);
-    const count = parseInt(newLayout);
-    setCharts(prev => {
-      const newCharts = [...prev];
-      if (newCharts.length < count) {
-        // Add new charts with empty indicators array (per-indicator system)
-        for (let i = newCharts.length; i < count; i++) {
-          newCharts.push({
-            id: i + 1,
-            symbol: activeChart.symbol,
-            exchange: activeChart.exchange || 'NSE',
-            interval: activeChart.interval,
-            indicators: [], // Empty array - indicators added individually
-            comparisonSymbols: [],
-            strategyConfig: null
-          });
-        }
-      } else if (newCharts.length > count) {
-        // Remove charts
-        newCharts.splice(count);
-      }
-      return newCharts;
-    });
-    // Ensure active chart is valid
-    if (activeChartId > count) {
-      setActiveChartId(1);
-    }
-  };
-
-  // Handle Alt+click maximize/restore for split charts
-  const handleMaximizeChart = (chartId) => {
-    if (!isMaximized) {
-      // Maximize: save current layout and switch to single chart
-      prevLayoutRef.current = layout;
-      setIsMaximized(true);
-      setLayout('1');
-      setActiveChartId(chartId);
-    } else {
-      // Restore: go back to previous layout
-      setIsMaximized(false);
-      if (prevLayoutRef.current && prevLayoutRef.current !== '1') {
-        setLayout(prevLayoutRef.current);
-      }
-      prevLayoutRef.current = null;
-    }
-  };
-
-  const handleSaveLayout = async () => {
-    const layoutData = {
-      layout,
-      charts
-    };
-    try {
-      // Save to localStorage
-      localStorage.setItem('tv_saved_layout', JSON.stringify(layoutData));
-
-      // Immediately sync to cloud
-      const SYNC_KEYS = [
-        'tv_saved_layout', 'tv_watchlists', 'tv_theme', 'tv_fav_intervals_v2',
-        'tv_custom_intervals', 'tv_drawing_defaults', 'tv_alerts', 'tv_alert_logs',
-        'tv_last_nonfav_interval', 'tv_interval', 'tv_chart_appearance',
-        'tv_drawing_templates', 'tv_template_favorites', 'tv_symbol_favorites',
-        'tv_recent_symbols', 'tv_layout_templates', 'tv_favorite_drawing_tools',
-        'tv_floating_toolbar_pos', 'tv_recent_commands'
-      ];
-
-      const prefsToSave = {};
-      SYNC_KEYS.forEach(key => {
-        const value = localStorage.getItem(key);
-        if (value !== null) {
-          prefsToSave[key] = value;
-        }
-      });
-
-      const success = await saveUserPreferences(prefsToSave);
-      if (success) {
-        showSnapshotToast('Layout saved to cloud');
-      } else {
-        showSnapshotToast('Layout saved locally');
-      }
-    } catch (error) {
-      console.error('Failed to save layout:', error);
-      showToast('Failed to save layout', 'error');
-    }
-  };
+  // Layout handlers are now provided by useLayoutHandlers hook
 
   // handleUndo and handleRedo are now integrated into handleToolChange, but we need wrappers for Topbar
   const handleUndo = () => handleToolChange('undo');
