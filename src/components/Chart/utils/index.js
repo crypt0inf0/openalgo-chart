@@ -7,3 +7,4 @@ export * from './chartHelpers';
 export * from './seriesFactories';
 export * from './chartConfig';
 export * from './indicatorCreators';
+export * from './indicatorUpdaters';
