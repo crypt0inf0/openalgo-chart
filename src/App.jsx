@@ -36,6 +36,7 @@ import { useWatchlistHandlers } from './hooks/useWatchlistHandlers';
 import { useIndicatorHandlers } from './hooks/useIndicatorHandlers';
 import { useIntervalHandlers } from './hooks/useIntervalHandlers';
 import { useOrderHandlers } from './hooks/useOrderHandlers';
+import { useSymbolHandlers } from './hooks/useSymbolHandlers';
 import { useTheme } from './context/ThemeContext';
 import { useUser } from './context/UserContext';
 import { indicatorConfigs } from './components/IndicatorSettings/indicatorConfigs';
@@ -771,6 +772,23 @@ function AppContent({ isAuthenticated, setIsAuthenticated }) {
     activeChartId
   });
 
+  // Symbol handlers extracted to hook
+  const {
+    handleSymbolChange,
+    handleRemoveFromWatchlist,
+    handleAddClick,
+    handleSymbolClick,
+    handleCompareClick
+  } = useSymbolHandlers({
+    searchMode,
+    setCharts,
+    activeChartId,
+    watchlistSymbols,
+    setWatchlistsState,
+    setIsSearchOpen,
+    setSearchMode
+  });
+
   // Ref to store current watchlist symbols - fixes stale closure in WebSocket callback
   const watchlistSymbolsRef = useRef([]);
 
@@ -1322,106 +1340,7 @@ function AppContent({ isAuthenticated, setIsAuthenticated }) {
   // useEffect(() => { subscribeToMultiTicker(alertWsSymbols, ...) });
 
   // Watchlist handlers are now provided by useWatchlistHandlers hook
-
-  const handleSymbolChange = (symbolData) => {
-    // Handle both string (legacy) and object format { symbol, exchange }
-    const symbol = typeof symbolData === 'string' ? symbolData : symbolData.symbol;
-    const exchange = typeof symbolData === 'string' ? 'NSE' : (symbolData.exchange || 'NSE');
-
-    if (searchMode === 'switch') {
-      setCharts(prev => prev.map(chart =>
-        chart.id === activeChartId ? { ...chart, symbol: symbol, exchange: exchange, strategyConfig: null } : chart
-      ));
-    } else if (searchMode === 'compare') {
-      const colors = ['#f57f17', '#e91e63', '#9c27b0', '#673ab7', '#3f51b5'];
-      setCharts(prev => prev.map(chart => {
-        if (chart.id === activeChartId) {
-          const currentComparisons = chart.comparisonSymbols || [];
-          // Check both symbol AND exchange to allow same symbol from different exchanges
-          const exists = currentComparisons.find(c => c.symbol === symbol && c.exchange === exchange);
-
-          if (exists) {
-            // Remove (match both symbol and exchange)
-            return {
-              ...chart,
-              comparisonSymbols: currentComparisons.filter(c => !(c.symbol === symbol && c.exchange === exchange))
-            };
-          } else {
-            // Add
-            const nextColor = colors[currentComparisons.length % colors.length];
-            return {
-              ...chart,
-              comparisonSymbols: [
-                ...currentComparisons,
-                { symbol: symbol, exchange: exchange, color: nextColor }
-              ]
-            };
-          }
-        }
-        return chart;
-      }));
-      // Do not close search in compare mode to allow multiple selections
-    } else {
-      // Add to watchlist mode
-      // Check both symbol AND exchange to allow same symbol from different exchanges
-      const existsInWatchlist = watchlistSymbols.some(s => {
-        if (typeof s === 'string') return s === symbol;
-        return s.symbol === symbol && s.exchange === exchange;
-      });
-      if (!existsInWatchlist) {
-        setWatchlistsState(prev => ({
-          ...prev,
-          lists: prev.lists.map(wl =>
-            wl.id === prev.activeListId
-              ? { ...wl, symbols: [...wl.symbols, { symbol, exchange }] }
-              : wl
-          ),
-        }));
-        // Silent - no toast for symbol add
-      }
-      setIsSearchOpen(false);
-    }
-  };
-
-  const handleRemoveFromWatchlist = (symbolData) => {
-    const symbolToRemove = typeof symbolData === 'string' ? symbolData : symbolData.symbol;
-    const exchangeToRemove = typeof symbolData === 'string' ? null : symbolData.exchange;
-    setWatchlistsState(prev => ({
-      ...prev,
-      lists: prev.lists.map(wl =>
-        wl.id === prev.activeListId
-          ? {
-            ...wl,
-            symbols: wl.symbols.filter(s => {
-              // If s is a string, compare by symbol name only
-              if (typeof s === 'string') return s !== symbolToRemove;
-              // If we have exchange info, match both symbol and exchange
-              if (exchangeToRemove) {
-                return !(s.symbol === symbolToRemove && s.exchange === exchangeToRemove);
-              }
-              // Fallback: match by symbol only (backward compatibility)
-              return s.symbol !== symbolToRemove;
-            })
-          }
-          : wl
-      ),
-    }));
-  };
-
-  const handleAddClick = () => {
-    setSearchMode('add');
-    setIsSearchOpen(true);
-  };
-
-  const handleSymbolClick = () => {
-    setSearchMode('switch');
-    setIsSearchOpen(true);
-  };
-
-  const handleCompareClick = () => {
-    setSearchMode('compare');
-    setIsSearchOpen(true);
-  };
+  // Symbol handlers are now provided by useSymbolHandlers hook
 
   const toggleIndicator = (name) => {
     setCharts(prev => prev.map(chart => {
