@@ -158,6 +158,23 @@ export const debounce = (func, wait) => {
 };
 
 /**
+ * Format time difference in human-readable format
+ * @param {number} ms - Time difference in milliseconds
+ * @returns {string} Formatted time string (e.g., "2d 5h", "3h 45m", "10m", "30s")
+ */
+export const formatTimeDiff = (ms) => {
+  const seconds = Math.floor(ms / 1000);
+  const minutes = Math.floor(seconds / 60);
+  const hours = Math.floor(minutes / 60);
+  const days = Math.floor(hours / 24);
+
+  if (days > 0) return `${days}d ${hours % 24}h`;
+  if (hours > 0) return `${hours}h ${minutes % 60}m`;
+  if (minutes > 0) return `${minutes}m`;
+  return `${seconds}s`;
+};
+
+/**
  * Add future whitespace points for time axis display
  * Whitespace points are data objects with only 'time' property (no price data)
  * This allows lightweight-charts to render future time labels on the axis

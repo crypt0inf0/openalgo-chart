@@ -53,7 +53,7 @@ import { useChartResize } from '../../hooks/useChartResize';
 import { useChartDrawings } from '../../hooks/useChartDrawings';
 import { useChartAlerts } from '../../hooks/useChartAlerts';
 import { getChartTheme, getThemeType } from '../../utils/chartTheme';
-import { TOOL_MAP, hexToRgba, areSymbolsEquivalent, addFutureWhitespacePoints } from './utils/chartHelpers';
+import { TOOL_MAP, hexToRgba, areSymbolsEquivalent, addFutureWhitespacePoints, formatTimeDiff } from './utils/chartHelpers';
 import { createSeries, transformData } from './utils/seriesFactories';
 import { saveAlertsForSymbol, loadAlertsForSymbol } from '../../services/alertService';
 
@@ -902,18 +902,6 @@ const ChartComponent = forwardRef(({
     // Shift+Click Quick Measure Tool - chart click handler
     useEffect(() => {
         if (!chartRef.current || !mainSeriesRef.current) return;
-
-        const formatTimeDiff = (ms) => {
-            const seconds = Math.floor(ms / 1000);
-            const minutes = Math.floor(seconds / 60);
-            const hours = Math.floor(minutes / 60);
-            const days = Math.floor(hours / 24);
-
-            if (days > 0) return `${days}d ${hours % 24}h`;
-            if (hours > 0) return `${hours}h ${minutes % 60}m`;
-            if (minutes > 0) return `${minutes}m`;
-            return `${seconds}s`;
-        };
 
         const handleChartClick = (param) => {
             if (!isShiftPressedRef.current) return;
