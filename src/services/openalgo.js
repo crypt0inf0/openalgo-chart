@@ -688,13 +688,13 @@ export default {
     saveDrawings,
     loadDrawings,
     // Accounts API
-    ping,
-    getFunds,
-    getPositionBook,
-    getOrderBook,
-    getTradeBook,
-    getHoldings,
-    placeOrder,
-    modifyOrder,
-    cancelOrder
+    ping: pingService,
+    getFunds: getFundsService,
+    getPositionBook: getPositionBookService,
+    getOrderBook: getOrderBookService,
+    getTradeBook: getTradeBookService,
+    getHoldings: getHoldingsService,
+    placeOrder: placeOrderService,
+    modifyOrder: modifyOrderService,
+    cancelOrder: cancelOrderService
 };

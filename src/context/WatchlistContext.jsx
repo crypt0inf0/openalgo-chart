@@ -5,8 +5,19 @@
 
 import React, { createContext, useContext, useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { STORAGE_KEYS } from '../constants/storageKeys';
-import { safeParseJSON } from '../services/storageService';
 import logger from '../utils/logger';
+
+// Local safeParseJSON to avoid import issues
+const safeParseJSON = (value, fallback = null) => {
+    if (value === null || value === undefined) {
+        return fallback;
+    }
+    try {
+        return JSON.parse(value);
+    } catch {
+        return fallback;
+    }
+};
 
 // Default watchlist configuration
 const DEFAULT_WATCHLIST = {

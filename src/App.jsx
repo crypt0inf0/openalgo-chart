@@ -236,6 +236,43 @@ function AppContent({ isAuthenticated, setIsAuthenticated }) {
   const MAX_TOASTS = 3;
 
   const [snapshotToast, setSnapshotToast] = useState(null);
+
+  // Toast timeout refs for cleanup
+  const snapshotToastTimeoutRef = React.useRef(null);
+
+  // Show toast helper with queue management - defined early for use in hooks
+  const showToast = (message, type = 'error', action = null) => {
+    const id = ++toastIdCounter.current;
+    const newToast = { id, message, type, action };
+
+    setToasts(prev => {
+      // Add new toast, limit to MAX_TOASTS (oldest removed first)
+      const updated = [...prev, newToast];
+      if (updated.length > MAX_TOASTS) {
+        return updated.slice(-MAX_TOASTS);
+      }
+      return updated;
+    });
+
+    // Auto-remove after 5 seconds
+    setTimeout(() => {
+      setToasts(prev => prev.filter(t => t.id !== id));
+    }, 5000);
+  };
+
+  // Remove a specific toast
+  const removeToast = (id) => {
+    setToasts(prev => prev.filter(t => t.id !== id));
+  };
+
+  const showSnapshotToast = (message) => {
+    if (snapshotToastTimeoutRef.current) {
+      clearTimeout(snapshotToastTimeoutRef.current);
+    }
+    setSnapshotToast(message);
+    snapshotToastTimeoutRef.current = setTimeout(() => setSnapshotToast(null), 3000);
+  };
+
   const [isAlertOpen, setIsAlertOpen] = useState(false);
   const [alertPrice, setAlertPrice] = useState(null);
 
@@ -458,42 +495,6 @@ function AppContent({ isAuthenticated, setIsAuthenticated }) {
       console.error('Failed to persist drawing defaults:', error);
     }
   }, [drawingDefaults]);
-
-  // Toast timeout refs for cleanup
-  const snapshotToastTimeoutRef = React.useRef(null);
-
-  // Show toast helper with queue management
-  const showToast = (message, type = 'error', action = null) => {
-    const id = ++toastIdCounter.current;
-    const newToast = { id, message, type, action };
-
-    setToasts(prev => {
-      // Add new toast, limit to MAX_TOASTS (oldest removed first)
-      const updated = [...prev, newToast];
-      if (updated.length > MAX_TOASTS) {
-        return updated.slice(-MAX_TOASTS);
-      }
-      return updated;
-    });
-
-    // Auto-remove after 5 seconds
-    setTimeout(() => {
-      setToasts(prev => prev.filter(t => t.id !== id));
-    }, 5000);
-  };
-
-  // Remove a specific toast
-  const removeToast = (id) => {
-    setToasts(prev => prev.filter(t => t.id !== id));
-  };
-
-  const showSnapshotToast = (message) => {
-    if (snapshotToastTimeoutRef.current) {
-      clearTimeout(snapshotToastTimeoutRef.current);
-    }
-    setSnapshotToast(message);
-    snapshotToastTimeoutRef.current = setTimeout(() => setSnapshotToast(null), 3000);
-  };
 
   // Order handlers are now provided by useOrderHandlers hook
 
@@ -733,6 +734,46 @@ function AppContent({ isAuthenticated, setIsAuthenticated }) {
     skipNextSyncRef,
     setAlertLogs,
     setUnreadAlertCount
+  });
+
+  // Tool-related state - moved early for use in useToolHandlers
+  const [activeTool, setActiveTool] = useState(null);
+  const [isMagnetMode, setIsMagnetMode] = useState(false);
+  const [showDrawingToolbar, setShowDrawingToolbar] = useState(true);
+  const [isReplayMode, setIsReplayMode] = useState(false);
+  const [isDrawingsLocked, setIsDrawingsLocked] = useState(false);
+  const [isDrawingsHidden, setIsDrawingsHidden] = useState(false);
+  const [isTimerVisible, setIsTimerVisible] = useLocalStorage('oa_timer_visible', false);
+  const [isSessionBreakVisible, setIsSessionBreakVisible] = useLocalStorage('oa_session_break_visible', false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isIndicatorSettingsOpen, setIsIndicatorSettingsOpen] = useState(false);
+  const [websocketUrl, setWebsocketUrl] = useState(() => {
+    try {
+      return localStorage.getItem('oa_ws_url') || '127.0.0.1:8765';
+    } catch {
+      return '127.0.0.1:8765';
+    }
+  });
+  const [apiKey, setApiKey] = useState(() => {
+    try {
+      return localStorage.getItem('oa_apikey') || '';
+    } catch {
+      return '';
+    }
+  });
+  const [hostUrl, setHostUrl] = useState(() => {
+    try {
+      return localStorage.getItem('oa_host_url') || 'http://127.0.0.1:5000';
+    } catch {
+      return 'http://127.0.0.1:5000';
+    }
+  });
+  const [openalgoUsername, setOpenalgoUsername] = useState(() => {
+    try {
+      return localStorage.getItem('oa_username') || '';
+    } catch {
+      return '';
+    }
   });
 
   // Tool handlers extracted to hook
@@ -1389,47 +1430,8 @@ function AppContent({ isAuthenticated, setIsAuthenticated }) {
 
   // Indicator handlers are now provided by useIndicatorHandlers hook
 
-  const [activeTool, setActiveTool] = useState(null);
-  const [isMagnetMode, setIsMagnetMode] = useState(false);
-  const [showDrawingToolbar, setShowDrawingToolbar] = useState(true);
-
   // Check if properties panel should be visible
   const isDrawingPanelVisible = activeTool && DRAWING_TOOLS.includes(activeTool);
-  const [isReplayMode, setIsReplayMode] = useState(false);
-  const [isDrawingsLocked, setIsDrawingsLocked] = useState(false);
-  const [isDrawingsHidden, setIsDrawingsHidden] = useState(false);
-  const [isTimerVisible, setIsTimerVisible] = useLocalStorage('oa_timer_visible', false);
-  const [isSessionBreakVisible, setIsSessionBreakVisible] = useLocalStorage('oa_session_break_visible', false);
-  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const [isIndicatorSettingsOpen, setIsIndicatorSettingsOpen] = useState(false);
-  const [websocketUrl, setWebsocketUrl] = useState(() => {
-    try {
-      return localStorage.getItem('oa_ws_url') || '127.0.0.1:8765';
-    } catch {
-      return '127.0.0.1:8765';
-    }
-  });
-  const [apiKey, setApiKey] = useState(() => {
-    try {
-      return localStorage.getItem('oa_apikey') || '';
-    } catch {
-      return '';
-    }
-  });
-  const [hostUrl, setHostUrl] = useState(() => {
-    try {
-      return localStorage.getItem('oa_host_url') || 'http://127.0.0.1:5000';
-    } catch {
-      return 'http://127.0.0.1:5000';
-    }
-  });
-  const [openalgoUsername, setOpenalgoUsername] = useState(() => {
-    try {
-      return localStorage.getItem('oa_username') || '';
-    } catch {
-      return '';
-    }
-  });
 
   // Command Palette (Cmd+K / Ctrl+K)
   const commandPaletteHandlers = React.useMemo(() => ({

@@ -56,8 +56,9 @@ export const sanitizeCustomIntervals = (raw) => {
 
 // ============== JSON/Storage Utilities ==============
 
-// Re-export from centralized storage service
-export { safeParseJSON } from '../services/storageService';
+// Import and re-export from centralized storage service
+import { safeParseJSON as _safeParseJSON } from '../services/storageService';
+export const safeParseJSON = _safeParseJSON;
 
 // ============== Alert Constants ==============
 
