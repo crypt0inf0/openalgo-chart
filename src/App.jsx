@@ -46,163 +46,21 @@ import ANNScanner from './components/ANNScanner';
 import { scanStocks } from './services/annScannerService';
 import ChartTemplatesDialog from './components/ChartTemplates/ChartTemplatesDialog';
 import ShortcutsSettings from './components/ShortcutsSettings/ShortcutsSettings';
-
-const VALID_INTERVAL_UNITS = new Set(['s', 'm', 'h', 'd', 'w', 'M']);
-const DEFAULT_FAVORITE_INTERVALS = []; // No default favorites
-
-const isValidIntervalValue = (value) => {
-  if (!value || typeof value !== 'string') return false;
-  const trimmed = value.trim();
-  if (!trimmed) return false;
-  if (/^\d+$/.test(trimmed)) {
-    return parseInt(trimmed, 10) > 0;
-  }
-  const match = /^([1-9]\d*)([smhdwM])$/.exec(trimmed);
-  if (!match) return false;
-  const unit = match[2];
-  return VALID_INTERVAL_UNITS.has(unit);
-};
-
-const sanitizeFavoriteIntervals = (raw) => {
-  if (!Array.isArray(raw)) return DEFAULT_FAVORITE_INTERVALS;
-  const filtered = raw.filter(isValidIntervalValue);
-  const unique = Array.from(new Set(filtered));
-  return unique; // Allow empty array
-};
-
-const sanitizeCustomIntervals = (raw) => {
-  if (!Array.isArray(raw)) return [];
-  return raw
-    .filter((item) => item && typeof item === 'object' && isValidIntervalValue(item.value))
-    .map((item) => ({
-      value: item.value,
-      label: item.label || item.value,
-      isCustom: true,
-    }));
-};
-
-const safeParseJSON = (value, fallback) => {
-  if (!value) return fallback;
-  try {
-    return JSON.parse(value);
-  } catch (error) {
-    console.error('Failed to parse JSON from localStorage:', error);
-    return fallback;
-  }
-};
-
-const ALERT_RETENTION_MS = 24 * 60 * 60 * 1000; // 24 hours
-
-// Default watchlist for new users or migration
-const DEFAULT_WATCHLIST = {
-  id: 'wl_default',
-  name: 'My Watchlist',
-  symbols: [
-    { symbol: 'RELIANCE', exchange: 'NSE' },
-    { symbol: 'TCS', exchange: 'NSE' },
-    { symbol: 'INFY', exchange: 'NSE' },
-    { symbol: 'HDFCBANK', exchange: 'NSE' },
-    { symbol: 'ICICIBANK', exchange: 'NSE' },
-    { symbol: 'SBIN', exchange: 'NSE' },
-    { symbol: 'BHARTIARTL', exchange: 'NSE' },
-    { symbol: 'ITC', exchange: 'NSE' },
-  ],
-};
-
-// Migration function: converts old tv_watchlist to new tv_watchlists format
-const migrateWatchlistData = () => {
-  const newData = safeParseJSON(localStorage.getItem('tv_watchlists'), null);
-
-  // If new format exists, validate and use it
-  if (newData && newData.lists && Array.isArray(newData.lists)) {
-    // Filter out any old Favorites watchlist
-    newData.lists = newData.lists.filter(wl => wl.id !== 'wl_favorites');
-    // Ensure at least one watchlist exists
-    if (newData.lists.length === 0) {
-      newData.lists.push(DEFAULT_WATCHLIST);
-      newData.activeListId = 'wl_default';
-    }
-    // Update activeListId if it was pointing to favorites
-    if (newData.activeListId === 'wl_favorites') {
-      newData.activeListId = newData.lists[0].id;
-    }
-    return newData;
-  }
-
-  // Check for old format
-  const oldData = safeParseJSON(localStorage.getItem('tv_watchlist'), null);
-
-  if (oldData && Array.isArray(oldData) && oldData.length > 0) {
-    // Migrate old format to new format
-    return {
-      lists: [
-        {
-          ...DEFAULT_WATCHLIST,
-          symbols: oldData.map(s => typeof s === 'string' ? { symbol: s, exchange: 'NSE' } : s),
-        }
-      ],
-      activeListId: 'wl_default',
-    };
-  }
-
-  // Return default
-  return {
-    lists: [DEFAULT_WATCHLIST],
-    activeListId: 'wl_default',
-  };
-};
-
-// Default chart appearance settings
-const DEFAULT_CHART_APPEARANCE = {
-  // Candle Colors
-  candleUpColor: '#089981',
-  candleDownColor: '#F23645',
-  wickUpColor: '#089981',
-  wickDownColor: '#F23645',
-  // Grid Settings
-  showVerticalGridLines: true,
-  showHorizontalGridLines: true,
-  // Background Colors (per theme)
-  darkBackground: '#131722',
-  lightBackground: '#ffffff',
-  // Grid Colors (per theme)
-  darkGridColor: '#2A2E39',
-  lightGridColor: '#e0e3eb',
-};
-
-// Default drawing tool options
-// Line styles: 0=Solid, 1=Dotted, 2=Dashed, 3=LargeDashed, 4=SparseDotted
-const DEFAULT_DRAWING_OPTIONS = {
-  lineColor: '#2962FF',
-  backgroundColor: 'rgba(41, 98, 255, 0.2)',
-  width: 2,
-  lineStyle: 0,
-  globalAlpha: 1.0,
-};
-
-// Drawing tools that should show the properties panel
-const DRAWING_TOOLS = [
-  'TrendLine',
-  'HorizontalLine',
-  'VerticalLine',
-  'Rectangle',
-  'Circle',
-  'Path',
-  'Text',
-  'Callout',
-  'PriceRange',
-  'Arrow',
-  'Ray',
-  'ExtendedLine',
-  'ParallelChannel',
-  'FibonacciRetracement',
-];
-
-const formatPrice = (value) => {
-  const num = Number(value);
-  if (!Number.isFinite(num)) return value;
-  return num.toFixed(2);
-};
+import {
+    VALID_INTERVAL_UNITS,
+    DEFAULT_FAVORITE_INTERVALS,
+    isValidIntervalValue,
+    sanitizeFavoriteIntervals,
+    sanitizeCustomIntervals,
+    safeParseJSON,
+    ALERT_RETENTION_MS,
+    DEFAULT_WATCHLIST,
+    migrateWatchlistData,
+    DEFAULT_CHART_APPEARANCE,
+    DEFAULT_DRAWING_OPTIONS,
+    DRAWING_TOOLS,
+    formatPrice
+} from './utils/appUtils';
 
 // Simple Loader Component - uses CSS variables to match user's theme
 const WorkspaceLoader = () => (
