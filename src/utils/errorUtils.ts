@@ -3,18 +3,106 @@
  * Centralized error handling, retry logic, and resilience patterns
  */
 
+// Types
+export interface RetryOptions {
+    maxRetries?: number;
+    baseDelay?: number;
+    maxDelay?: number;
+    shouldRetry?: (error: Error, attempt: number) => boolean;
+    onRetry?: (error: Error, attempt: number, delay: number) => void;
+}
+
+export interface CircuitBreakerOptions {
+    failureThreshold?: number;
+    resetTimeout?: number;
+    onStateChange?: (newState: CircuitState, oldState: CircuitState) => void;
+}
+
+export type CircuitState = 'CLOSED' | 'OPEN' | 'HALF_OPEN';
+
+export interface CircuitBreaker {
+    readonly state: CircuitState;
+    readonly failures: number;
+    execute: <T>(fn: () => Promise<T>) => Promise<T>;
+    reset: () => void;
+}
+
+export interface ErrorHandlerOptions {
+    onError?: (error: Error) => void;
+    rethrow?: boolean;
+    silent?: boolean;
+}
+
+/**
+ * Sleep utility for delays
+ */
+export const sleep = (ms: number): Promise<void> =>
+    new Promise(resolve => setTimeout(resolve, ms));
+
+/**
+ * Custom TimeoutError class
+ */
+export class TimeoutError extends Error {
+    readonly timeout: number;
+
+    constructor(message: string, timeout: number) {
+        super(message);
+        this.name = 'TimeoutError';
+        this.timeout = timeout;
+    }
+}
+
+/**
+ * Custom ApiError class with status code
+ */
+export class ApiError extends Error {
+    readonly status: number;
+    readonly response: unknown;
+
+    constructor(message: string, status: number, response: unknown = null) {
+        super(message);
+        this.name = 'ApiError';
+        this.status = status;
+        this.response = response;
+    }
+
+    get isAuthError(): boolean {
+        return this.status === 401 || this.status === 403;
+    }
+
+    get isNotFound(): boolean {
+        return this.status === 404;
+    }
+
+    get isRateLimit(): boolean {
+        return this.status === 429;
+    }
+
+    get isServerError(): boolean {
+        return this.status >= 500;
+    }
+}
+
+/**
+ * Circuit breaker open error
+ */
+export class CircuitOpenError extends Error {
+    readonly retryAfter: number;
+
+    constructor(message: string, retryAfter: number) {
+        super(message);
+        this.name = 'CircuitOpenError';
+        this.retryAfter = retryAfter;
+    }
+}
+
 /**
  * Retry an async function with exponential backoff
- * @param {Function} fn - Async function to retry
- * @param {Object} options - Retry options
- * @param {number} options.maxRetries - Maximum retry attempts (default: 3)
- * @param {number} options.baseDelay - Initial delay in ms (default: 1000)
- * @param {number} options.maxDelay - Maximum delay cap in ms (default: 30000)
- * @param {Function} options.shouldRetry - Function to determine if error is retryable (default: all errors)
- * @param {Function} options.onRetry - Callback before each retry (receives error, attempt, delay)
- * @returns {Promise<*>} Result of successful function call
  */
-export const retryWithBackoff = async (fn, options = {}) => {
+export const retryWithBackoff = async <T>(
+    fn: () => Promise<T>,
+    options: RetryOptions = {}
+): Promise<T> => {
     const {
         maxRetries = 3,
         baseDelay = 1000,
@@ -23,27 +111,27 @@ export const retryWithBackoff = async (fn, options = {}) => {
         onRetry = null,
     } = options;
 
-    let lastError;
+    let lastError: Error | undefined;
 
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
         try {
             return await fn();
         } catch (error) {
-            lastError = error;
+            lastError = error as Error;
 
             // Check if we should retry
-            if (attempt >= maxRetries || !shouldRetry(error, attempt)) {
+            if (attempt >= maxRetries || !shouldRetry(lastError, attempt)) {
                 throw error;
             }
 
             // Calculate delay with exponential backoff and jitter
             const exponentialDelay = baseDelay * Math.pow(2, attempt);
-            const jitter = Math.random() * 0.3 * exponentialDelay; // 0-30% jitter
+            const jitter = Math.random() * 0.3 * exponentialDelay;
             const delay = Math.min(exponentialDelay + jitter, maxDelay);
 
             // Notify before retry
             if (onRetry) {
-                onRetry(error, attempt + 1, delay);
+                onRetry(lastError, attempt + 1, delay);
             }
 
             // Wait before retrying
@@ -55,23 +143,16 @@ export const retryWithBackoff = async (fn, options = {}) => {
 };
 
 /**
- * Sleep utility for delays
- * @param {number} ms - Milliseconds to sleep
- * @returns {Promise<void>}
- */
-export const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
-
-/**
  * Wrap a promise with a timeout
- * @param {Promise} promise - Promise to wrap
- * @param {number} timeoutMs - Timeout in milliseconds
- * @param {string} message - Custom timeout error message
- * @returns {Promise<*>} Result or timeout error
  */
-export const withTimeout = (promise, timeoutMs, message = 'Operation timed out') => {
-    let timeoutId;
+export const withTimeout = <T>(
+    promise: Promise<T>,
+    timeoutMs: number,
+    message: string = 'Operation timed out'
+): Promise<T> => {
+    let timeoutId: ReturnType<typeof setTimeout>;
 
-    const timeoutPromise = new Promise((_, reject) => {
+    const timeoutPromise = new Promise<never>((_, reject) => {
         timeoutId = setTimeout(() => {
             reject(new TimeoutError(message, timeoutMs));
         }, timeoutMs);
@@ -83,60 +164,22 @@ export const withTimeout = (promise, timeoutMs, message = 'Operation timed out')
 };
 
 /**
- * Custom TimeoutError class
- */
-export class TimeoutError extends Error {
-    constructor(message, timeout) {
-        super(message);
-        this.name = 'TimeoutError';
-        this.timeout = timeout;
-    }
-}
-
-/**
- * Custom ApiError class with status code
- */
-export class ApiError extends Error {
-    constructor(message, status, response = null) {
-        super(message);
-        this.name = 'ApiError';
-        this.status = status;
-        this.response = response;
-    }
-
-    get isAuthError() {
-        return this.status === 401 || this.status === 403;
-    }
-
-    get isNotFound() {
-        return this.status === 404;
-    }
-
-    get isRateLimit() {
-        return this.status === 429;
-    }
-
-    get isServerError() {
-        return this.status >= 500;
-    }
-}
-
-/**
  * Handle API response and throw ApiError if not ok
- * @param {Response} response - Fetch Response object
- * @param {string} context - Description for error message
- * @returns {Promise<Response>} The response if ok
  */
-export const handleApiResponse = async (response, context = 'API call') => {
+export const handleApiResponse = async (
+    response: Response,
+    context: string = 'API call'
+): Promise<Response> => {
     if (!response.ok) {
-        let errorBody = null;
+        let errorBody: { message?: string; error?: string } | null = null;
         try {
             errorBody = await response.json();
         } catch {
             // Response might not be JSON
         }
 
-        const message = errorBody?.message || errorBody?.error || `${context} failed: ${response.status} ${response.statusText}`;
+        const message = errorBody?.message || errorBody?.error ||
+            `${context} failed: ${response.status} ${response.statusText}`;
         throw new ApiError(message, response.status, errorBody);
     }
     return response;
@@ -144,36 +187,29 @@ export const handleApiResponse = async (response, context = 'API call') => {
 
 /**
  * Safe JSON parse with error context
- * @param {string} text - JSON string to parse
- * @param {string} context - Description for error message
- * @returns {*} Parsed JSON
  */
-export const safeJsonParse = (text, context = 'JSON parse') => {
+export const safeJsonParse = <T>(text: string, context: string = 'JSON parse'): T => {
     try {
-        return JSON.parse(text);
+        return JSON.parse(text) as T;
     } catch (error) {
-        throw new Error(`${context}: Invalid JSON - ${error.message}`);
+        throw new Error(`${context}: Invalid JSON - ${(error as Error).message}`);
     }
 };
 
 /**
  * Create a rate limiter for function calls
- * @param {number} minInterval - Minimum milliseconds between calls
- * @returns {Function} Rate-limited wrapper function
  */
-export const createRateLimiter = (minInterval) => {
+export const createRateLimiter = (minInterval: number) => {
     let lastCallTime = 0;
-    let pendingPromise = null;
+    let pendingPromise: Promise<void> | null = null;
 
-    return async (fn) => {
+    return async <T>(fn: () => T | Promise<T>): Promise<T> => {
         const now = Date.now();
         const elapsed = now - lastCallTime;
 
         if (elapsed < minInterval) {
-            // Wait for remaining time
             const waitTime = minInterval - elapsed;
 
-            // If there's already a pending call, wait for it
             if (pendingPromise) {
                 await pendingPromise;
             }
@@ -190,24 +226,19 @@ export const createRateLimiter = (minInterval) => {
 
 /**
  * Create a circuit breaker to prevent cascading failures
- * @param {Object} options - Circuit breaker options
- * @param {number} options.failureThreshold - Failures before opening circuit (default: 5)
- * @param {number} options.resetTimeout - Time in ms before attempting to close (default: 30000)
- * @param {Function} options.onStateChange - Callback when state changes
- * @returns {Object} Circuit breaker with execute method
  */
-export const createCircuitBreaker = (options = {}) => {
+export const createCircuitBreaker = (options: CircuitBreakerOptions = {}): CircuitBreaker => {
     const {
         failureThreshold = 5,
         resetTimeout = 30000,
         onStateChange = null,
     } = options;
 
-    let state = 'CLOSED'; // CLOSED, OPEN, HALF_OPEN
+    let state: CircuitState = 'CLOSED';
     let failures = 0;
     let lastFailureTime = 0;
 
-    const changeState = (newState) => {
+    const changeState = (newState: CircuitState): void => {
         if (state !== newState) {
             const oldState = state;
             state = newState;
@@ -218,21 +249,24 @@ export const createCircuitBreaker = (options = {}) => {
     };
 
     return {
-        get state() {
+        get state(): CircuitState {
             return state;
         },
 
-        get failures() {
+        get failures(): number {
             return failures;
         },
 
-        async execute(fn) {
+        async execute<T>(fn: () => Promise<T>): Promise<T> {
             // Check if circuit should transition from OPEN to HALF_OPEN
             if (state === 'OPEN') {
                 if (Date.now() - lastFailureTime >= resetTimeout) {
                     changeState('HALF_OPEN');
                 } else {
-                    throw new CircuitOpenError('Circuit breaker is open', resetTimeout - (Date.now() - lastFailureTime));
+                    throw new CircuitOpenError(
+                        'Circuit breaker is open',
+                        resetTimeout - (Date.now() - lastFailureTime)
+                    );
                 }
             }
 
@@ -260,7 +294,7 @@ export const createCircuitBreaker = (options = {}) => {
             }
         },
 
-        reset() {
+        reset(): void {
             failures = 0;
             changeState('CLOSED');
         },
@@ -268,22 +302,9 @@ export const createCircuitBreaker = (options = {}) => {
 };
 
 /**
- * Circuit breaker open error
- */
-export class CircuitOpenError extends Error {
-    constructor(message, retryAfter) {
-        super(message);
-        this.name = 'CircuitOpenError';
-        this.retryAfter = retryAfter;
-    }
-}
-
-/**
  * Check if an error is retryable (network errors, server errors, rate limits)
- * @param {Error} error - The error to check
- * @returns {boolean} Whether the error is retryable
  */
-export const isRetryableError = (error) => {
+export const isRetryableError = (error: Error): boolean => {
     // AbortError should not be retried
     if (error.name === 'AbortError') return false;
 
@@ -307,17 +328,14 @@ export const isRetryableError = (error) => {
 
 /**
  * Create a standardized error handler for async operations
- * @param {string} context - Description of the operation
- * @param {Object} options - Handler options
- * @param {Function} options.onError - Custom error callback
- * @param {boolean} options.rethrow - Whether to rethrow after handling (default: true)
- * @param {boolean} options.silent - Whether to suppress console logging (default: false)
- * @returns {Function} Error handler function
  */
-export const createErrorHandler = (context, options = {}) => {
+export const createErrorHandler = (
+    context: string,
+    options: ErrorHandlerOptions = {}
+) => {
     const { onError = null, rethrow = true, silent = false } = options;
 
-    return (error) => {
+    return (error: Error): void => {
         // Don't log abort errors
         if (error.name === 'AbortError') {
             if (rethrow) throw error;
@@ -349,19 +367,19 @@ export const createErrorHandler = (context, options = {}) => {
 
 /**
  * Wrap an async function with standard error handling
- * @param {Function} fn - Async function to wrap
- * @param {string} context - Description for error messages
- * @param {Object} options - Options passed to createErrorHandler
- * @returns {Function} Wrapped function
  */
-export const withErrorHandling = (fn, context, options = {}) => {
+export const withErrorHandling = <T, Args extends unknown[]>(
+    fn: (...args: Args) => Promise<T>,
+    context: string,
+    options: ErrorHandlerOptions = {}
+) => {
     const handler = createErrorHandler(context, { ...options, rethrow: false });
 
-    return async (...args) => {
+    return async (...args: Args): Promise<T | null> => {
         try {
             return await fn(...args);
         } catch (error) {
-            handler(error);
+            handler(error as Error);
             return null;
         }
     };
