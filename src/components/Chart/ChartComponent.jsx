@@ -2,9 +2,6 @@ import React, { useEffect, useRef, useState, useImperativeHandle, forwardRef, us
 import {
     createChart,
     LineSeries,
-    AreaSeries,
-    BaselineSeries,
-    HistogramSeries,
     createSeriesMarkers
 } from 'lightweight-charts';
 import styles from './ChartComponent.module.css';
@@ -16,7 +13,7 @@ import ChartContextMenu from './ChartContextMenu';
 import IndicatorSettingsDialog from '../IndicatorSettings/IndicatorSettingsDialog';
 import { getIndicatorConfig } from '../IndicatorSettings/indicatorConfigs';
 import { getKlines, getHistoricalKlines, subscribeToTicker, saveDrawings, loadDrawings } from '../../services/openalgo';
-import { combinePremiumOHLC, combineMultiLegOHLC } from '../../services/optionChain';
+import { combineMultiLegOHLC } from '../../services/optionChain';
 import { getAccurateISTTimestamp, syncTimeWithAPI, shouldResync } from '../../services/timeService';
 import {
     calculateSMA,
@@ -24,20 +21,15 @@ import {
     calculateRSI,
     calculateMACD,
     calculateBollingerBands,
-    calculateVolume,
     calculateEnhancedVolume,
     calculateATR,
     calculateStochastic,
     calculateVWAP,
-    calculateSupertrend,
-    calculateADX,
-    calculateIchimoku,
-    calculatePivotPoints
+    calculateSupertrend
 } from '../../utils/indicators';
 
 import { calculateTPO } from '../../utils/indicators/tpo';
 import { calculateFirstCandle } from '../../utils/indicators/firstCandle';
-import { calculatePriceActionRange } from '../../utils/indicators/priceActionRange';
 import { calculateRangeBreakout } from '../../utils/indicators/rangeBreakout';
 import { calculateANNStrategy } from '../../utils/indicators/annStrategy';
 import { calculateHilengaMilenga } from '../../utils/indicators/hilengaMilenga';
