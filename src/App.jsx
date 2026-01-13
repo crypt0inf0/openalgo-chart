@@ -34,6 +34,7 @@ import { useOILines } from './hooks/useOILines';
 import { useTradingData } from './hooks/useTradingData';
 import { useWatchlistHandlers } from './hooks/useWatchlistHandlers';
 import { useIndicatorHandlers } from './hooks/useIndicatorHandlers';
+import { useIntervalHandlers } from './hooks/useIntervalHandlers';
 import { useTheme } from './context/ThemeContext';
 import { useUser } from './context/UserContext';
 import { indicatorConfigs } from './components/IndicatorSettings/indicatorConfigs';
@@ -763,67 +764,23 @@ function AppContent({ isAuthenticated, setIsAuthenticated }) {
     }
   }, [lastNonFavoriteInterval]);
 
-  // Handle interval change - track non-favorite selections
-  // Handle interval change - track non-favorite selections
-  const handleIntervalChange = (newInterval) => {
-    setCharts(prev => prev.map(chart =>
-      chart.id === activeChartId ? { ...chart, interval: newInterval } : chart
-    ));
-
-    // If the new interval is not a favorite, save it as the last non-favorite
-    if (!favoriteIntervals.includes(newInterval)) {
-      setLastNonFavoriteInterval(newInterval);
-    }
-  };
-
-  const handleToggleFavorite = (interval) => {
-    if (!isValidIntervalValue(interval)) {
-      showToast('Invalid interval provided', 'error');
-      return;
-    }
-    setFavoriteIntervals(prev =>
-      prev.includes(interval) ? prev.filter(i => i !== interval) : [...prev, interval]
-    );
-  };
-
-  const handleAddCustomInterval = (value, unit) => {
-    const numericValue = parseInt(value, 10);
-    if (!Number.isFinite(numericValue) || numericValue <= 0) {
-      showToast('Enter a valid number greater than 0', 'error');
-      return;
-    }
-    const unitNormalized = VALID_INTERVAL_UNITS.has(unit) ? unit : null;
-    if (!unitNormalized) {
-      showToast('Invalid interval unit', 'error');
-      return;
-    }
-    const newValue = `${numericValue}${unitNormalized}`;
-
-    if (!isValidIntervalValue(newValue)) {
-      showToast('Invalid interval format', 'error');
-      return;
-    }
-
-    // Check if already exists in default or custom
-    if (DEFAULT_FAVORITE_INTERVALS.includes(newValue) || customIntervals.some(i => i.value === newValue)) {
-      showToast('Interval already available!', 'info');
-      return;
-    }
-
-    const newInterval = { value: newValue, label: newValue, isCustom: true };
-    setCustomIntervals(prev => [...prev, newInterval]);
-    showToast('Custom interval added successfully!', 'success');
-  };
-
-  const handleRemoveCustomInterval = (intervalValue) => {
-    setCustomIntervals(prev => prev.filter(i => i.value !== intervalValue));
-    // Also remove from favorites if present
-    setFavoriteIntervals(prev => prev.filter(i => i !== intervalValue));
-    // If current interval is removed, switch to default
-    if (currentInterval === intervalValue) {
-      handleIntervalChange('1d');
-    }
-  };
+  // Interval handlers extracted to hook
+  const {
+    handleIntervalChange,
+    handleToggleFavorite,
+    handleAddCustomInterval,
+    handleRemoveCustomInterval
+  } = useIntervalHandlers({
+    setCharts,
+    activeChartId,
+    favoriteIntervals,
+    setFavoriteIntervals,
+    setLastNonFavoriteInterval,
+    customIntervals,
+    setCustomIntervals,
+    currentInterval,
+    showToast
+  });
 
   // Multiple Watchlists State
   const [watchlistsState, setWatchlistsState] = useState(migrateWatchlistData);
