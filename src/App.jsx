@@ -44,6 +44,8 @@ import AccountPanel from './components/AccountPanel';
 import TradingPanel from './components/TradingPanel/TradingPanel';
 import ANNScanner from './components/ANNScanner';
 import { scanStocks } from './services/annScannerService';
+import ChartTemplatesDialog from './components/ChartTemplates/ChartTemplatesDialog';
+import ShortcutsSettings from './components/ShortcutsSettings/ShortcutsSettings';
 
 const VALID_INTERVAL_UNITS = new Set(['s', 'm', 'h', 'd', 'w', 'M']);
 const DEFAULT_FAVORITE_INTERVALS = []; // No default favorites
@@ -294,7 +296,13 @@ function AppContent({ isAuthenticated, setIsAuthenticated }) {
       // Also ensure strategyConfig exists (for migration from older versions)
       return saved.charts.map(chart => ({
         ...chart,
-        indicators: migrateIndicators(chart.indicators || []),
+        indicators: migrateIndicators(chart.indicators || []).map(ind => {
+          // Auto-repair Pivot Points showing as 'classic' due to previous bug
+          if (ind.type === 'classic') {
+            return { ...ind, type: 'pivotPoints', pivotType: 'classic' };
+          }
+          return ind;
+        }),
         strategyConfig: chart.strategyConfig ?? null
       }));
     }
@@ -341,7 +349,9 @@ function AppContent({ isAuthenticated, setIsAuthenticated }) {
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
   const [isTemplateDialogOpen, setIsTemplateDialogOpen] = useState(false);
   const [isShortcutsDialogOpen, setIsShortcutsDialogOpen] = useState(false);
+  const [isChartTemplatesOpen, setIsChartTemplatesOpen] = useState(false);
   // Multi-leg strategy chart state
+
   const [isStraddlePickerOpen, setIsStraddlePickerOpen] = useState(false);
   // strategyConfig is now per-chart, stored in charts[].strategyConfig
   const [isOptionChainOpen, setIsOptionChainOpen] = useState(false);
@@ -1980,10 +1990,10 @@ function AppContent({ isAuthenticated, setIsAuthenticated }) {
       }
 
       const newIndicator = {
+        ...defaultSettings,
         id: `${type}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
         type: type,
-        visible: true,
-        ...defaultSettings
+        visible: true
       };
 
       return {
@@ -2620,6 +2630,45 @@ function AppContent({ isAuthenticated, setIsAuthenticated }) {
     setIsTemplateDialogOpen(true);
   };
 
+  // Chart Templates handlers (for indicator configurations)
+  const handleChartTemplatesClick = useCallback(() => {
+    setIsChartTemplatesOpen(true);
+  }, []);
+
+  const handleLoadChartTemplate = useCallback((template) => {
+    if (!template) return;
+
+    // Update chart type
+    if (template.chartType) {
+      setChartType(template.chartType);
+    }
+
+    // Update indicators on active chart
+    if (template.indicators && Array.isArray(template.indicators)) {
+      setCharts(prev => prev.map(chart =>
+        chart.id === activeChartId
+          ? { ...chart, indicators: template.indicators }
+          : chart
+      ));
+    }
+
+    // Update appearance settings if present
+    if (template.appearance) {
+      setChartAppearance(prev => ({ ...prev, ...template.appearance }));
+    }
+
+    showToast(`Loaded template: ${template.name}`, 'success');
+  }, [activeChartId, showToast]);
+
+  // Get current chart configuration for saving as template
+  const getCurrentChartConfig = useCallback(() => {
+    return {
+      chartType,
+      indicators: activeChart?.indicators || [],
+      appearance: chartAppearance,
+    };
+  }, [chartType, activeChart, chartAppearance]);
+
   // Option Chain handlers
   const handleOptionChainClick = () => {
     setIsOptionChainOpen(true);
@@ -2980,7 +3029,9 @@ function AppContent({ isAuthenticated, setIsAuthenticated }) {
             onSaveLayout={handleSaveLayout}
             onSettingsClick={handleSettingsClick}
             onTemplatesClick={handleTemplatesClick}
+            onChartTemplatesClick={handleChartTemplatesClick}
             onStraddleClick={() => setIsStraddlePickerOpen(true)}
+
             strategyConfig={activeChart?.strategyConfig}
             onIndicatorSettingsClick={() => setIsIndicatorSettingsOpen(true)}
             onOptionsClick={() => setIsOptionChainOpen(true)}
@@ -3333,7 +3384,14 @@ function AppContent({ isAuthenticated, setIsAuthenticated }) {
         isOpen={isShortcutsDialogOpen}
         onClose={() => setIsShortcutsDialogOpen(false)}
       />
+      <ChartTemplatesDialog
+        isOpen={isChartTemplatesOpen}
+        onClose={() => setIsChartTemplatesOpen(false)}
+        currentConfig={getCurrentChartConfig()}
+        onLoadTemplate={handleLoadChartTemplate}
+      />
       <OptionChainPicker
+
         isOpen={isStraddlePickerOpen}
         onClose={() => setIsStraddlePickerOpen(false)}
         onSelect={(config) => {

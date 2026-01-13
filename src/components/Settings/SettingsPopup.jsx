@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import styles from './SettingsPopup.module.css';
-import { X, Eye, EyeOff } from 'lucide-react';
+import { X, Eye, EyeOff, Keyboard } from 'lucide-react';
+import ShortcutsSettings from '../ShortcutsSettings/ShortcutsSettings';
 import { LOG_LEVELS, LOG_LEVEL_LABELS, getLogLevel, setLogLevel } from '../../utils/logger';
 import { useFocusTrap } from '../../hooks/useFocusTrap';
 import { useKeyboardNav } from '../../hooks/useKeyboardNav';
@@ -156,6 +157,11 @@ const SettingsPopup = ({
                     <path d="M14 4a10 10 0 1 0 0 20 10 10 0 0 0 0-20ZM5 14a9 9 0 1 1 18 0 9 9 0 0 1-18 0Z" />
                     <path d="M14 8a6 6 0 0 0-6 6h12a6 6 0 0 0-6-6Z" />
                 </svg>
+            )
+        },
+        {
+            id: 'shortcuts', label: 'Keyboard Shortcuts', icon: (
+                <Keyboard size={18} />
             )
         }
     ];
@@ -496,6 +502,12 @@ const SettingsPopup = ({
                                 >
                                     Reset to Defaults
                                 </button>
+                            </div>
+                        )}
+
+                        {activeSection === 'shortcuts' && (
+                            <div className={styles.section}>
+                                <ShortcutsSettings embedded={true} />
                             </div>
                         )}
                     </div>

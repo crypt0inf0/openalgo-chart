@@ -1,0 +1,254 @@
+.container {
+    display: flex;
+    flex-direction: column;
+    max-height: 70vh;
+    min-width: 400px;
+    max-width: 500px;
+    background: var(--tv-color-dropdown-background, #1e222d);
+    border-radius: 12px;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
+    color: var(--tv-color-text-primary, #d1d4dc);
+    border: 1px solid var(--tv-color-border, #2a2e39);
+}
+
+/* Embedded variant - no container styling when inside settings popup */
+.embedded {
+    display: flex;
+    flex-direction: column;
+    max-height: 100%;
+    color: var(--tv-color-text-primary, #d1d4dc);
+}
+
+.embedded .header {
+    padding: 0 0 12px 0;
+    border-bottom: none;
+}
+
+.embedded .scrollContainer {
+    max-height: 350px;
+}
+
+
+.header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--tv-color-border, #2a2e39);
+}
+
+.title {
+    font-size: 16px;
+    font-weight: 600;
+    margin: 0;
+    color: var(--tv-color-text-primary, #d1d4dc);
+}
+
+.headerActions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.resetAllBtn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--tv-color-text-secondary, #787b86);
+    background: transparent;
+    border: 1px solid var(--tv-color-border, #2a2e39);
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.resetAllBtn:hover {
+    color: var(--tv-color-text-primary, #d1d4dc);
+    background: var(--tv-color-toolbar-button-background-hover, #2a2e39);
+    border-color: var(--tv-color-text-secondary, #787b86);
+}
+
+.closeBtn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    color: var(--tv-color-text-secondary, #787b86);
+    background: transparent;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.closeBtn:hover {
+    color: var(--tv-color-text-primary, #d1d4dc);
+    background: var(--tv-color-toolbar-button-background-hover, #2a2e39);
+}
+
+.conflictBanner {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 20px;
+    font-size: 13px;
+    color: #f7a83e;
+    background: rgba(247, 168, 62, 0.1);
+    border-bottom: 1px solid rgba(247, 168, 62, 0.2);
+}
+
+.hint {
+    padding: 12px 20px;
+    font-size: 12px;
+    color: var(--tv-color-text-secondary, #787b86);
+    border-bottom: 1px solid var(--tv-color-border, #2a2e39);
+}
+
+.scrollContainer {
+    flex: 1;
+    overflow-y: auto;
+    padding: 8px 0;
+}
+
+.category {
+    margin-bottom: 4px;
+}
+
+.categoryHeader {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    padding: 10px 20px;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--tv-color-text-secondary, #787b86);
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.categoryHeader:hover {
+    background: var(--tv-color-toolbar-button-background-hover, #2a2e39);
+}
+
+.categoryLabel {
+    flex: 1;
+}
+
+
+.categoryToggle {
+    font-size: 16px;
+    font-weight: normal;
+}
+
+.categoryItems {
+    padding: 0 8px;
+}
+
+.shortcutRow {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 12px;
+    margin: 2px 0;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.shortcutRow:hover {
+    background: var(--tv-color-toolbar-button-background-hover, #2a2e39);
+}
+
+.shortcutRow.editing {
+    background: rgba(41, 98, 255, 0.1);
+    box-shadow: 0 0 0 2px var(--tv-color-brand, #2962ff);
+}
+
+.shortcutRow.customized {
+    background: rgba(41, 98, 255, 0.05);
+}
+
+.shortcutRow.customized .shortcutLabel {
+    color: var(--tv-color-brand, #2962ff);
+}
+
+.shortcutLabel {
+    font-size: 13px;
+    color: var(--tv-color-text-primary, #d1d4dc);
+    flex: 1;
+}
+
+.shortcutValue {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.kbd {
+    display: inline-flex;
+    align-items: center;
+    padding: 4px 8px;
+    font-family: 'SF Mono', 'Menlo', 'Consolas', monospace;
+    font-size: 12px;
+    color: var(--tv-color-text-primary, #d1d4dc);
+    background: var(--tv-color-input-background, #131722);
+    border: 1px solid var(--tv-color-border, #2a2e39);
+    border-radius: 4px;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+    white-space: nowrap;
+}
+
+.recording {
+    padding: 4px 8px;
+    font-size: 12px;
+    font-style: italic;
+    color: var(--tv-color-brand, #2962ff);
+    background: rgba(41, 98, 255, 0.1);
+    border: 1px dashed var(--tv-color-brand, #2962ff);
+    border-radius: 4px;
+    animation: pulse 1s ease-in-out infinite;
+}
+
+@keyframes pulse {
+
+    0%,
+    100% {
+        opacity: 1;
+    }
+
+    50% {
+        opacity: 0.6;
+    }
+}
+
+.resetBtn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    padding: 0;
+    color: var(--tv-color-text-secondary, #787b86);
+    background: transparent;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    opacity: 0.6;
+    transition: all 0.15s ease;
+}
+
+.resetBtn:hover {
+    color: var(--tv-color-text-primary, #d1d4dc);
+    background: var(--tv-color-toolbar-button-background-hover, #2a2e39);
+    opacity: 1;
+}

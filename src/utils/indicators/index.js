@@ -42,3 +42,13 @@ export { calculateANNStrategy, getLatestANNSignal } from './annStrategy';
 
 // Hilenga-Milenga Indicator
 export { calculateHilengaMilenga, getLatestHilengaMilenga } from './hilengaMilenga';
+
+// ADX - Trend Strength
+export { calculateADX } from './adx';
+
+// Ichimoku Cloud
+export { calculateIchimoku, getCloudData } from './ichimoku';
+
+// Pivot Points
+export { calculatePivotPoints } from './pivotPoints';
+

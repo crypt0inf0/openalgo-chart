@@ -1,0 +1,418 @@
+.overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.7);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 9999;
+}
+
+.dialog {
+    display: flex;
+    flex-direction: column;
+    width: 95%;
+    max-width: 560px;
+    max-height: 75vh;
+    background: var(--tv-color-dropdown-background, #1e222d);
+    border-radius: 12px;
+    box-shadow: 0 24px 80px rgba(0, 0, 0, 0.6);
+    overflow: hidden;
+    border: 1px solid var(--tv-color-border, #2a2e39);
+}
+
+.header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--tv-color-border, #2a2e39);
+    background: var(--tv-color-dropdown-background, #1e222d);
+}
+
+.headerTitle {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: var(--tv-color-text-primary, #d1d4dc);
+}
+
+.headerTitle h2 {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 600;
+}
+
+.headerTitle svg {
+    color: var(--tv-color-brand, #2962ff);
+}
+
+.headerActions {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.headerBtn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    color: var(--tv-color-text-secondary, #787b86);
+    background: transparent;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.headerBtn:hover:not(:disabled) {
+    color: var(--tv-color-text-primary, #d1d4dc);
+    background: var(--tv-color-toolbar-button-background-hover, #2a2e39);
+}
+
+.headerBtn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+.closeBtn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    color: var(--tv-color-text-secondary, #787b86);
+    background: transparent;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.closeBtn:hover {
+    color: var(--tv-color-text-primary, #d1d4dc);
+    background: var(--tv-color-toolbar-button-background-hover, #2a2e39);
+}
+
+/* Save Section */
+.saveSection {
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--tv-color-border, #2a2e39);
+    background: var(--tv-color-dropdown-background, #1e222d);
+}
+
+.saveBtn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    width: 100%;
+    padding: 12px 16px;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--tv-color-text-primary, #d1d4dc);
+    background: var(--tv-color-toolbar-button-background-hover, #2a2e39);
+    border: 1px dashed var(--tv-color-border, #363a45);
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.saveBtn:hover {
+    background: var(--tv-color-input-background, #131722);
+    border-color: var(--tv-color-brand, #2962ff);
+    color: var(--tv-color-brand, #2962ff);
+}
+
+.saveForm {
+    display: flex;
+    gap: 8px;
+}
+
+.saveInput {
+    flex: 1;
+    padding: 10px 14px;
+    font-size: 13px;
+    color: var(--tv-color-text-primary, #d1d4dc);
+    background: var(--tv-color-input-background, #131722);
+    border: 1px solid var(--tv-color-border, #2a2e39);
+    border-radius: 6px;
+    outline: none;
+    transition: border-color 0.15s ease;
+}
+
+.saveInput:focus {
+    border-color: var(--tv-color-brand, #2962ff);
+}
+
+.saveInput::placeholder {
+    color: var(--tv-color-text-secondary, #787b86);
+}
+
+.saveConfirmBtn,
+.saveCancelBtn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    padding: 0;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.saveConfirmBtn {
+    color: #fff;
+    background: var(--tv-color-up, #26A69A);
+}
+
+.saveConfirmBtn:hover:not(:disabled) {
+    filter: brightness(1.1);
+}
+
+.saveConfirmBtn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+.saveCancelBtn {
+    color: var(--tv-color-text-secondary, #787b86);
+    background: var(--tv-color-toolbar-button-background-hover, #2a2e39);
+}
+
+.saveCancelBtn:hover {
+    color: var(--tv-color-text-primary, #d1d4dc);
+}
+
+/* Template List */
+.templateList {
+    flex: 1;
+    overflow-y: auto;
+    padding: 8px 12px 16px;
+    background: var(--tv-color-dropdown-background, #1e222d);
+}
+
+.emptyState {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 48px 24px;
+    text-align: center;
+    color: var(--tv-color-text-secondary, #787b86);
+}
+
+.emptyIcon {
+    margin-bottom: 16px;
+    opacity: 0.3;
+    color: var(--tv-color-text-secondary, #787b86);
+}
+
+.emptyState p {
+    margin: 0 0 8px;
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--tv-color-text-secondary, #787b86);
+}
+
+.emptyState span {
+    font-size: 12px;
+    color: var(--tv-color-text-secondary, #787b86);
+    opacity: 0.7;
+}
+
+/* Template Item */
+.templateItem {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 14px;
+    margin-bottom: 6px;
+    background: var(--tv-color-toolbar-button-background-hover, #2a2e39);
+    border: 1px solid transparent;
+    border-radius: 8px;
+    transition: all 0.15s ease;
+}
+
+.templateItem:hover {
+    background: var(--tv-color-input-background, #131722);
+    border-color: var(--tv-color-border, #2a2e39);
+}
+
+.templateItem.defaultTemplate {
+    background: rgba(41, 98, 255, 0.08);
+    border-color: rgba(41, 98, 255, 0.2);
+}
+
+.templateInfo {
+    flex: 1;
+    min-width: 0;
+}
+
+.templateName {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--tv-color-text-primary, #d1d4dc);
+    margin-bottom: 4px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.defaultStar {
+    color: #FFB300;
+    fill: #FFB300;
+    flex-shrink: 0;
+}
+
+.templateMeta {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    color: var(--tv-color-text-secondary, #787b86);
+}
+
+.chartType {
+    color: var(--tv-color-text-secondary, #787b86);
+    background: var(--tv-color-toolbar-button-background-hover, #2a2e39);
+    padding: 2px 6px;
+    border-radius: 4px;
+}
+
+.separator {
+    opacity: 0.4;
+}
+
+.indicators {
+    max-width: 140px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.date {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+/* Rename input */
+.renameInput {
+    width: 100%;
+    padding: 6px 10px;
+    font-size: 14px;
+    color: var(--tv-color-text-primary, #d1d4dc);
+    background: var(--tv-color-input-background, #131722);
+    border: 1px solid var(--tv-color-brand, #2962ff);
+    border-radius: 4px;
+    outline: none;
+}
+
+/* Template Actions */
+.templateActions {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin-left: 12px;
+}
+
+.actionBtn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    color: var(--tv-color-text-secondary, #787b86);
+    background: transparent;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.actionBtn:hover {
+    color: var(--tv-color-text-primary, #d1d4dc);
+    background: var(--tv-color-toolbar-button-background-hover, #2a2e39);
+}
+
+.actionBtn.deleteBtn:hover {
+    color: var(--tv-color-down, #EF5350);
+    background: rgba(239, 83, 80, 0.1);
+}
+
+.loadBtn {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 6px 12px;
+    margin-left: 4px;
+    font-size: 12px;
+    font-weight: 500;
+    color: #fff;
+    background: var(--tv-color-brand, #2962ff);
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.loadBtn:hover {
+    filter: brightness(1.1);
+}
+
+/* Confirm Delete */
+.confirmDelete {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    font-size: 13px;
+    color: var(--tv-color-text-primary, #d1d4dc);
+}
+
+.confirmDelete span {
+    flex: 1;
+}
+
+.confirmYes,
+.confirmNo {
+    padding: 6px 14px;
+    font-size: 12px;
+    font-weight: 500;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.confirmYes {
+    color: #fff;
+    background: var(--tv-color-down, #EF5350);
+}
+
+.confirmYes:hover {
+    filter: brightness(1.1);
+}
+
+.confirmNo {
+    color: var(--tv-color-text-secondary, #787b86);
+    background: var(--tv-color-toolbar-button-background-hover, #2a2e39);
+}
+
+.confirmNo:hover {
+    color: var(--tv-color-text-primary, #d1d4dc);
+}

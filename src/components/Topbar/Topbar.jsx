@@ -6,8 +6,9 @@ import { getIntervals } from '../../services/openalgo';
 import { logger } from '../../utils/logger.js';
 import Tooltip from '../Tooltip/Tooltip';
 import {
-    Plus, Star, Trash2, X, AlertCircle, Loader2, Layout as LayoutIcon, BarChart3
+    Plus, Star, Trash2, X, AlertCircle, Loader2, Layout as LayoutIcon, BarChart3, Bookmark
 } from 'lucide-react';
+
 
 const Topbar = ({
     symbol, interval, chartType, indicators, favoriteIntervals, customIntervals,
@@ -17,10 +18,11 @@ const Topbar = ({
     onUndo, onRedo, onMenuClick, theme, onToggleTheme,
     onDownloadImage, onCopyImage, onFullScreen,
     layout, onLayoutChange, onSaveLayout, onAlertClick, onCompareClick, onReplayClick,
-    isReplayMode = false, onSettingsClick, onTemplatesClick,
+    isReplayMode = false, onSettingsClick, onTemplatesClick, onChartTemplatesClick,
     onStraddleClick, strategyConfig = null,
     onOptionsClick, onHeatmapClick, onAddIndicator
 }) => {
+
     const [showIndicators, setShowIndicators] = useState(false);
     const [showTimeframes, setShowTimeframes] = useState(false);
     const [showChartTypes, setShowChartTypes] = useState(false);
@@ -665,6 +667,13 @@ const Topbar = ({
                                                             <div className={styles.dropdownDivider}></div>
                                                             <div className={styles.dropdownSection}>Trend</div>
                                                             <div className={styles.dropdownItem} onClick={(e) => { e.stopPropagation(); onAddIndicator('supertrend'); }}>Supertrend</div>
+                                                            <div className={styles.dropdownItem} onClick={(e) => { e.stopPropagation(); onAddIndicator('ichimoku'); }}>Ichimoku Cloud</div>
+                                                            <div className={styles.dropdownDivider}></div>
+                                                            <div className={styles.dropdownSection}>Trend Strength</div>
+                                                            <div className={styles.dropdownItem} onClick={(e) => { e.stopPropagation(); onAddIndicator('adx'); }}>ADX</div>
+                                                            <div className={styles.dropdownDivider}></div>
+                                                            <div className={styles.dropdownSection}>Support/Resistance</div>
+                                                            <div className={styles.dropdownItem} onClick={(e) => { e.stopPropagation(); onAddIndicator('pivotPoints'); }}>Pivot Points</div>
                                                             <div className={styles.dropdownDivider}></div>
                                                             <div className={styles.dropdownSection}>Volume</div>
                                                             <div className={styles.dropdownItem} onClick={(e) => { e.stopPropagation(); onAddIndicator('volume'); }}>Volume</div>
@@ -679,6 +688,7 @@ const Topbar = ({
                                                             <div className={styles.dropdownItem} onClick={(e) => { e.stopPropagation(); onAddIndicator('annStrategy'); }}>ANN Strategy</div>
                                                         </div>
                                                     )}
+
                                                 </div>
                                             </div>
 
@@ -782,8 +792,16 @@ const Topbar = ({
                                                         </div>
                                                     </button>
                                                 </Tooltip>
+                                                <Tooltip content="Chart Templates" position="bottom">
+                                                    <button className={classNames(styles.button, styles.iconButton)} aria-label="Chart Templates" onClick={onChartTemplatesClick}>
+                                                        <div className={styles.icon}>
+                                                            <Bookmark size={18} strokeWidth={1.5} />
+                                                        </div>
+                                                    </button>
+                                                </Tooltip>
 
                                                 <div className={styles.separatorWrap}><div className={styles.separator}></div></div>
+
 
                                                 {/* Theme Toggle */}
                                                 <button

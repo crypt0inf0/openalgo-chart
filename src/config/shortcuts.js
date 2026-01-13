@@ -328,3 +328,169 @@ export const isInputField = (event) => {
 
     return isEditable || isInput;
 };
+
+// ============================================
+// SHORTCUT CUSTOMIZATION - User-defined overrides
+// ============================================
+
+const CUSTOM_SHORTCUTS_KEY = 'custom_keyboard_shortcuts';
+
+/**
+ * Load user's custom shortcut overrides from localStorage
+ * @returns {Object} Map of shortcut ID -> { key, modifiers }
+ */
+export const loadCustomShortcuts = () => {
+    try {
+        const saved = localStorage.getItem(CUSTOM_SHORTCUTS_KEY);
+        return saved ? JSON.parse(saved) : {};
+    } catch (e) {
+        console.warn('Failed to load custom shortcuts:', e);
+        return {};
+    }
+};
+
+/**
+ * Save user's custom shortcut overrides to localStorage
+ * @param {Object} customizations - Map of shortcut ID -> { key, modifiers }
+ */
+export const saveCustomShortcuts = (customizations) => {
+    try {
+        localStorage.setItem(CUSTOM_SHORTCUTS_KEY, JSON.stringify(customizations));
+    } catch (e) {
+        console.warn('Failed to save custom shortcuts:', e);
+    }
+};
+
+/**
+ * Get effective shortcuts (defaults merged with user customizations)
+ * @returns {Object} Complete shortcuts object with user overrides applied
+ */
+export const getEffectiveShortcuts = () => {
+    const custom = loadCustomShortcuts();
+    const effective = {};
+
+    Object.entries(SHORTCUTS).forEach(([id, shortcut]) => {
+        if (custom[id]) {
+            // Merge user customization with default (keeps action, label, category)
+            effective[id] = {
+                ...shortcut,
+                key: custom[id].key,
+                modifiers: custom[id].modifiers || [],
+            };
+        } else {
+            effective[id] = { ...shortcut };
+        }
+    });
+
+    return effective;
+};
+
+/**
+ * Update a single shortcut binding
+ * @param {string} shortcutId - ID of the shortcut to update
+ * @param {string} key - New key binding
+ * @param {string[]} modifiers - New modifier keys
+ * @returns {Object|null} Conflict info if there's a conflict, null otherwise
+ */
+export const updateShortcut = (shortcutId, key, modifiers = []) => {
+    const custom = loadCustomShortcuts();
+    const effective = getEffectiveShortcuts();
+
+    // Check for conflicts with other shortcuts
+    const newBinding = { key: key.toLowerCase(), modifiers: [...modifiers].sort() };
+
+    for (const [id, shortcut] of Object.entries(effective)) {
+        if (id === shortcutId) continue; // Skip self
+
+        const existingBinding = {
+            key: shortcut.key.toLowerCase(),
+            modifiers: [...(shortcut.modifiers || [])].sort(),
+        };
+
+        // Check if key and modifiers match
+        if (
+            existingBinding.key === newBinding.key &&
+            JSON.stringify(existingBinding.modifiers) === JSON.stringify(newBinding.modifiers)
+        ) {
+            return {
+                conflict: true,
+                conflictWith: id,
+                conflictLabel: shortcut.label,
+            };
+        }
+    }
+
+    // No conflict, save the update
+    custom[shortcutId] = { key, modifiers };
+    saveCustomShortcuts(custom);
+    return null;
+};
+
+/**
+ * Reset a single shortcut to its default binding
+ * @param {string} shortcutId - ID of the shortcut to reset
+ */
+export const resetShortcut = (shortcutId) => {
+    const custom = loadCustomShortcuts();
+    delete custom[shortcutId];
+    saveCustomShortcuts(custom);
+};
+
+/**
+ * Reset all shortcuts to their default bindings
+ */
+export const resetAllShortcuts = () => {
+    saveCustomShortcuts({});
+};
+
+/**
+ * Check if a shortcut has been customized
+ * @param {string} shortcutId - ID of the shortcut
+ * @returns {boolean} True if the shortcut has a custom binding
+ */
+export const isShortcutCustomized = (shortcutId) => {
+    const custom = loadCustomShortcuts();
+    return !!custom[shortcutId];
+};
+
+/**
+ * Parse a keyboard event into a shortcut definition
+ * @param {KeyboardEvent} event - The keyboard event
+ * @returns {Object} { key, modifiers } or null if invalid
+ */
+export const parseKeyboardEvent = (event) => {
+    // Ignore modifier-only key presses
+    if (['Control', 'Alt', 'Shift', 'Meta', 'CapsLock', 'Tab'].includes(event.key)) {
+        return null;
+    }
+
+    const modifiers = [];
+    const mac = isMac();
+
+    if (mac ? event.metaKey : event.ctrlKey) {
+        modifiers.push('cmd');
+    }
+    if (event.altKey) {
+        modifiers.push('alt');
+    }
+    if (event.shiftKey) {
+        // Only add shift for letter/number keys, not for special chars
+        const isShiftSpecialChar = /^[!@#$%^&*()_+{}|:"<>?~]$/.test(event.key);
+        if (!isShiftSpecialChar) {
+            modifiers.push('shift');
+        }
+    }
+
+    return {
+        key: event.key,
+        modifiers,
+    };
+};
+
+/**
+ * Get all shortcuts that have been customized
+ * @returns {Object} Map of shortcut ID -> custom binding
+ */
+export const getCustomizedShortcuts = () => {
+    return loadCustomShortcuts();
+};

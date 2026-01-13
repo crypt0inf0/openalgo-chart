@@ -271,7 +271,60 @@ export const indicatorConfigs = {
             { key: 'midlineColor', label: 'Midline (50)', type: 'color', default: '#787B86' },
         ],
     },
+
+    adx: {
+        name: 'ADX',
+        fullName: 'Average Directional Index',
+        pane: 'adx',
+        inputs: [
+            { key: 'period', label: 'Length', type: 'number', min: 1, max: 100, default: 14 },
+        ],
+        style: [
+            { key: 'adxColor', label: 'ADX Line', type: 'color', default: '#FF9800' },
+            { key: 'plusDIColor', label: '+DI Line', type: 'color', default: '#26A69A' },
+            { key: 'minusDIColor', label: '-DI Line', type: 'color', default: '#EF5350' },
+            { key: 'lineWidth', label: 'Line Width', type: 'number', min: 1, max: 5, default: 2 },
+        ],
+    },
+
+    ichimoku: {
+        name: 'Ichimoku',
+        fullName: 'Ichimoku Cloud',
+        pane: 'main',
+        inputs: [
+            { key: 'tenkanPeriod', label: 'Conversion Line', type: 'number', min: 1, max: 100, default: 9 },
+            { key: 'kijunPeriod', label: 'Base Line', type: 'number', min: 1, max: 100, default: 26 },
+            { key: 'senkouBPeriod', label: 'Senkou B Period', type: 'number', min: 1, max: 200, default: 52 },
+            { key: 'displacement', label: 'Displacement', type: 'number', min: 1, max: 100, default: 26 },
+        ],
+        style: [
+            { key: 'tenkanColor', label: 'Tenkan-sen', type: 'color', default: '#2962FF' },
+            { key: 'kijunColor', label: 'Kijun-sen', type: 'color', default: '#EF5350' },
+            { key: 'senkouAColor', label: 'Senkou A', type: 'color', default: '#26A69A' },
+            { key: 'senkouBColor', label: 'Senkou B', type: 'color', default: '#EF5350' },
+            { key: 'chikouColor', label: 'Chikou Span', type: 'color', default: '#9C27B0' },
+            { key: 'cloudUpColor', label: 'Cloud Up', type: 'color', default: 'rgba(38,166,154,0.2)' },
+            { key: 'cloudDownColor', label: 'Cloud Down', type: 'color', default: 'rgba(239,83,80,0.2)' },
+        ],
+    },
+
+    pivotPoints: {
+        name: 'Pivot Points',
+        fullName: 'Pivot Points',
+        pane: 'main',
+        inputs: [
+            { key: 'pivotType', label: 'Type', type: 'select', options: ['classic', 'fibonacci', 'woodie', 'camarilla'], default: 'classic' },
+            { key: 'timeframe', label: 'Timeframe', type: 'select', options: ['daily', 'weekly', 'monthly'], default: 'daily' },
+        ],
+        style: [
+            { key: 'pivotColor', label: 'Pivot', type: 'color', default: '#FF9800' },
+            { key: 'resistanceColor', label: 'Resistance', type: 'color', default: '#EF5350' },
+            { key: 'supportColor', label: 'Support', type: 'color', default: '#26A69A' },
+            { key: 'lineWidth', label: 'Line Width', type: 'number', min: 1, max: 5, default: 1 },
+        ],
+    },
 };
+
 
 /**
  * Get config for a specific indicator type
