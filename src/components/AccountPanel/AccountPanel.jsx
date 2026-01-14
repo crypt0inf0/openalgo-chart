@@ -2,7 +2,9 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { ChevronDown, ChevronUp, RefreshCw, X, Wallet, Minus, Maximize2, Minimize2, LogOut, XCircle } from 'lucide-react';
 import styles from './AccountPanel.module.css';
 import { getFunds, getPositionBook, getOrderBook, getHoldings, getTradeBook, ping, placeOrder, cancelOrder } from '../../services/openalgo';
+import { modifyOrder } from '../../services/orderService';
 import ExitPositionModal from '../ExitPositionModal';
+import ModifyOrderModal from './components/ModifyOrderModal';
 
 // Import extracted components
 import { PositionsTable, OrdersTable, HoldingsTable, TradesTable } from './components';
@@ -37,6 +39,10 @@ const AccountPanel = ({
     // Exit Position Modal state
     const [isExitModalOpen, setIsExitModalOpen] = useState(false);
     const [selectedPositionForExit, setSelectedPositionForExit] = useState(null);
+
+    // Modify Order Modal state
+    const [isModifyModalOpen, setIsModifyModalOpen] = useState(false);
+    const [selectedOrderForModify, setSelectedOrderForModify] = useState(null);
 
     // Data states
     const [funds, setFunds] = useState(null);
@@ -243,6 +249,32 @@ const AccountPanel = ({
         } catch (error) {
             console.error('Error cancelling order:', error);
             if (showToast) showToast('Failed to cancel order', 'error');
+        }
+    };
+
+    // Handle modify order
+    const handleModifyOrder = (order, e) => {
+        e.stopPropagation(); // Prevent row click
+        setSelectedOrderForModify(order);
+        setIsModifyModalOpen(true);
+    };
+
+    // Handle modify complete
+    const handleModifyComplete = async (modifyPayload) => {
+        try {
+            const result = await modifyOrder(modifyPayload);
+
+            if (result.status === 'success') {
+                if (showToast) showToast(`Order modified successfully`, 'success');
+                // Refresh data after successful modify
+                setTimeout(fetchAccountData, 1000);
+            } else {
+                throw new Error(result.message || 'Failed to modify order');
+            }
+        } catch (error) {
+            console.error('Error modifying order:', error);
+            if (showToast) showToast(`Failed to modify order: ${error.message}`, 'error');
+            throw error; // Re-throw to let modal handle it
         }
     };
 
@@ -565,7 +597,7 @@ const AccountPanel = ({
             case 'positions':
                 return <PositionsTable positions={positions} onRowClick={handleRowClick} onExitPosition={handleExitPosition} />;
             case 'orders':
-                return <OrdersTable orders={orders.orders || []} onRowClick={handleRowClick} onCancelOrder={handleCancelOrder} />;
+                return <OrdersTable orders={orders.orders || []} onRowClick={handleRowClick} onCancelOrder={handleCancelOrder} onModifyOrder={handleModifyOrder} />;
             case 'holdings':
                 return <HoldingsTable holdings={holdings.holdings || []} onRowClick={handleRowClick} />;
             case 'trades':
@@ -718,6 +750,15 @@ const AccountPanel = ({
                 position={selectedPositionForExit}
                 onClose={handleExitModalClose}
                 onExitComplete={handleExitComplete}
+                showToast={showToast}
+            />
+
+            {/* Modify Order Modal */}
+            <ModifyOrderModal
+                isOpen={isModifyModalOpen}
+                order={selectedOrderForModify}
+                onClose={() => setIsModifyModalOpen(false)}
+                onModifyComplete={handleModifyComplete}
                 showToast={showToast}
             />
         </div>

@@ -3,11 +3,11 @@
  * Renders the orders table for AccountPanel with search and filter
  */
 import React, { useState, useMemo, useCallback } from 'react';
-import { XCircle, Search, X, Filter } from 'lucide-react';
+import { XCircle, Search, X, Filter, Edit } from 'lucide-react';
 import styles from '../AccountPanel.module.css';
-import { formatCurrency, isOpenOrderStatus } from '../utils/accountFormatters';
+import { formatCurrency, isOpenOrderStatus, sortData } from '../utils/accountFormatters';
 
-const OrdersTable = ({ orders, onRowClick, onCancelOrder }) => {
+const OrdersTable = ({ orders, onRowClick, onCancelOrder, onModifyOrder }) => {
     const [searchTerm, setSearchTerm] = useState('');
     const [filters, setFilters] = useState({
         action: [],
@@ -16,6 +16,7 @@ const OrdersTable = ({ orders, onRowClick, onCancelOrder }) => {
         product: []
     });
     const [showFilters, setShowFilters] = useState(false);
+    const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' });
 
     // Get unique values for filters
     const uniqueActions = useMemo(() => {
@@ -38,7 +39,7 @@ const OrdersTable = ({ orders, onRowClick, onCancelOrder }) => {
     const sortedOrders = useMemo(() => {
         const normalizeStatus = (s) => (s || '').toUpperCase().replace(/\s+/g, '_');
 
-        return orders
+        const filtered = orders
             .filter(order => {
                 // Search filter
                 const matchesSearch = !searchTerm ||
@@ -62,20 +63,26 @@ const OrdersTable = ({ orders, onRowClick, onCancelOrder }) => {
 
                 return matchesSearch && matchesAction && matchesStatus &&
                        matchesExchange && matchesProduct;
-            })
-            .sort((a, b) => {
-                const statusA = normalizeStatus(a.order_status);
-                const statusB = normalizeStatus(b.order_status);
-
-                const isOpenA = ['OPEN', 'PENDING', 'TRIGGER_PENDING', 'AMO_REQ_RECEIVED'].includes(statusA);
-                const isOpenB = ['OPEN', 'PENDING', 'TRIGGER_PENDING', 'AMO_REQ_RECEIVED'].includes(statusB);
-
-                if (isOpenA && !isOpenB) return -1;
-                if (!isOpenA && isOpenB) return 1;
-
-                return (b.timestamp || '').localeCompare(a.timestamp || '');
             });
-    }, [orders, searchTerm, filters]);
+
+        // Apply sorting if configured, otherwise default sort
+        if (sortConfig.key) {
+            return sortData(filtered, sortConfig);
+        }
+
+        return filtered.sort((a, b) => {
+            const statusA = normalizeStatus(a.order_status);
+            const statusB = normalizeStatus(b.order_status);
+
+            const isOpenA = ['OPEN', 'PENDING', 'TRIGGER_PENDING', 'AMO_REQ_RECEIVED'].includes(statusA);
+            const isOpenB = ['OPEN', 'PENDING', 'TRIGGER_PENDING', 'AMO_REQ_RECEIVED'].includes(statusB);
+
+            if (isOpenA && !isOpenB) return -1;
+            if (!isOpenA && isOpenB) return 1;
+
+            return (b.timestamp || '').localeCompare(a.timestamp || '');
+        });
+    }, [orders, searchTerm, filters, sortConfig]);
 
     // Handle filter toggle
     const handleFilterToggle = useCallback((filterType, value) => {
@@ -93,6 +100,20 @@ const OrdersTable = ({ orders, onRowClick, onCancelOrder }) => {
         setSearchTerm('');
         setFilters({ action: [], status: [], exchange: [], product: [] });
     }, []);
+
+    // Handle column sorting
+    const handleSort = useCallback((key) => {
+        setSortConfig(prev => ({
+            key,
+            direction: prev.key === key && prev.direction === 'asc' ? 'desc' : 'asc'
+        }));
+    }, []);
+
+    // Get sort indicator
+    const getSortIndicator = (key) => {
+        if (sortConfig.key !== key) return null;
+        return sortConfig.direction === 'asc' ? '↑' : '↓';
+    };
 
     const hasActiveFilters = searchTerm || filters.action.length > 0 ||
         filters.status.length > 0 || filters.exchange.length > 0 || filters.product.length > 0;
@@ -253,13 +274,63 @@ const OrdersTable = ({ orders, onRowClick, onCancelOrder }) => {
                 </colgroup>
                 <thead>
                     <tr>
-                        <th>Time</th>
-                        <th>Symbol</th>
+                        <th
+                            className={`${styles.sortableHeader} ${sortConfig.key === 'timestamp' ? styles.sorted : ''}`}
+                            onClick={() => handleSort('timestamp')}
+                        >
+                            Time
+                            {getSortIndicator('timestamp') && (
+                                <span className={`${styles.sortIndicator} ${styles.active}`}>
+                                    {getSortIndicator('timestamp')}
+                                </span>
+                            )}
+                        </th>
+                        <th
+                            className={`${styles.sortableHeader} ${sortConfig.key === 'symbol' ? styles.sorted : ''}`}
+                            onClick={() => handleSort('symbol')}
+                        >
+                            Symbol
+                            {getSortIndicator('symbol') && (
+                                <span className={`${styles.sortIndicator} ${styles.active}`}>
+                                    {getSortIndicator('symbol')}
+                                </span>
+                            )}
+                        </th>
                         <th>Action</th>
                         <th>Type</th>
-                        <th className={styles.alignRight}>Qty</th>
-                        <th className={styles.alignRight}>Limit Price</th>
-                        <th className={styles.alignRight}>Fill Price</th>
+                        <th
+                            className={`${styles.alignRight} ${styles.sortableHeader} ${sortConfig.key === 'quantity' ? styles.sorted : ''}`}
+                            onClick={() => handleSort('quantity')}
+                        >
+                            Qty
+                            {getSortIndicator('quantity') && (
+                                <span className={`${styles.sortIndicator} ${styles.active}`}>
+                                    {getSortIndicator('quantity')}
+                                </span>
+                            )}
+                        </th>
+                        <th
+                            className={`${styles.alignRight} ${styles.sortableHeader} ${sortConfig.key === 'price' ? styles.sorted : ''}`}
+                            onClick={() => handleSort('price')}
+                        >
+                            Limit Price
+                            {getSortIndicator('price') && (
+                                <span className={`${styles.sortIndicator} ${styles.active}`}>
+                                    {getSortIndicator('price')}
+                                </span>
+                            )}
+                        </th>
+                        <th
+                            className={`${styles.alignRight} ${styles.sortableHeader} ${sortConfig.key === 'average_price' ? styles.sorted : ''}`}
+                            onClick={() => handleSort('average_price')}
+                        >
+                            Fill Price
+                            {getSortIndicator('average_price') && (
+                                <span className={`${styles.sortIndicator} ${styles.active}`}>
+                                    {getSortIndicator('average_price')}
+                                </span>
+                            )}
+                        </th>
                         <th>Status</th>
                         <th className={styles.alignCenter}>Action</th>
                     </tr>
@@ -310,14 +381,24 @@ const OrdersTable = ({ orders, onRowClick, onCancelOrder }) => {
                                 </td>
                                 <td className={styles.alignCenter}>
                                     {canCancel ? (
-                                        <button
-                                            className={styles.cancelBtn}
-                                            onClick={(e) => onCancelOrder(order, e)}
-                                            title="Cancel order"
-                                        >
-                                            <XCircle size={12} />
-                                            <span>Cancel</span>
-                                        </button>
+                                        <div className={styles.actionButtons}>
+                                            <button
+                                                className={styles.modifyBtn}
+                                                onClick={(e) => onModifyOrder(order, e)}
+                                                title="Modify order"
+                                            >
+                                                <Edit size={12} />
+                                                <span>Modify</span>
+                                            </button>
+                                            <button
+                                                className={styles.cancelBtn}
+                                                onClick={(e) => onCancelOrder(order, e)}
+                                                title="Cancel order"
+                                            >
+                                                <XCircle size={12} />
+                                                <span>Cancel</span>
+                                            </button>
+                                        </div>
                                     ) : (
                                         <span className={styles.noAction}>-</span>
                                     )}

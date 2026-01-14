@@ -685,3 +685,309 @@
     padding: 4px 6px;
   }
 }
+
+/* Sortable Column Headers */
+.sortableHeader {
+  cursor: pointer;
+  user-select: none;
+  position: relative;
+  transition: background-color 0.2s ease;
+}
+
+.sortableHeader:hover {
+  background-color: rgba(255, 255, 255, 0.05);
+}
+
+.sortableHeader.sorted {
+  background-color: rgba(41, 98, 255, 0.1);
+}
+
+.sortIndicator {
+  display: inline-block;
+  margin-left: 4px;
+  font-size: 10px;
+  opacity: 0.6;
+}
+
+.sortIndicator.active {
+  opacity: 1;
+  color: var(--tv-color-brand, #2962ff);
+}
+
+/* Modal Styles */
+.modalOverlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+  animation: fadeIn 0.2s ease;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.modal {
+  background-color: var(--tv-color-pane-background, #131722);
+  border: 1px solid var(--tv-color-border, #2A2E39);
+  border-radius: 8px;
+  min-width: 450px;
+  max-width: 500px;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.5);
+  animation: slideUp 0.2s ease;
+}
+
+@keyframes slideUp {
+  from {
+    transform: translateY(20px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.modalHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--tv-color-border, #2A2E39);
+}
+
+.modalHeader h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--tv-color-text-primary);
+}
+
+.modalCloseBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  color: var(--tv-color-text-secondary, #787b86);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.modalCloseBtn:hover:not(:disabled) {
+  background-color: rgba(255, 255, 255, 0.05);
+  color: var(--tv-color-text-primary);
+}
+
+.modalCloseBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.modalBody {
+  padding: 20px;
+}
+
+.orderDetails {
+  background-color: var(--tv-color-toolbar-background, #1e1e1e);
+  border: 1px solid var(--tv-color-border, #2A2E39);
+  border-radius: 6px;
+  padding: 12px;
+  margin-bottom: 20px;
+}
+
+.orderDetailRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 4px 0;
+}
+
+.orderDetailLabel {
+  font-size: 12px;
+  color: var(--tv-color-text-secondary, #787b86);
+  font-weight: 500;
+}
+
+.orderDetailValue {
+  font-size: 13px;
+  color: var(--tv-color-text-primary);
+  font-weight: 600;
+}
+
+.modifyForm {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.formGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.formGroup label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--tv-color-text-primary);
+}
+
+.required {
+  color: #F23645;
+}
+
+.formInput {
+  width: 100%;
+  padding: 10px 12px;
+  background-color: var(--tv-color-toolbar-background, #1e1e1e);
+  border: 1px solid var(--tv-color-border, #2A2E39);
+  border-radius: 4px;
+  color: var(--tv-color-text-primary);
+  font-size: 14px;
+  outline: none;
+  transition: border-color 0.2s ease;
+}
+
+.formInput:focus {
+  border-color: var(--tv-color-brand, #2962ff);
+}
+
+.formInput:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.formInput.inputError {
+  border-color: #F23645;
+}
+
+.errorText {
+  font-size: 11px;
+  color: #F23645;
+  margin-top: -2px;
+}
+
+.estimatedValue {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px;
+  background-color: rgba(41, 98, 255, 0.1);
+  border: 1px solid rgba(41, 98, 255, 0.3);
+  border-radius: 4px;
+  margin-top: 8px;
+}
+
+.estimatedLabel {
+  font-size: 12px;
+  color: var(--tv-color-text-secondary, #787b86);
+  font-weight: 500;
+}
+
+.estimatedAmount {
+  font-size: 14px;
+  color: var(--tv-color-brand, #2962ff);
+  font-weight: 700;
+}
+
+.errorMessage {
+  padding: 10px 12px;
+  background-color: rgba(242, 54, 69, 0.1);
+  border: 1px solid rgba(242, 54, 69, 0.3);
+  border-radius: 4px;
+  color: #F23645;
+  font-size: 12px;
+  margin-top: 12px;
+}
+
+.modalActions {
+  display: flex;
+  gap: 10px;
+  padding: 16px 20px;
+  border-top: 1px solid var(--tv-color-border, #2A2E39);
+}
+
+.primaryBtn,
+.secondaryBtn {
+  flex: 1;
+  padding: 10px 16px;
+  border: none;
+  border-radius: 4px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.primaryBtn {
+  background-color: var(--tv-color-brand, #2962ff);
+  color: white;
+}
+
+.primaryBtn:hover:not(:disabled) {
+  background-color: #1e53e5;
+}
+
+.primaryBtn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.secondaryBtn {
+  background-color: transparent;
+  border: 1px solid var(--tv-color-border, #2A2E39);
+  color: var(--tv-color-text-primary);
+}
+
+.secondaryBtn:hover:not(:disabled) {
+  background-color: rgba(255, 255, 255, 0.05);
+}
+
+.secondaryBtn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Modify Button in OrdersTable */
+.modifyBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  border: none;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  background-color: rgba(41, 98, 255, 0.15);
+  color: #2962ff;
+}
+
+.modifyBtn:hover {
+  background-color: rgba(41, 98, 255, 0.3);
+}
+
+.actionButtons {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}

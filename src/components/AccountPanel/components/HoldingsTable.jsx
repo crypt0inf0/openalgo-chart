@@ -5,7 +5,7 @@
 import React, { useState, useMemo, useCallback } from 'react';
 import { Search, X, Filter } from 'lucide-react';
 import styles from '../AccountPanel.module.css';
-import { formatCurrency } from '../utils/accountFormatters';
+import { formatCurrency, sortData } from '../utils/accountFormatters';
 
 const HoldingsTable = ({ holdings, onRowClick }) => {
     const [searchTerm, setSearchTerm] = useState('');
@@ -13,6 +13,7 @@ const HoldingsTable = ({ holdings, onRowClick }) => {
         exchange: []
     });
     const [showFilters, setShowFilters] = useState(false);
+    const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' });
 
     // Get unique values for filters
     const uniqueExchanges = useMemo(() => {
@@ -21,7 +22,7 @@ const HoldingsTable = ({ holdings, onRowClick }) => {
 
     // Filter and sort holdings
     const sortedHoldings = useMemo(() => {
-        return holdings
+        const filtered = holdings
             .filter(holding => {
                 // Search filter
                 const matchesSearch = !searchTerm ||
@@ -32,9 +33,14 @@ const HoldingsTable = ({ holdings, onRowClick }) => {
                     filters.exchange.includes(holding.exchange);
 
                 return matchesSearch && matchesExchange;
-            })
-            .sort((a, b) => (b.timestamp || '').localeCompare(a.timestamp || ''));
-    }, [holdings, searchTerm, filters]);
+            });
+
+        // Apply sorting if configured, otherwise sort by timestamp
+        if (sortConfig.key) {
+            return sortData(filtered, sortConfig);
+        }
+        return filtered.sort((a, b) => (b.timestamp || '').localeCompare(a.timestamp || ''));
+    }, [holdings, searchTerm, filters, sortConfig]);
 
     // Handle filter toggle
     const handleFilterToggle = useCallback((filterType, value) => {
@@ -52,6 +58,20 @@ const HoldingsTable = ({ holdings, onRowClick }) => {
         setSearchTerm('');
         setFilters({ exchange: [] });
     }, []);
+
+    // Handle column sorting
+    const handleSort = useCallback((key) => {
+        setSortConfig(prev => ({
+            key,
+            direction: prev.key === key && prev.direction === 'asc' ? 'desc' : 'asc'
+        }));
+    }, []);
+
+    // Get sort indicator
+    const getSortIndicator = (key) => {
+        if (sortConfig.key !== key) return null;
+        return sortConfig.direction === 'asc' ? '↑' : '↓';
+    };
 
     const hasActiveFilters = searchTerm || filters.exchange.length > 0;
 
@@ -162,14 +182,64 @@ const HoldingsTable = ({ holdings, onRowClick }) => {
                 </colgroup>
                 <thead>
                     <tr>
-                        <th>Symbol</th>
+                        <th
+                            className={`${styles.sortableHeader} ${sortConfig.key === 'symbol' ? styles.sorted : ''}`}
+                            onClick={() => handleSort('symbol')}
+                        >
+                            Symbol
+                            {getSortIndicator('symbol') && (
+                                <span className={`${styles.sortIndicator} ${styles.active}`}>
+                                    {getSortIndicator('symbol')}
+                                </span>
+                            )}
+                        </th>
                         <th>Exchange</th>
-                        <th className={styles.alignRight}>Qty</th>
+                        <th
+                            className={`${styles.alignRight} ${styles.sortableHeader} ${sortConfig.key === 'quantity' ? styles.sorted : ''}`}
+                            onClick={() => handleSort('quantity')}
+                        >
+                            Qty
+                            {getSortIndicator('quantity') && (
+                                <span className={`${styles.sortIndicator} ${styles.active}`}>
+                                    {getSortIndicator('quantity')}
+                                </span>
+                            )}
+                        </th>
                         <th className={styles.alignRight}>Avg Cost</th>
-                        <th className={styles.alignRight}>LTP</th>
+                        <th
+                            className={`${styles.alignRight} ${styles.sortableHeader} ${sortConfig.key === 'close' ? styles.sorted : ''}`}
+                            onClick={() => handleSort('close')}
+                        >
+                            LTP
+                            {getSortIndicator('close') && (
+                                <span className={`${styles.sortIndicator} ${styles.active}`}>
+                                    {getSortIndicator('close')}
+                                </span>
+                            )}
+                        </th>
                         <th className={styles.alignRight}>Value</th>
-                        <th className={styles.alignRight}>P&L</th>
-                        <th className={styles.alignRight}>P&L %</th>
+                        <th
+                            className={`${styles.alignRight} ${styles.sortableHeader} ${sortConfig.key === 'pnl' ? styles.sorted : ''}`}
+                            onClick={() => handleSort('pnl')}
+                        >
+                            P&L
+                            {getSortIndicator('pnl') && (
+                                <span className={`${styles.sortIndicator} ${styles.active}`}>
+                                    {getSortIndicator('pnl')}
+                                </span>
+                            )}
+                        </th>
+                        <th
+                            className={`${styles.alignRight} ${styles.sortableHeader} ${sortConfig.key === 'pnlpercent' ? styles.sorted : ''}`}
+                            onClick={() => handleSort('pnlpercent')}
+                        >
+                            P&L %
+                            {getSortIndicator('pnlpercent') && (
+                                <span className={`${styles.sortIndicator} ${styles.active}`}>
+                                    {getSortIndicator('pnlpercent')}
+                                </span>
+                            )}
+                        </th>
                     </tr>
                 </thead>
                 <tbody>

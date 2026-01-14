@@ -5,7 +5,7 @@
 import React, { useState, useMemo, useCallback } from 'react';
 import { Search, X, Filter } from 'lucide-react';
 import styles from '../AccountPanel.module.css';
-import { formatCurrency } from '../utils/accountFormatters';
+import { formatCurrency, sortData } from '../utils/accountFormatters';
 
 const TradesTable = ({ trades, onRowClick }) => {
     const [searchTerm, setSearchTerm] = useState('');
@@ -14,6 +14,7 @@ const TradesTable = ({ trades, onRowClick }) => {
         exchange: []
     });
     const [showFilters, setShowFilters] = useState(false);
+    const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' });
 
     // Get unique values for filters
     const uniqueActions = useMemo(() => {
@@ -26,7 +27,7 @@ const TradesTable = ({ trades, onRowClick }) => {
 
     // Filter and sort trades
     const sortedTrades = useMemo(() => {
-        return trades
+        const filtered = trades
             .filter(trade => {
                 // Search filter
                 const matchesSearch = !searchTerm ||
@@ -41,9 +42,14 @@ const TradesTable = ({ trades, onRowClick }) => {
                     filters.exchange.includes(trade.exchange);
 
                 return matchesSearch && matchesAction && matchesExchange;
-            })
-            .sort((a, b) => (b.timestamp || '').localeCompare(a.timestamp || ''));
-    }, [trades, searchTerm, filters]);
+            });
+
+        // Apply sorting if configured, otherwise sort by timestamp
+        if (sortConfig.key) {
+            return sortData(filtered, sortConfig);
+        }
+        return filtered.sort((a, b) => (b.timestamp || '').localeCompare(a.timestamp || ''));
+    }, [trades, searchTerm, filters, sortConfig]);
 
     // Handle filter toggle
     const handleFilterToggle = useCallback((filterType, value) => {
@@ -61,6 +67,20 @@ const TradesTable = ({ trades, onRowClick }) => {
         setSearchTerm('');
         setFilters({ action: [], exchange: [] });
     }, []);
+
+    // Handle column sorting
+    const handleSort = useCallback((key) => {
+        setSortConfig(prev => ({
+            key,
+            direction: prev.key === key && prev.direction === 'asc' ? 'desc' : 'asc'
+        }));
+    }, []);
+
+    // Get sort indicator
+    const getSortIndicator = (key) => {
+        if (sortConfig.key !== key) return null;
+        return sortConfig.direction === 'asc' ? '↑' : '↓';
+    };
 
     const hasActiveFilters = searchTerm || filters.action.length > 0 || filters.exchange.length > 0;
 
@@ -187,12 +207,62 @@ const TradesTable = ({ trades, onRowClick }) => {
                 </colgroup>
                 <thead>
                     <tr>
-                        <th>Time</th>
-                        <th>Symbol</th>
+                        <th
+                            className={`${styles.sortableHeader} ${sortConfig.key === 'timestamp' ? styles.sorted : ''}`}
+                            onClick={() => handleSort('timestamp')}
+                        >
+                            Time
+                            {getSortIndicator('timestamp') && (
+                                <span className={`${styles.sortIndicator} ${styles.active}`}>
+                                    {getSortIndicator('timestamp')}
+                                </span>
+                            )}
+                        </th>
+                        <th
+                            className={`${styles.sortableHeader} ${sortConfig.key === 'symbol' ? styles.sorted : ''}`}
+                            onClick={() => handleSort('symbol')}
+                        >
+                            Symbol
+                            {getSortIndicator('symbol') && (
+                                <span className={`${styles.sortIndicator} ${styles.active}`}>
+                                    {getSortIndicator('symbol')}
+                                </span>
+                            )}
+                        </th>
                         <th>Action</th>
-                        <th className={styles.alignRight}>Qty</th>
-                        <th className={styles.alignRight}>Avg Price</th>
-                        <th className={styles.alignRight}>Value</th>
+                        <th
+                            className={`${styles.alignRight} ${styles.sortableHeader} ${sortConfig.key === 'quantity' ? styles.sorted : ''}`}
+                            onClick={() => handleSort('quantity')}
+                        >
+                            Qty
+                            {getSortIndicator('quantity') && (
+                                <span className={`${styles.sortIndicator} ${styles.active}`}>
+                                    {getSortIndicator('quantity')}
+                                </span>
+                            )}
+                        </th>
+                        <th
+                            className={`${styles.alignRight} ${styles.sortableHeader} ${sortConfig.key === 'average_price' ? styles.sorted : ''}`}
+                            onClick={() => handleSort('average_price')}
+                        >
+                            Avg Price
+                            {getSortIndicator('average_price') && (
+                                <span className={`${styles.sortIndicator} ${styles.active}`}>
+                                    {getSortIndicator('average_price')}
+                                </span>
+                            )}
+                        </th>
+                        <th
+                            className={`${styles.alignRight} ${styles.sortableHeader} ${sortConfig.key === 'trade_value' ? styles.sorted : ''}`}
+                            onClick={() => handleSort('trade_value')}
+                        >
+                            Value
+                            {getSortIndicator('trade_value') && (
+                                <span className={`${styles.sortIndicator} ${styles.active}`}>
+                                    {getSortIndicator('trade_value')}
+                                </span>
+                            )}
+                        </th>
                         <th className={styles.alignRight}>Charges</th>
                         <th className={styles.alignRight}>Trade ID</th>
                     </tr>

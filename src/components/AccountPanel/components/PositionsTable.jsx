@@ -5,7 +5,7 @@
 import React, { useState, useMemo, useCallback } from 'react';
 import { LogOut, Search, X, Filter } from 'lucide-react';
 import styles from '../AccountPanel.module.css';
-import { formatCurrency } from '../utils/accountFormatters';
+import { formatCurrency, sortData } from '../utils/accountFormatters';
 
 const PositionsTable = ({ positions, onRowClick, onExitPosition }) => {
     const [searchTerm, setSearchTerm] = useState('');
@@ -14,6 +14,7 @@ const PositionsTable = ({ positions, onRowClick, onExitPosition }) => {
         product: []
     });
     const [showFilters, setShowFilters] = useState(false);
+    const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' });
 
     // Get unique values for filters
     const uniqueExchanges = useMemo(() => {
@@ -26,7 +27,7 @@ const PositionsTable = ({ positions, onRowClick, onExitPosition }) => {
 
     // Filter and sort positions
     const filteredPositions = useMemo(() => {
-        return positions
+        const filtered = positions
             .filter(p => p.quantity !== 0) // Only open positions
             .filter(p => {
                 // Search filter
@@ -42,9 +43,14 @@ const PositionsTable = ({ positions, onRowClick, onExitPosition }) => {
                     filters.product.includes(p.product);
 
                 return matchesSearch && matchesExchange && matchesProduct;
-            })
-            .sort((a, b) => (b.timestamp || '').localeCompare(a.timestamp || ''));
-    }, [positions, searchTerm, filters]);
+            });
+
+        // Apply sorting if configured, otherwise sort by timestamp
+        if (sortConfig.key) {
+            return sortData(filtered, sortConfig);
+        }
+        return filtered.sort((a, b) => (b.timestamp || '').localeCompare(a.timestamp || ''));
+    }, [positions, searchTerm, filters, sortConfig]);
 
     // Handle filter toggle
     const handleFilterToggle = useCallback((filterType, value) => {
@@ -62,6 +68,20 @@ const PositionsTable = ({ positions, onRowClick, onExitPosition }) => {
         setSearchTerm('');
         setFilters({ exchange: [], product: [] });
     }, []);
+
+    // Handle column sorting
+    const handleSort = useCallback((key) => {
+        setSortConfig(prev => ({
+            key,
+            direction: prev.key === key && prev.direction === 'asc' ? 'desc' : 'asc'
+        }));
+    }, []);
+
+    // Get sort indicator
+    const getSortIndicator = (key) => {
+        if (sortConfig.key !== key) return null;
+        return sortConfig.direction === 'asc' ? '↑' : '↓';
+    };
 
     const hasActiveFilters = searchTerm || filters.exchange.length > 0 || filters.product.length > 0;
 
@@ -190,14 +210,64 @@ const PositionsTable = ({ positions, onRowClick, onExitPosition }) => {
                 </colgroup>
                 <thead>
                     <tr>
-                        <th>Symbol</th>
+                        <th
+                            className={`${styles.sortableHeader} ${sortConfig.key === 'symbol' ? styles.sorted : ''}`}
+                            onClick={() => handleSort('symbol')}
+                        >
+                            Symbol
+                            {getSortIndicator('symbol') && (
+                                <span className={`${styles.sortIndicator} ${styles.active}`}>
+                                    {getSortIndicator('symbol')}
+                                </span>
+                            )}
+                        </th>
                         <th>Exchange</th>
                         <th>Product</th>
-                        <th className={styles.alignRight}>Qty</th>
-                        <th className={styles.alignRight}>Avg Price</th>
-                        <th className={styles.alignRight}>LTP</th>
+                        <th
+                            className={`${styles.alignRight} ${styles.sortableHeader} ${sortConfig.key === 'quantity' ? styles.sorted : ''}`}
+                            onClick={() => handleSort('quantity')}
+                        >
+                            Qty
+                            {getSortIndicator('quantity') && (
+                                <span className={`${styles.sortIndicator} ${styles.active}`}>
+                                    {getSortIndicator('quantity')}
+                                </span>
+                            )}
+                        </th>
+                        <th
+                            className={`${styles.alignRight} ${styles.sortableHeader} ${sortConfig.key === 'average_price' ? styles.sorted : ''}`}
+                            onClick={() => handleSort('average_price')}
+                        >
+                            Avg Price
+                            {getSortIndicator('average_price') && (
+                                <span className={`${styles.sortIndicator} ${styles.active}`}>
+                                    {getSortIndicator('average_price')}
+                                </span>
+                            )}
+                        </th>
+                        <th
+                            className={`${styles.alignRight} ${styles.sortableHeader} ${sortConfig.key === 'ltp' ? styles.sorted : ''}`}
+                            onClick={() => handleSort('ltp')}
+                        >
+                            LTP
+                            {getSortIndicator('ltp') && (
+                                <span className={`${styles.sortIndicator} ${styles.active}`}>
+                                    {getSortIndicator('ltp')}
+                                </span>
+                            )}
+                        </th>
                         <th className={styles.alignRight}>Value</th>
-                        <th className={styles.alignRight}>P&L</th>
+                        <th
+                            className={`${styles.alignRight} ${styles.sortableHeader} ${sortConfig.key === 'pnl' ? styles.sorted : ''}`}
+                            onClick={() => handleSort('pnl')}
+                        >
+                            P&L
+                            {getSortIndicator('pnl') && (
+                                <span className={`${styles.sortIndicator} ${styles.active}`}>
+                                    {getSortIndicator('pnl')}
+                                </span>
+                            )}
+                        </th>
                         <th className={styles.alignRight}>P&L %</th>
                         <th className={styles.alignCenter}>Action</th>
                     </tr>

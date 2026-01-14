@@ -51,9 +51,51 @@ export const calculateOrderStats = (orders) => {
     }, { open: 0, completed: 0, rejected: 0 });
 };
 
+/**
+ * Sort data array by a specific key
+ * @param {Array} data - Data array to sort
+ * @param {Object} sortConfig - Sort configuration { key, direction }
+ * @returns {Array} Sorted data array
+ */
+export const sortData = (data, sortConfig) => {
+    if (!sortConfig || !sortConfig.key) return data;
+
+    return [...data].sort((a, b) => {
+        const aVal = a[sortConfig.key];
+        const bVal = b[sortConfig.key];
+
+        // Handle null/undefined values
+        if (aVal === null || aVal === undefined) return 1;
+        if (bVal === null || bVal === undefined) return -1;
+
+        // Numeric comparison
+        if (typeof aVal === 'number' && typeof bVal === 'number') {
+            return sortConfig.direction === 'asc' ? aVal - bVal : bVal - aVal;
+        }
+
+        // Try to parse as numbers if strings contain numeric values
+        const aNum = parseFloat(aVal);
+        const bNum = parseFloat(bVal);
+        if (!isNaN(aNum) && !isNaN(bNum)) {
+            return sortConfig.direction === 'asc' ? aNum - bNum : bNum - aNum;
+        }
+
+        // String comparison
+        const aStr = String(aVal).toLowerCase();
+        const bStr = String(bVal).toLowerCase();
+
+        if (sortConfig.direction === 'asc') {
+            return aStr.localeCompare(bStr);
+        } else {
+            return bStr.localeCompare(aStr);
+        }
+    });
+};
+
 export default {
     formatCurrency,
     formatPnL,
     isOpenOrderStatus,
     calculateOrderStats,
+    sortData,
 };
