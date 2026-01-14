@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { ChevronDown, ChevronUp, RefreshCw, X, Wallet, Minus, Maximize2, Minimize2, LogOut, XCircle, Wifi, WifiOff } from 'lucide-react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { ChevronDown, ChevronUp, RefreshCw, X, Wallet, Minus, Maximize2, Minimize2, LogOut, XCircle, Wifi, WifiOff, Settings, Search, Filter } from 'lucide-react';
 import styles from './AccountPanel.module.css';
 import { ping, placeOrder, subscribeToMultiTicker } from '../../services/openalgo';
 import ExitPositionModal from '../ExitPositionModal';
@@ -8,7 +8,10 @@ import CancelOrderModal from './components/CancelOrderModal';
 import { useOrders } from '../../context/OrderContext';
 
 // Import extracted components
-import { PositionsTable, ClosedPositionsTable, OrdersTable, HoldingsTable, TradesTable } from './components';
+import { PositionsTable, ClosedPositionsTable, OrdersTable, HoldingsTable, TradesTable, TableSettingsPanel } from './components';
+
+// Import hooks
+import { useTablePreferences } from './hooks/useTablePreferences';
 
 // Import constants and formatters
 import { TABS, AUTO_REFRESH_INTERVAL_MS } from './constants/accountConstants';
@@ -63,6 +66,20 @@ const AccountPanel = ({
     // Closed positions visibility state
     const [showClosedPositions, setShowClosedPositions] = useState(true);
 
+    // Table settings state
+    const [isSettingsPanelOpen, setIsSettingsPanelOpen] = useState(false);
+    const { preferences, updatePreference } = useTablePreferences();
+    const settingsButtonRef = useRef(null);
+    const [settingsPanelPosition, setSettingsPanelPosition] = useState({ top: 0, right: 0 });
+
+    // Unified positions search state
+    const [positionsSearchTerm, setPositionsSearchTerm] = useState('');
+    const [positionsFilters, setPositionsFilters] = useState({
+        exchange: [],
+        product: []
+    });
+    const [showPositionsFilters, setShowPositionsFilters] = useState(false);
+
     // Use context data directly (OrderContext provides all data)
     const funds = contextFunds;
     const positions = contextPositions;
@@ -72,6 +89,54 @@ const AccountPanel = ({
 
     // Calculate order stats using extracted utility
     const orderStats = calculateOrderStats(contextOrders);
+
+    // Unified positions search logic
+    const uniquePositionsExchanges = useMemo(() => {
+        return [...new Set(positions.map(p => p.exchange).filter(Boolean))];
+    }, [positions]);
+
+    const uniquePositionsProducts = useMemo(() => {
+        return [...new Set(positions.map(p => p.product).filter(Boolean))];
+    }, [positions]);
+
+    const filteredPositions = useMemo(() => {
+        return positions.filter(p => {
+            const matchesSearch = !positionsSearchTerm ||
+                p.symbol?.toLowerCase().includes(positionsSearchTerm.toLowerCase());
+            const matchesExchange = positionsFilters.exchange.length === 0 ||
+                positionsFilters.exchange.includes(p.exchange);
+            const matchesProduct = positionsFilters.product.length === 0 ||
+                positionsFilters.product.includes(p.product);
+            return matchesSearch && matchesExchange && matchesProduct;
+        });
+    }, [positions, positionsSearchTerm, positionsFilters]);
+
+    const handlePositionsFilterToggle = useCallback((filterType, value) => {
+        setPositionsFilters(prev => {
+            const currentFilters = prev[filterType];
+            const newFilters = currentFilters.includes(value)
+                ? currentFilters.filter(v => v !== value)
+                : [...currentFilters, value];
+            return { ...prev, [filterType]: newFilters };
+        });
+    }, []);
+
+    const handleClearPositionsFilters = useCallback(() => {
+        setPositionsSearchTerm('');
+        setPositionsFilters({ exchange: [], product: [] });
+    }, []);
+
+    // Calculate settings panel position
+    const handleToggleSettingsPanel = useCallback(() => {
+        if (!isSettingsPanelOpen && settingsButtonRef.current) {
+            const rect = settingsButtonRef.current.getBoundingClientRect();
+            setSettingsPanelPosition({
+                top: rect.bottom + 8,
+                right: window.innerWidth - rect.right
+            });
+        }
+        setIsSettingsPanelOpen(!isSettingsPanelOpen);
+    }, [isSettingsPanelOpen]);
 
     // Refresh function - uses OrderContext refresh + fetches broker info
     const fetchAccountData = useCallback(async () => {
@@ -762,21 +827,117 @@ const AccountPanel = ({
 
     // Render content based on active tab using extracted components
     const renderContent = () => {
+        const showSearchFilter = preferences.showSearchFilter;
+
         switch (activeTab) {
             case 'positions': {
-                // Calculate counts
-                const openPositionsCount = positions.filter(p => p.quantity !== 0).length;
-                const closedPositionsCount = positions.filter(p => p.quantity === 0).length;
+                // Calculate counts from filtered positions
+                const openPositionsCount = filteredPositions.filter(p => p.quantity !== 0).length;
+                const closedPositionsCount = filteredPositions.filter(p => p.quantity === 0).length;
+                const hasActiveFilters = positionsSearchTerm || positionsFilters.exchange.length > 0 || positionsFilters.product.length > 0;
 
                 return (
                     <div className={styles.tabContent}>
+                        {/* Unified Search and Filter Bar */}
+                        {showSearchFilter && (
+                            <>
+                                <div className={styles.tableControls}>
+                                    <div className={styles.searchBar}>
+                                        <Search size={14} className={styles.searchIcon} />
+                                        <input
+                                            type="text"
+                                            placeholder="Search symbol..."
+                                            value={positionsSearchTerm}
+                                            onChange={(e) => setPositionsSearchTerm(e.target.value)}
+                                            className={styles.searchInput}
+                                        />
+                                        {positionsSearchTerm && (
+                                            <X
+                                                size={14}
+                                                className={styles.clearIcon}
+                                                onClick={() => setPositionsSearchTerm('')}
+                                            />
+                                        )}
+                                    </div>
+
+                                    <button
+                                        className={`${styles.filterBtn} ${hasActiveFilters ? styles.filterActive : ''}`}
+                                        onClick={() => setShowPositionsFilters(!showPositionsFilters)}
+                                        title="Toggle filters"
+                                    >
+                                        <Filter size={14} />
+                                        <span>Filters</span>
+                                        {hasActiveFilters && <span className={styles.filterCount}>
+                                            {positionsFilters.exchange.length + positionsFilters.product.length}
+                                        </span>}
+                                    </button>
+
+                                    {hasActiveFilters && (
+                                        <button
+                                            className={styles.clearFiltersBtn}
+                                            onClick={handleClearPositionsFilters}
+                                            title="Clear all filters"
+                                        >
+                                            <X size={12} />
+                                            <span>Clear</span>
+                                        </button>
+                                    )}
+                                </div>
+
+                                {/* Filter Dropdowns */}
+                                {showPositionsFilters && (
+                                    <div className={styles.filterPanel}>
+                                        <div className={styles.filterGroup}>
+                                            <label>Exchange</label>
+                                            <div className={styles.filterOptions}>
+                                                {uniquePositionsExchanges.map(exchange => (
+                                                    <label key={exchange} className={styles.filterOption}>
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={positionsFilters.exchange.includes(exchange)}
+                                                            onChange={() => handlePositionsFilterToggle('exchange', exchange)}
+                                                        />
+                                                        <span>{exchange}</span>
+                                                    </label>
+                                                ))}
+                                            </div>
+                                        </div>
+
+                                        <div className={styles.filterGroup}>
+                                            <label>Product</label>
+                                            <div className={styles.filterOptions}>
+                                                {uniquePositionsProducts.map(product => (
+                                                    <label key={product} className={styles.filterOption}>
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={positionsFilters.product.includes(product)}
+                                                            onChange={() => handlePositionsFilterToggle('product', product)}
+                                                        />
+                                                        <span>{product}</span>
+                                                    </label>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Results Count */}
+                                {hasActiveFilters && (
+                                    <div className={styles.resultsCount}>
+                                        Showing {filteredPositions.length} of {positions.length} positions
+                                    </div>
+                                )}
+                            </>
+                        )}
+
                         {/* Active Positions Section */}
                         <div className={styles.positionsSection}>
                             <PositionsTable
-                                positions={positions}
+                                positions={filteredPositions}
                                 onRowClick={handleRowClick}
                                 onExitPosition={handleExitPosition}
                                 lastUpdateTime={lastUpdateTime}
+                                showSearchFilter={false}
                             />
                         </div>
 
@@ -798,7 +959,7 @@ const AccountPanel = ({
 
                                 {showClosedPositions && (
                                     <ClosedPositionsTable
-                                        positions={positions}
+                                        positions={filteredPositions}
                                         onRowClick={handleRowClick}
                                     />
                                 )}
@@ -808,13 +969,41 @@ const AccountPanel = ({
                 );
             }
             case 'orders':
-                return <OrdersTable orders={orders.orders || []} onRowClick={handleRowClick} onCancelOrder={handleCancelOrder} onModifyOrder={handleModifyOrder} />;
+                return (
+                    <OrdersTable
+                        orders={orders.orders || []}
+                        onRowClick={handleRowClick}
+                        onCancelOrder={handleCancelOrder}
+                        onModifyOrder={handleModifyOrder}
+                        showSearchFilter={showSearchFilter}
+                    />
+                );
             case 'holdings':
-                return <HoldingsTable holdings={holdings.holdings || []} onRowClick={handleRowClick} />;
+                return (
+                    <HoldingsTable
+                        holdings={holdings.holdings || []}
+                        onRowClick={handleRowClick}
+                        showSearchFilter={showSearchFilter}
+                    />
+                );
             case 'trades':
-                return <TradesTable trades={trades} onRowClick={handleRowClick} />;
+                return (
+                    <TradesTable
+                        trades={trades}
+                        onRowClick={handleRowClick}
+                        showSearchFilter={showSearchFilter}
+                    />
+                );
             default:
-                return <PositionsTable positions={positions} onRowClick={handleRowClick} onExitPosition={handleExitPosition} lastUpdateTime={lastUpdateTime} />;
+                return (
+                    <PositionsTable
+                        positions={positions}
+                        onRowClick={handleRowClick}
+                        onExitPosition={handleExitPosition}
+                        lastUpdateTime={lastUpdateTime}
+                        showSearchFilter={showSearchFilter}
+                    />
+                );
         }
     };
 
@@ -872,7 +1061,7 @@ const AccountPanel = ({
                     </div>
                 </div>
 
-                <div className={styles.headerRight}>
+                <div className={styles.headerRight} style={{ position: 'relative' }}>
                     <button
                         className={styles.refreshBtn}
                         onClick={fetchAccountData}
@@ -880,6 +1069,14 @@ const AccountPanel = ({
                         title="Refresh data"
                     >
                         <RefreshCw size={14} className={isLoading ? styles.spinning : ''} />
+                    </button>
+                    <button
+                        ref={settingsButtonRef}
+                        className={styles.controlBtn}
+                        onClick={handleToggleSettingsPanel}
+                        title="Table Settings"
+                    >
+                        <Settings size={14} />
                     </button>
                     <button
                         className={styles.controlBtn}
@@ -898,6 +1095,16 @@ const AccountPanel = ({
                     <button className={styles.closeBtn} onClick={onClose} title="Close panel">
                         <X size={16} />
                     </button>
+
+                    {/* Settings Panel */}
+                    {isSettingsPanelOpen && (
+                        <TableSettingsPanel
+                            preferences={preferences}
+                            onUpdate={updatePreference}
+                            onClose={() => setIsSettingsPanelOpen(false)}
+                            position={settingsPanelPosition}
+                        />
+                    )}
                 </div>
             </div>
 

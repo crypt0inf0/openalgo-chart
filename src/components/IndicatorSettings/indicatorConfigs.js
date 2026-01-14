@@ -130,19 +130,12 @@ export const indicatorConfigs = {
 
     volume: {
         name: 'Volume',
-        fullName: 'Volume',
+        fullName: 'Volume (TradingView Style)',
         pane: 'main',
-        inputs: [
-            { key: 'maPeriod', label: 'MA Period', type: 'number', default: 20, min: 1, max: 200 },
-            { key: 'highVolumeThreshold', label: 'High Vol Threshold', type: 'number', default: 1.5, min: 1.0, max: 5.0, step: 0.1 },
-            { key: 'showMA', label: 'Show MA Line', type: 'boolean', default: true },
-        ],
+        inputs: [],
         style: [
             { key: 'colorUp', label: 'Up Color', type: 'color', default: '#26A69A' },
             { key: 'colorDown', label: 'Down Color', type: 'color', default: '#EF5350' },
-            { key: 'highVolumeUpColor', label: 'High Vol Up', type: 'color', default: '#00E676' },
-            { key: 'highVolumeDownColor', label: 'High Vol Down', type: 'color', default: '#FF1744' },
-            { key: 'maColor', label: 'MA Line Color', type: 'color', default: '#FFD700' },
         ],
     },
 

@@ -151,7 +151,7 @@ export const createSupertrendSeries = (chart, isVisible) => {
 };
 
 /**
- * Create Volume series (histogram + MA)
+ * Create Volume series (histogram only - TradingView style)
  */
 export const createVolumeSeries = (chart, ind) => {
     const volumeBars = chart.addSeries(HistogramSeries, {
@@ -162,16 +162,8 @@ export const createVolumeSeries = (chart, ind) => {
     });
     volumeBars.priceScale().applyOptions({ scaleMargins: { top: 0.85, bottom: 0 } });
 
-    const volumeMA = chart.addSeries(LineSeries, {
-        color: ind.maColor || '#FFD700',
-        lineWidth: 2,
-        priceScaleId: 'volume',
-        priceLineVisible: false,
-        lastValueVisible: false,
-        crosshairMarkerVisible: false
-    });
-
-    return { bars: volumeBars, ma: volumeMA };
+    // Return just the bars (no MA line)
+    return { bars: volumeBars };
 };
 
 /**

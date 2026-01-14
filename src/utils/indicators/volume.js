@@ -1,26 +1,38 @@
 /**
- * Volume Indicator with Color Coding and Moving Average
- * Shows trading volume with color based on price direction and relative volume analysis
+ * Volume Indicator - TradingView Style
+ * Shows trading volume with color based on close vs previous close comparison
  *
  * @param {Array} data - Array of OHLC data points with {time, open, high, low, close, volume}
- * @param {string} upColor - Color for up candles (default: '#089981')
- * @param {string} downColor - Color for down candles (default: '#F23645')
+ * @param {string} upColor - Color for up bars (default: '#26A69A')
+ * @param {string} downColor - Color for down bars (default: '#EF5350')
  * @returns {Array} Array of {time, value, color} objects
  */
-export const calculateVolume = (data, upColor = '#089981', downColor = '#F23645') => {
+export const calculateVolume = (data, upColor = '#26A69A', downColor = '#EF5350') => {
   if (!Array.isArray(data) || data.length === 0) {
     return [];
   }
 
-  return data.map(candle => ({
-    time: candle.time,
-    value: candle.volume || 0,
-    color: candle.close >= candle.open ? upColor : downColor
-  }));
+  return data.map((candle, index) => {
+    let color;
+    if (index === 0) {
+      // First bar - use close vs open as fallback
+      color = candle.close >= candle.open ? upColor : downColor;
+    } else {
+      // Compare current close to previous close (TradingView style)
+      color = candle.close >= data[index - 1].close ? upColor : downColor;
+    }
+
+    return {
+      time: candle.time,
+      value: candle.volume || 0,
+      color
+    };
+  });
 };
 
 /**
  * Calculate Volume Moving Average
+ * @deprecated Legacy function - not used in TradingView-style volume indicator
  * @param {Array} data - Array of OHLC data points with volume
  * @param {number} period - MA period (default: 20)
  * @returns {Array} Array of {time, value} objects for the MA line
@@ -54,6 +66,7 @@ export const calculateVolumeMA = (data, period = 20) => {
 
 /**
  * Enhanced Volume with Relative Volume Analysis
+ * @deprecated Legacy function - not used in TradingView-style volume indicator
  * Returns volume bars with color-coding based on:
  * - Price direction (up/down candle)
  * - Relative volume (highlight when above average)

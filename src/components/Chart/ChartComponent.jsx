@@ -21,7 +21,7 @@ import {
     calculateRSI,
     calculateMACD,
     calculateBollingerBands,
-    calculateEnhancedVolume,
+    calculateVolume,
     calculateATR,
     calculateStochastic,
     calculateVWAP,
@@ -140,6 +140,7 @@ const ChartComponent = forwardRef(({
     // Keeping these for now if used by specific legacy logic, but goal is to move to maps
     // Integrated indicator series refs (displayed within main chart)
     const volumeSeriesRef = useRef(null); // Volume might remain special or move to map
+    const cumulativeVolumeRef = useRef(0); // Track cumulative day volume for per-candle calculation
 
     const chartReadyRef = useRef(false); // Track when chart is fully stable and ready for indicator additions
     const lineToolManagerRef = useRef(null);
@@ -2031,27 +2032,45 @@ const ChartComponent = forwardRef(({
                             let candle;
                             if (needNewCandle) {
                                 // Create a new candle - all OHLC start at current price
+                                // Calculate per-candle volume from cumulative day volume
+                                const perCandleVolume = cumulativeVolumeRef.current === 0
+                                    ? tickVolume  // First tick: use as-is
+                                    : Math.max(0, tickVolume - cumulativeVolumeRef.current);  // Subsequent: calculate difference
+
+                                // Update baseline for next candle
+                                cumulativeVolumeRef.current = tickVolume;
+
                                 candle = {
                                     time: currentCandleTime,
                                     open: closePrice,
                                     high: closePrice,
                                     low: closePrice,
                                     close: closePrice,
-                                    volume: tickVolume,
+                                    volume: perCandleVolume,
                                 };
                                 currentData.push(candle);
-                                logger.debug('[WebSocket] Created new candle at time:', currentCandleTime, 'price:', closePrice);
+                                logger.debug('[WebSocket] Created new candle at time:', currentCandleTime, 'price:', closePrice, 'volume:', perCandleVolume, '(cumulative:', tickVolume + ')');
                             } else {
                                 // Update the last candle using ONLY the close price for high/low
                                 // WebSocket high/low are session-wide, not per-interval
                                 const existingCandle = currentData[lastIndex];
+
+                                // Initialize baseline on first tick for this candle
+                                if (cumulativeVolumeRef.current === 0) {
+                                    // Estimate baseline: current cumulative - existing candle volume
+                                    cumulativeVolumeRef.current = Math.max(0, tickVolume - (existingCandle.volume || 0));
+                                }
+
+                                // Calculate per-candle volume
+                                const perCandleVolume = Math.max(0, tickVolume - cumulativeVolumeRef.current);
+
                                 candle = {
                                     time: lastCandleTime,
                                     open: existingCandle.open,
                                     high: Math.max(existingCandle.high, closePrice),
                                     low: Math.min(existingCandle.low, closePrice),
                                     close: closePrice,
-                                    volume: tickVolume,
+                                    volume: perCandleVolume,
                                 };
                                 currentData[lastIndex] = candle;
                             }
@@ -2234,20 +2253,14 @@ const ChartComponent = forwardRef(({
                         break;
                     }
                     case 'volume': {
-                        const result = calculateEnhancedVolume(data, {
-                            maPeriod: ind.maPeriod || 20,
-                            upColor: ind.colorUp || '#26A69A',
-                            downColor: ind.colorDown || '#EF5350',
-                            highVolumeUpColor: ind.highVolumeUpColor || '#00E676',
-                            highVolumeDownColor: ind.highVolumeDownColor || '#FF1744',
-                            highVolumeThreshold: ind.highVolumeThreshold || 1.5,
-                            showMA: ind.showMA !== false
-                        });
-                        if (result.bars && result.bars.length > 0 && series.bars) {
-                            series.bars.setData(result.bars);
-                        }
-                        if (result.ma && result.ma.length > 0 && series.ma) {
-                            series.ma.setData(result.ma);
+                        // TradingView-style volume (close vs previous close)
+                        const volumeData = calculateVolume(
+                            data,
+                            ind.colorUp || '#26A69A',
+                            ind.colorDown || '#EF5350'
+                        );
+                        if (volumeData && volumeData.length > 0 && series.bars) {
+                            series.bars.setData(volumeData);
                         }
                         break;
                     }
