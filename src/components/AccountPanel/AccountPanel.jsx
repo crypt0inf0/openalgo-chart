@@ -120,7 +120,7 @@ const AccountPanel = ({
         // Only subscribe if panel is open, authenticated, and we have positions
         if (!isOpen || !isAuthenticated || !positions || positions.length === 0) {
             // Cleanup previous subscription
-            if (wsUnsubscribeRef.current) {
+            if (typeof wsUnsubscribeRef.current === 'function') {
                 wsUnsubscribeRef.current();
                 wsUnsubscribeRef.current = null;
                 setIsWebSocketConnected(false);
@@ -131,7 +131,7 @@ const AccountPanel = ({
         // Get open positions (quantity !== 0)
         const openPositions = positions.filter(p => p.quantity !== 0);
         if (openPositions.length === 0) {
-            if (wsUnsubscribeRef.current) {
+            if (typeof wsUnsubscribeRef.current === 'function') {
                 wsUnsubscribeRef.current();
                 wsUnsubscribeRef.current = null;
                 setIsWebSocketConnected(false);
@@ -140,7 +140,7 @@ const AccountPanel = ({
         }
 
         // Cleanup previous subscription before creating new one
-        if (wsUnsubscribeRef.current) {
+        if (typeof wsUnsubscribeRef.current === 'function') {
             wsUnsubscribeRef.current();
         }
 
@@ -190,7 +190,7 @@ const AccountPanel = ({
 
         // Cleanup on unmount
         return () => {
-            if (wsUnsubscribeRef.current) {
+            if (typeof wsUnsubscribeRef.current === 'function') {
                 wsUnsubscribeRef.current();
                 wsUnsubscribeRef.current = null;
                 setIsWebSocketConnected(false);
