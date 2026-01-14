@@ -1,24 +1,16 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import styles from './SettingsPopup.module.css';
-import { X, Eye, EyeOff, Keyboard } from 'lucide-react';
+import { X, Keyboard } from 'lucide-react';
 import ShortcutsSettings from '../ShortcutsSettings/ShortcutsSettings';
-import { LOG_LEVELS, LOG_LEVEL_LABELS, getLogLevel, setLogLevel } from '../../utils/logger';
+import { getLogLevel } from '../../utils/logger';
 import { useFocusTrap } from '../../hooks/useFocusTrap';
 import { useKeyboardNav } from '../../hooks/useKeyboardNav';
 
-// Default chart appearance for reset
-const DEFAULT_CHART_APPEARANCE = {
-    candleUpColor: '#089981',
-    candleDownColor: '#F23645',
-    wickUpColor: '#089981',
-    wickDownColor: '#F23645',
-    showVerticalGridLines: true,
-    showHorizontalGridLines: true,
-    darkBackground: '#131722',
-    lightBackground: '#ffffff',
-    darkGridColor: '#2A2E39',
-    lightGridColor: '#e0e3eb',
-};
+// Import extracted section components
+import { ScalesSection, OpenAlgoSection, LoggingSection, AppearanceSection } from './sections';
+
+// Import constants
+import { DEFAULT_CHART_APPEARANCE } from './constants';
 
 const SettingsPopup = ({
     isOpen,
@@ -51,7 +43,6 @@ const SettingsPopup = ({
     const [localWsUrl, setLocalWsUrl] = useState(websocketUrl);
     const [localUsername, setLocalUsername] = useState(openalgoUsername);
     const [hasChanges, setHasChanges] = useState(false);
-    const [showApiKey, setShowApiKey] = useState(false);
     const [localAppearance, setLocalAppearance] = useState(chartAppearance);
 
     // Handle cancel - reset local state and close
@@ -123,10 +114,6 @@ const SettingsPopup = ({
             onChartAppearanceChange?.(localAppearance);
         }
         onClose();
-    };
-
-    const handleResetAppearance = () => {
-        setLocalAppearance(DEFAULT_CHART_APPEARANCE);
     };
 
     const sections = [
@@ -207,302 +194,39 @@ const SettingsPopup = ({
                     {/* Main Content Area */}
                     <div className={styles.main}>
                         {activeSection === 'scales' && (
-                            <div className={styles.section}>
-                                <h3 className={styles.sectionTitle}>PRICE SCALE</h3>
-
-                                <div className={styles.optionGroup}>
-                                    <label className={styles.checkboxLabel}>
-                                        <input
-                                            type="checkbox"
-                                            checked={isTimerVisible}
-                                            onChange={() => onTimerToggle?.()}
-                                            className={styles.checkbox}
-                                        />
-                                        <span className={styles.checkmark}></span>
-                                        <span>Countdown to bar close</span>
-                                    </label>
-                                </div>
-
-                                <div className={styles.optionGroup}>
-                                    <label className={styles.checkboxLabel}>
-                                        <input
-                                            type="checkbox"
-                                            checked={isSessionBreakVisible}
-                                            onChange={() => onSessionBreakToggle?.()}
-                                            className={styles.checkbox}
-                                        />
-                                        <span className={styles.checkmark}></span>
-                                        <span>Session breaks</span>
-                                    </label>
-                                </div>
-                            </div>
+                            <ScalesSection
+                                isTimerVisible={isTimerVisible}
+                                onTimerToggle={onTimerToggle}
+                                isSessionBreakVisible={isSessionBreakVisible}
+                                onSessionBreakToggle={onSessionBreakToggle}
+                            />
                         )}
 
                         {activeSection === 'openalgo' && (
-                            <div className={styles.section}>
-                                <h3 className={styles.sectionTitle}>OPENALGO CONNECTION</h3>
-
-                                <div className={styles.inputGroup}>
-                                    <label className={styles.inputLabel}>Host URL</label>
-                                    <input
-                                        type="text"
-                                        value={localHostUrl}
-                                        onChange={(e) => setLocalHostUrl(e.target.value)}
-                                        placeholder="http://127.0.0.1:5000"
-                                        className={styles.input}
-                                    />
-                                    <p className={styles.inputHint}>
-                                        Default: http://127.0.0.1:5000. Change to use a custom OpenAlgo server URL.
-                                    </p>
-                                </div>
-
-
-                                <div className={styles.inputGroup}>
-                                    <label className={styles.inputLabel}>API Key</label>
-                                    <div className={styles.inputWithIcon}>
-                                        <input
-                                            type={showApiKey ? "text" : "password"}
-                                            value={localApiKey}
-                                            onChange={(e) => setLocalApiKey(e.target.value)}
-                                            placeholder="Enter your OpenAlgo API key"
-                                            className={styles.input}
-                                        />
-                                        <button
-                                            type="button"
-                                            className={styles.eyeButton}
-                                            onClick={() => setShowApiKey(!showApiKey)}
-                                            title={showApiKey ? "Hide API key" : "Show API key"}
-                                        >
-                                            {showApiKey ? <EyeOff size={16} /> : <Eye size={16} />}
-                                        </button>
-                                    </div>
-                                    <p className={styles.inputHint}>
-                                        Find your API key in the{' '}
-                                        <a
-                                            href={`${localHostUrl}/apikey`}
-                                            target="_blank"
-                                            rel="noopener noreferrer"
-                                            className={styles.link}
-                                        >
-                                            OpenAlgo Dashboard
-                                        </a>
-                                    </p>
-                                </div>
-
-                                <div className={styles.inputGroup}>
-                                    <label className={styles.inputLabel}>WebSocket URL</label>
-                                    <input
-                                        type="text"
-                                        value={localWsUrl}
-                                        onChange={(e) => setLocalWsUrl(e.target.value)}
-                                        placeholder="127.0.0.1:8765"
-                                        className={styles.input}
-                                    />
-                                    <p className={styles.inputHint}>
-                                        Default: 127.0.0.1:8765. Change to use a custom domain (e.g., openalgo.example.com:8765)
-                                    </p>
-                                </div>
-
-                                <div className={styles.inputGroup}>
-                                    <label className={styles.inputLabel}>OpenAlgo Username</label>
-                                    <input
-                                        type="text"
-                                        value={localUsername}
-                                        onChange={(e) => setLocalUsername(e.target.value)}
-                                        placeholder="Enter your OpenAlgo login username"
-                                        className={styles.input}
-                                    />
-                                    <p className={styles.inputHint}>
-                                        Your OpenAlgo login username (NOT Telegram username). Required for Telegram notifications.
-                                    </p>
-                                </div>
-                            </div>
+                            <OpenAlgoSection
+                                localHostUrl={localHostUrl}
+                                setLocalHostUrl={setLocalHostUrl}
+                                localApiKey={localApiKey}
+                                setLocalApiKey={setLocalApiKey}
+                                localWsUrl={localWsUrl}
+                                setLocalWsUrl={setLocalWsUrl}
+                                localUsername={localUsername}
+                                setLocalUsername={setLocalUsername}
+                            />
                         )}
 
                         {activeSection === 'logging' && (
-                            <div className={styles.section}>
-                                <h3 className={styles.sectionTitle}>CONSOLE LOGGING</h3>
-
-                                <div className={styles.inputGroup}>
-                                    <label className={styles.inputLabel}>Log Level</label>
-                                    <select
-                                        value={logLevel}
-                                        onChange={(e) => {
-                                            const newLevel = parseInt(e.target.value, 10);
-                                            setLocalLogLevel(newLevel);
-                                            setLogLevel(newLevel);
-                                        }}
-                                        className={styles.select}
-                                    >
-                                        {Object.entries(LOG_LEVELS).map(([name, value]) => (
-                                            <option key={name} value={value}>
-                                                {LOG_LEVEL_LABELS[value]}
-                                            </option>
-                                        ))}
-                                    </select>
-                                    <p className={styles.inputHint}>
-                                        Controls which messages appear in the browser console. Set to "Debug" for detailed troubleshooting.
-                                    </p>
-                                </div>
-
-                                <div className={styles.optionGroup} style={{ marginTop: '16px' }}>
-                                    <div className={styles.levelDescriptions}>
-                                        <p><strong>Debug:</strong> All messages including detailed tracing</p>
-                                        <p><strong>Info:</strong> General information and above</p>
-                                        <p><strong>Warnings:</strong> Warnings and errors only</p>
-                                        <p><strong>Errors:</strong> Only error messages</p>
-                                        <p><strong>None:</strong> Silent mode - no console output</p>
-                                    </div>
-                                </div>
-                            </div>
+                            <LoggingSection
+                                logLevel={logLevel}
+                                setLocalLogLevel={setLocalLogLevel}
+                            />
                         )}
 
                         {activeSection === 'appearance' && (
-                            <div className={styles.section}>
-                                <h3 className={styles.sectionTitle}>CANDLE COLORS</h3>
-
-                                <div className={styles.colorRow}>
-                                    <label className={styles.colorLabel}>Up Color (Bullish)</label>
-                                    <div className={styles.colorInputWrapper}>
-                                        <input
-                                            type="color"
-                                            value={localAppearance.candleUpColor}
-                                            onChange={(e) => setLocalAppearance(prev => ({ ...prev, candleUpColor: e.target.value, wickUpColor: e.target.value }))}
-                                            className={styles.colorInput}
-                                        />
-                                        <input
-                                            type="text"
-                                            value={localAppearance.candleUpColor}
-                                            onChange={(e) => {
-                                                let val = e.target.value;
-                                                if (!val.startsWith('#')) val = '#' + val;
-                                                if (/^#[0-9A-Fa-f]{0,6}$/.test(val)) {
-                                                    setLocalAppearance(prev => ({ ...prev, candleUpColor: val, wickUpColor: val }));
-                                                }
-                                            }}
-                                            className={styles.hexInput}
-                                            maxLength={7}
-                                            placeholder="#000000"
-                                        />
-                                    </div>
-                                </div>
-
-                                <div className={styles.colorRow}>
-                                    <label className={styles.colorLabel}>Down Color (Bearish)</label>
-                                    <div className={styles.colorInputWrapper}>
-                                        <input
-                                            type="color"
-                                            value={localAppearance.candleDownColor}
-                                            onChange={(e) => setLocalAppearance(prev => ({ ...prev, candleDownColor: e.target.value, wickDownColor: e.target.value }))}
-                                            className={styles.colorInput}
-                                        />
-                                        <input
-                                            type="text"
-                                            value={localAppearance.candleDownColor}
-                                            onChange={(e) => {
-                                                let val = e.target.value;
-                                                if (!val.startsWith('#')) val = '#' + val;
-                                                if (/^#[0-9A-Fa-f]{0,6}$/.test(val)) {
-                                                    setLocalAppearance(prev => ({ ...prev, candleDownColor: val, wickDownColor: val }));
-                                                }
-                                            }}
-                                            className={styles.hexInput}
-                                            maxLength={7}
-                                            placeholder="#000000"
-                                        />
-                                    </div>
-                                </div>
-
-                                <h3 className={styles.sectionTitle} style={{ marginTop: '24px' }}>GRID LINES</h3>
-
-                                <div className={styles.optionGroup}>
-                                    <label className={styles.checkboxLabel}>
-                                        <input
-                                            type="checkbox"
-                                            checked={localAppearance.showVerticalGridLines}
-                                            onChange={() => setLocalAppearance(prev => ({ ...prev, showVerticalGridLines: !prev.showVerticalGridLines }))}
-                                            className={styles.checkbox}
-                                        />
-                                        <span className={styles.checkmark}></span>
-                                        <span>Vertical grid lines</span>
-                                    </label>
-                                </div>
-
-                                <div className={styles.optionGroup}>
-                                    <label className={styles.checkboxLabel}>
-                                        <input
-                                            type="checkbox"
-                                            checked={localAppearance.showHorizontalGridLines}
-                                            onChange={() => setLocalAppearance(prev => ({ ...prev, showHorizontalGridLines: !prev.showHorizontalGridLines }))}
-                                            className={styles.checkbox}
-                                        />
-                                        <span className={styles.checkmark}></span>
-                                        <span>Horizontal grid lines</span>
-                                    </label>
-                                </div>
-
-                                <h3 className={styles.sectionTitle} style={{ marginTop: '24px' }}>BACKGROUND COLOR</h3>
-
-                                <div className={styles.colorRow}>
-                                    <label className={styles.colorLabel}>Dark Theme</label>
-                                    <div className={styles.colorInputWrapper}>
-                                        <input
-                                            type="color"
-                                            value={localAppearance.darkBackground}
-                                            onChange={(e) => setLocalAppearance(prev => ({ ...prev, darkBackground: e.target.value }))}
-                                            className={styles.colorInput}
-                                        />
-                                        <input
-                                            type="text"
-                                            value={localAppearance.darkBackground}
-                                            onChange={(e) => {
-                                                let val = e.target.value;
-                                                if (!val.startsWith('#')) val = '#' + val;
-                                                if (/^#[0-9A-Fa-f]{0,6}$/.test(val)) {
-                                                    setLocalAppearance(prev => ({ ...prev, darkBackground: val }));
-                                                }
-                                            }}
-                                            className={styles.hexInput}
-                                            maxLength={7}
-                                            placeholder="#000000"
-                                        />
-                                    </div>
-                                </div>
-
-                                <div className={styles.colorRow}>
-                                    <label className={styles.colorLabel}>Light Theme</label>
-                                    <div className={styles.colorInputWrapper}>
-                                        <input
-                                            type="color"
-                                            value={localAppearance.lightBackground}
-                                            onChange={(e) => setLocalAppearance(prev => ({ ...prev, lightBackground: e.target.value }))}
-                                            className={styles.colorInput}
-                                        />
-                                        <input
-                                            type="text"
-                                            value={localAppearance.lightBackground}
-                                            onChange={(e) => {
-                                                let val = e.target.value;
-                                                if (!val.startsWith('#')) val = '#' + val;
-                                                if (/^#[0-9A-Fa-f]{0,6}$/.test(val)) {
-                                                    setLocalAppearance(prev => ({ ...prev, lightBackground: val }));
-                                                }
-                                            }}
-                                            className={styles.hexInput}
-                                            maxLength={7}
-                                            placeholder="#000000"
-                                        />
-                                    </div>
-                                </div>
-
-                                <button
-                                    className={styles.resetButton}
-                                    onClick={handleResetAppearance}
-                                    style={{ marginTop: '24px' }}
-                                >
-                                    Reset to Defaults
-                                </button>
-                            </div>
+                            <AppearanceSection
+                                localAppearance={localAppearance}
+                                setLocalAppearance={setLocalAppearance}
+                            />
                         )}
 
                         {activeSection === 'shortcuts' && (

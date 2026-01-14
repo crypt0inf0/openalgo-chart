@@ -6,47 +6,9 @@ import PositionTrackerItem from './PositionTrackerItem';
 import PositionTrackerHeader from './PositionTrackerHeader';
 import { SECTORS, getSector } from './sectorMapping';
 
-// Market timing constants (IST)
-const MARKET_OPEN = { hour: 9, minute: 15 };
-const MARKET_CLOSE = { hour: 15, minute: 30 };
-
-// Top N options for gainers/losers filter
-const TOP_N_OPTIONS = [5, 10, 15, 20];
-
-// Default column widths
-const DEFAULT_COLUMN_WIDTHS = {
-  rank: 32,
-  move: 40,
-  symbol: 80,
-  ltp: 70,
-  change: 60,
-  volume: 55,
-};
-
-const MIN_COLUMN_WIDTH = 35;
-
-const getMarketStatus = () => {
-  const now = new Date();
-  const hours = now.getHours();
-  const minutes = now.getMinutes();
-  const day = now.getDay();
-
-  if (day === 0 || day === 6) {
-    return { isOpen: false, status: 'Weekend' };
-  }
-
-  const timeInMinutes = hours * 60 + minutes;
-  const openTime = MARKET_OPEN.hour * 60 + MARKET_OPEN.minute;
-  const closeTime = MARKET_CLOSE.hour * 60 + MARKET_CLOSE.minute;
-
-  if (timeInMinutes >= openTime && timeInMinutes <= closeTime) {
-    return { isOpen: true, status: 'Market Open' };
-  } else if (timeInMinutes < openTime) {
-    return { isOpen: false, status: 'Pre-Market' };
-  } else {
-    return { isOpen: false, status: 'Market Closed' };
-  }
-};
+// Import extracted constants and utils
+import { MARKET_OPEN, MARKET_CLOSE, TOP_N_OPTIONS, DEFAULT_COLUMN_WIDTHS, MIN_COLUMN_WIDTH } from './constants';
+import { getMarketStatus } from './utils';
 
 const PositionTracker = ({
   sourceMode,

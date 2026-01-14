@@ -64,6 +64,7 @@ import {
 } from './utils/chartConfig';
 import { saveAlertsForSymbol, loadAlertsForSymbol } from '../../services/alertService';
 import { usePaneMenu } from './hooks/usePaneMenu';
+import { useOrders } from '../../context/OrderContext';
 
 const ChartComponent = forwardRef(({
     data: initialData = [],
@@ -95,12 +96,11 @@ const ChartComponent = forwardRef(({
     strategyConfig = null, // { strategyType, legs: [{ id, symbol, direction, quantity }], exchange, displayName }
     onOpenOptionChain, // Callback to open option chain for current symbol
     oiLines = null, // { maxCallOI, maxPutOI, maxPain } - OI levels to display as price lines
-    showOILines = false, // Whether to show OI lines
-    orders = [],
-    positions = [],
-    onModifyOrder,
-    onCancelOrder
+    showOILines = false // Whether to show OI lines
 }, ref) => {
+    // Get orders and positions from OrderContext
+    const { activeOrders: orders = [], activePositions: positions = [], onModifyOrder, onCancelOrder } = useOrders();
+
     const chartContainerRef = useRef();
     const [isLoading, setIsLoading] = useState(true);
     const [contextMenu, setContextMenu] = useState({ show: false, x: 0, y: 0 });

@@ -5,14 +5,17 @@
 
 import logger from '../utils/logger.js';
 
-const DEFAULT_WS_HOST = '127.0.0.1:8765';
+// Import constants from dedicated module
+import {
+    WS_MODES,
+    DEFAULT_WS_HOST,
+    MAX_RECONNECT_ATTEMPTS,
+    BASE_RECONNECT_DELAY_MS,
+    MAX_RECONNECT_DELAY_MS,
+} from './tickConstants.js';
 
-// WebSocket modes
-export const WS_MODES = {
-    LTP: 1,
-    QUOTE: 2,
-    TICK: 3,  // Full tick data with trade direction
-};
+// Re-export WS_MODES for backward compatibility
+export { WS_MODES };
 
 // Maximum ticks to keep in memory per symbol (circular buffer)
 const MAX_TICKS_IN_MEMORY = 10000;

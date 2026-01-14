@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { ChevronDown, ChevronUp, RefreshCw, X, Wallet, Minus, Maximize2, Minimize2, LogOut, XCircle, Wifi, WifiOff } from 'lucide-react';
 import styles from './AccountPanel.module.css';
-import { getFunds, getPositionBook, getOrderBook, getHoldings, getTradeBook, ping, placeOrder, cancelOrder, subscribeToMultiTicker } from '../../services/openalgo';
-import { modifyOrder } from '../../services/orderService';
+import { ping, placeOrder, subscribeToMultiTicker } from '../../services/openalgo';
 import ExitPositionModal from '../ExitPositionModal';
 import ModifyOrderModal from './components/ModifyOrderModal';
 import CancelOrderModal from './components/CancelOrderModal';
+import { useOrders } from '../../context/OrderContext';
 
 // Import extracted components
 import { PositionsTable, OrdersTable, HoldingsTable, TradesTable } from './components';
@@ -25,14 +25,18 @@ const AccountPanel = ({
     isMaximized = false,
     onMaximize,
     isToolbarVisible = true,
-    showToast,
-    // Data props from parent (optional, to avoid duplicate fetching)
-    positions: propPositions,
-    orders: propOrders,
-    holdings: propHoldings,
-    trades: propTrades,
-    funds: propFunds
+    showToast
 }) => {
+    // Get data from OrderContext
+    const {
+        positions: contextPositions = [],
+        orders: contextOrders = [],
+        holdings: contextHoldings = [],
+        trades: contextTrades = [],
+        funds: contextFunds = {},
+        onCancelOrder,
+        refresh: refreshTradingData
+    } = useOrders();
     const [activeTab, setActiveTab] = useState('positions');
     const [isLoading, setIsLoading] = useState(false);
     const [brokerName, setBrokerName] = useState('');
@@ -56,98 +60,47 @@ const AccountPanel = ({
     const [lastUpdateTime, setLastUpdateTime] = useState({});
     const wsUnsubscribeRef = useRef(null);
 
-    // Data states
-    const [funds, setFunds] = useState(null);
-    const [positions, setPositions] = useState([]);
-    const [orders, setOrders] = useState({ orders: [], statistics: {} });
-    const [holdings, setHoldings] = useState({ holdings: [], statistics: {} });
-    const [trades, setTrades] = useState([]);
+    // Use context data directly (OrderContext provides all data)
+    const funds = contextFunds;
+    const positions = contextPositions;
+    const orders = { orders: contextOrders, statistics: {} }; // Wrap for compatibility
+    const holdings = { holdings: contextHoldings, statistics: {} }; // Wrap for compatibility
+    const trades = contextTrades;
 
-    // Sync props to state if provided
-    useEffect(() => {
-        if (propFunds) setFunds(propFunds);
-        if (propPositions) setPositions(propPositions);
-
-        // App passes orders array, we expect object with orders array
-        if (propOrders) {
-            console.log('[AccountPanel] Received updated orders from parent:', propOrders.length, 'orders');
-            const openOrders = propOrders.filter(o => {
-                const status = (o.status || o.order_status || '').toUpperCase().replace(/\s+/g, '_');
-                return ['OPEN', 'PENDING', 'TRIGGER_PENDING', 'VALIDATION_PENDING'].includes(status);
-            });
-            if (openOrders.length > 0) {
-                console.log('[AccountPanel] Open orders from props:', openOrders.map(o => ({
-                    id: o.orderid,
-                    symbol: o.symbol,
-                    price: o.price,
-                    status: o.order_status || o.status
-                })));
-            }
-            setOrders(prev => ({ ...prev, orders: propOrders }));
-        }
-
-        // App passes holdings array, we expect object with holdings array
-        if (propHoldings) setHoldings(prev => ({ ...prev, holdings: propHoldings }));
-        if (propTrades) setTrades(propTrades);
-    }, [propFunds, propPositions, propOrders, propHoldings, propTrades]);
-
-    // Fetch all account data
     // Calculate order stats using extracted utility
-    const orderStats = calculateOrderStats(orders.orders);
+    const orderStats = calculateOrderStats(contextOrders);
 
+    // Refresh function - uses OrderContext refresh + fetches broker info
     const fetchAccountData = useCallback(async () => {
         if (!isAuthenticated) return;
 
         setIsLoading(true);
         try {
-            const [fundsData, positionsData, ordersData, holdingsData, tradesData, pingData] = await Promise.all([
-                getFunds(),
-                getPositionBook(),
-                getOrderBook(),
-                getHoldings(),
-                getTradeBook(),
-                ping()
-            ]);
+            // OrderContext handles data refresh
+            await refreshTradingData();
 
-            setFunds(fundsData);
-            setPositions(positionsData || []);
-            setOrders(ordersData || { orders: [], statistics: {} });
-            setHoldings(holdingsData || { holdings: [], statistics: {} });
-            setTrades(tradesData || []);
+            // Fetch broker name from ping
+            const pingData = await ping();
             if (pingData?.broker) {
                 setBrokerName(pingData.broker);
             }
             setLastRefresh(new Date());
         } catch (error) {
-            console.error('[AccountPanel] Error fetching data:', error);
+            console.error('[AccountPanel] Error refreshing data:', error);
         } finally {
             setIsLoading(false);
         }
-    }, [isAuthenticated]);
+    }, [isAuthenticated, refreshTradingData]);
 
-    // Fetch data when panel opens, ONLY if not provided via props
+    // Initialize broker name on mount
     useEffect(() => {
-        // If props are provided (we check orders as a proxy), active fetching is handled by parent
-        const isManaged = !!propOrders;
-
-        console.log('[AccountPanel] Data management check:', {
-            isOpen,
-            isAuthenticated,
-            isManaged,
-            note: isManaged ? 'Using parent event-driven updates' : 'Would use own polling (legacy mode)'
-        });
-
-        // IMPORTANT: If props are provided, parent (App.jsx) handles all data fetching
-        // with event-driven updates. No polling needed here.
-        if (isOpen && isAuthenticated && !isManaged) {
-            console.warn('[AccountPanel] Running in legacy mode - no props provided. Consider passing data from parent.');
-            fetchAccountData();
-            const interval = setInterval(fetchAccountData, AUTO_REFRESH_INTERVAL_MS);
-            return () => clearInterval(interval);
-        } else if (isManaged) {
-            console.log('[AccountPanel] ✓ Using parent event-driven system (recommended)');
+        if (isOpen && isAuthenticated) {
+            console.log('[AccountPanel] Using OrderContext (event-driven updates)');
+            ping().then(pingData => {
+                if (pingData?.broker) setBrokerName(pingData.broker);
+            });
         }
-    }, [isOpen, isAuthenticated, fetchAccountData, propOrders]);
+    }, [isOpen, isAuthenticated]);
 
     // WebSocket subscription for real-time P&L updates
     useEffect(() => {

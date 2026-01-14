@@ -3,11 +3,9 @@ import { X, Grid3X3, LayoutGrid, BarChart3, TrendingUp, TrendingDown } from 'luc
 import styles from './SectorHeatmapModal.module.css';
 import { SECTORS, getSector } from '../PositionTracker/sectorMapping';
 
-const HEATMAP_MODES = [
-  { id: 'treemap', label: 'Treemap', icon: LayoutGrid },
-  { id: 'grid', label: 'Grid', icon: Grid3X3 },
-  { id: 'sector', label: 'Sectors', icon: BarChart3 },
-];
+// Import extracted constants and utils
+import { HEATMAP_MODES } from './constants';
+import { calculateIntradayChange, getChangeColor, getTextColor, getBarWidth, formatVolume, formatPrice, calculateTreemapLayout } from './utils';
 
 const SectorHeatmapModal = ({ isOpen, onClose, watchlistData, onSectorSelect, onSymbolSelect }) => {
   const [activeMode, setActiveMode] = useState('treemap');
@@ -58,16 +56,6 @@ const SectorHeatmapModal = ({ isOpen, onClose, watchlistData, onSectorSelect, on
       }
     };
   }, []);
-
-  // Calculate intraday change from open
-  const calculateIntradayChange = (item) => {
-    const ltp = parseFloat(item.last) || 0;
-    const openPrice = parseFloat(item.open) || 0;
-    if (openPrice > 0 && ltp > 0) {
-      return ((ltp - openPrice) / openPrice) * 100;
-    }
-    return parseFloat(item.chgP) || 0;
-  };
 
   // Process stock data
   const stockData = useMemo(() => {
@@ -128,56 +116,6 @@ const SectorHeatmapModal = ({ isOpen, onClose, watchlistData, onSectorSelect, on
     return { gainers, losers, unchanged, avgChange };
   }, [stockData]);
 
-  // Enhanced color palette - professional TradingView style (works well on both themes)
-  const getChangeColor = (change, isBackground = false) => {
-    const absChange = Math.abs(change);
-
-    if (change >= 0) {
-      // Green gradient - vibrant colors that work on both light and dark
-      if (absChange > 4) return '#00C853';
-      if (absChange > 3) return '#00B248';
-      if (absChange > 2) return '#00A63E';
-      if (absChange > 1.5) return '#009A38';
-      if (absChange > 1) return '#089981';
-      if (absChange > 0.5) return '#0D9668';
-      if (absChange > 0.2) return '#26A69A';
-      return '#3D8B80'; // Near zero positive
-    } else {
-      // Red gradient - vibrant colors
-      if (absChange > 4) return '#FF1744';
-      if (absChange > 3) return '#F5153D';
-      if (absChange > 2) return '#E91235';
-      if (absChange > 1.5) return '#D8102F';
-      if (absChange > 1) return '#C62828';
-      if (absChange > 0.5) return '#B71C1C';
-      if (absChange > 0.2) return '#A52727';
-      return '#8B3030'; // Near zero negative
-    }
-  };
-
-  // Text is always white with shadow for readability
-  const getTextColor = () => '#FFFFFF';
-
-  // Get bar width percentage
-  const getBarWidth = (change, maxChange) => {
-    return Math.min((Math.abs(change) / Math.max(maxChange, 1)) * 100, 100);
-  };
-
-  // Format volume
-  const formatVolume = (vol) => {
-    if (vol >= 10000000) return `${(vol / 10000000).toFixed(1)}Cr`;
-    if (vol >= 100000) return `${(vol / 100000).toFixed(1)}L`;
-    if (vol >= 1000) return `${(vol / 1000).toFixed(1)}K`;
-    return vol.toString();
-  };
-
-  // Format price
-  const formatPrice = (price) => {
-    if (price >= 1000) return price.toFixed(0);
-    if (price >= 100) return price.toFixed(1);
-    return price.toFixed(2);
-  };
-
   const handleRowClick = (sector) => {
     if (onSectorSelect) onSectorSelect(sector);
     onClose();
@@ -187,96 +125,6 @@ const SectorHeatmapModal = ({ isOpen, onClose, watchlistData, onSectorSelect, on
     e?.stopPropagation();
     if (onSymbolSelect) onSymbolSelect({ symbol: stock.symbol, exchange: stock.exchange });
     onClose();
-  };
-
-  // Squarified Treemap Algorithm
-  const calculateTreemapLayout = (items, x, y, width, height) => {
-    if (items.length === 0 || width <= 0 || height <= 0) return [];
-
-    const totalValue = items.reduce((sum, item) => sum + item.value, 0);
-    if (totalValue <= 0) return [];
-
-    const result = [];
-    let remaining = [...items];
-    let currentX = x;
-    let currentY = y;
-    let currentWidth = width;
-    let currentHeight = height;
-
-    while (remaining.length > 0) {
-      const isHorizontal = currentWidth >= currentHeight;
-      const mainSide = isHorizontal ? currentHeight : currentWidth;
-
-      // Find the best row using squarified algorithm
-      let row = [remaining[0]];
-      let rowValue = remaining[0].value;
-      let worstRatio = Infinity;
-
-      for (let i = 1; i < remaining.length; i++) {
-        const testRow = [...row, remaining[i]];
-        const testValue = rowValue + remaining[i].value;
-        const rowWidth = (testValue / totalValue) * (isHorizontal ? currentWidth : currentHeight);
-
-        // Calculate worst aspect ratio in current test row
-        let testWorst = 0;
-        testRow.forEach(item => {
-          const itemHeight = (item.value / testValue) * mainSide;
-          const ratio = Math.max(rowWidth / itemHeight, itemHeight / rowWidth);
-          testWorst = Math.max(testWorst, ratio);
-        });
-
-        if (testWorst <= worstRatio) {
-          row = testRow;
-          rowValue = testValue;
-          worstRatio = testWorst;
-        } else {
-          break;
-        }
-      }
-
-      // Layout the row
-      const rowFraction = rowValue / totalValue;
-      const rowSize = isHorizontal
-        ? rowFraction * currentWidth
-        : rowFraction * currentHeight;
-
-      let offset = 0;
-      row.forEach(item => {
-        const itemFraction = item.value / rowValue;
-        const itemSize = itemFraction * mainSide;
-
-        if (isHorizontal) {
-          result.push({
-            ...item,
-            x: currentX,
-            y: currentY + offset,
-            width: rowSize,
-            height: itemSize,
-          });
-        } else {
-          result.push({
-            ...item,
-            x: currentX + offset,
-            y: currentY,
-            width: itemSize,
-            height: rowSize,
-          });
-        }
-        offset += itemSize;
-      });
-
-      // Update remaining and area
-      remaining = remaining.slice(row.length);
-      if (isHorizontal) {
-        currentX += rowSize;
-        currentWidth -= rowSize;
-      } else {
-        currentY += rowSize;
-        currentHeight -= rowSize;
-      }
-    }
-
-    return result;
   };
 
   // Prepare treemap data with nested layout - EQUAL SIZED tiles for readability

@@ -5,153 +5,26 @@
 
 import { getOptionChain as fetchOptionChainAPI, getOptionGreeks, getMultiOptionGreeks, getKlines, searchSymbols, getExpiry, fetchExpiryDates } from './openalgo';
 
-// ==================== OPTION CHAIN CACHE ====================
-// Cache to reduce API calls and avoid Upstox rate limits (30 req/min)
-const optionChainCache = new Map();
-const CACHE_TTL_MS = 300000; // 5 minutes cache (increased from 60s to avoid rate limits)
-const MAX_OPTION_CHAIN_CACHE_SIZE = 50; // Max entries to prevent memory leaks
-const STORAGE_KEY = 'optionChainCache';
+// Import cache functions from dedicated module (used internally)
+import {
+    getCacheKey,
+    isCacheValid,
+    isNonFOSymbol,
+    markAsNonFOSymbol,
+    getOptionChainFromCache,
+    setOptionChainInCache,
+    shouldApplyRateLimit,
+    getRateLimitWaitTime,
+    updateLastApiCallTime,
+    evictOldestEntries,
+    setExpiryInCache,
+    getExpiryFromCache,
+    getExpiryCacheKey,
+    CACHE_CONFIG,
+} from './optionChainCache';
 
-// Negative cache for symbols that don't support F&O (prevents repeated failed API calls)
-const noFOSymbolsCache = new Set();
-const NO_FO_STORAGE_KEY = 'noFOSymbolsCache';
-const NO_FO_CACHE_DURATION_MS = 24 * 60 * 60 * 1000; // 24 hours
-
-// Rate limit protection: Track last API call time to prevent rapid repeated calls
-let lastApiCallTime = 0;
-const MIN_API_INTERVAL_MS = 5000; // Minimum 5 seconds between API calls
-
-// Generate cache key from underlying and expiry
-const getCacheKey = (underlying, expiry) => `${underlying}_${expiry || 'default'}`;
-
-// Load negative cache from localStorage
-const loadNoFOCacheFromStorage = () => {
-    try {
-        const stored = localStorage.getItem(NO_FO_STORAGE_KEY);
-        if (stored) {
-            const parsed = JSON.parse(stored);
-            // Only load entries that haven't expired
-            const now = Date.now();
-            Object.entries(parsed).forEach(([symbol, timestamp]) => {
-                if (now - timestamp < NO_FO_CACHE_DURATION_MS) {
-                    noFOSymbolsCache.add(symbol);
-                }
-            });
-            console.log('[OptionChain] Loaded', noFOSymbolsCache.size, 'non-F&O symbols from cache');
-        }
-    } catch (e) {
-        console.warn('[OptionChain] Failed to load no-F&O cache:', e.message);
-    }
-};
-
-// Save negative cache to localStorage with timestamps
-const saveNoFOCacheToStorage = () => {
-    try {
-        const now = Date.now();
-        const obj = {};
-        noFOSymbolsCache.forEach(symbol => {
-            obj[symbol] = now;
-        });
-        localStorage.setItem(NO_FO_STORAGE_KEY, JSON.stringify(obj));
-    } catch (e) {
-        console.warn('[OptionChain] Failed to save no-F&O cache:', e.message);
-    }
-};
-
-// Check if symbol is known to not support F&O
-const isNonFOSymbol = (symbol) => noFOSymbolsCache.has(symbol?.toUpperCase());
-
-// Mark a symbol as not supporting F&O
-const markAsNonFOSymbol = (symbol) => {
-    const upperSymbol = symbol?.toUpperCase();
-    if (upperSymbol) {
-        noFOSymbolsCache.add(upperSymbol);
-        saveNoFOCacheToStorage();
-        console.log('[OptionChain] Marked as non-F&O symbol:', upperSymbol);
-    }
-};
-
-// Load negative cache on module init
-loadNoFOCacheFromStorage();
-
-// Check if cache entry is still valid
-const isCacheValid = (cacheEntry) => {
-    if (!cacheEntry) return false;
-    return Date.now() - cacheEntry.timestamp < CACHE_TTL_MS;
-};
-
-// Load cache from localStorage on init (survives page refresh)
-const loadCacheFromStorage = () => {
-    try {
-        const stored = localStorage.getItem(STORAGE_KEY);
-        if (stored) {
-            const parsed = JSON.parse(stored);
-            Object.entries(parsed).forEach(([key, value]) => {
-                optionChainCache.set(key, value);
-            });
-            console.log('[OptionChain] Loaded', optionChainCache.size, 'cache entries from storage');
-        }
-    } catch (e) {
-        console.warn('[OptionChain] Failed to load cache from storage:', e.message);
-    }
-};
-
-// Save cache to localStorage
-const saveCacheToStorage = () => {
-    try {
-        const obj = Object.fromEntries(optionChainCache);
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(obj));
-    } catch (e) {
-        console.warn('[OptionChain] Failed to save cache to storage:', e.message);
-    }
-};
-
-// Load cache from storage on module init
-loadCacheFromStorage();
-
-/**
- * Evict oldest entries from cache to prevent unbounded growth
- * Uses LRU-like eviction based on timestamp
- * @param {Map} cache - The cache Map to evict from
- * @param {number} maxSize - Maximum allowed entries
- */
-const evictOldestEntries = (cache, maxSize) => {
-    if (cache.size <= maxSize) return;
-
-    // Sort by timestamp and remove oldest entries
-    const entries = Array.from(cache.entries())
-        .sort((a, b) => a[1].timestamp - b[1].timestamp);
-
-    const toRemove = entries.slice(0, cache.size - maxSize);
-    toRemove.forEach(([key]) => cache.delete(key));
-    console.log('[OptionChain] Evicted', toRemove.length, 'old cache entries');
-};
-
-/**
- * Clear option chain cache
- * @param {string} underlying - Optional: clear only for this underlying
- * @param {string} expiry - Optional: clear only for this expiry
- */
-export const clearOptionChainCache = (underlying = null, expiry = null) => {
-    if (underlying && expiry) {
-        const key = getCacheKey(underlying, expiry);
-        optionChainCache.delete(key);
-        console.log('[OptionChain] Cache cleared for:', key);
-    } else if (underlying) {
-        // Clear all entries for this underlying
-        for (const key of optionChainCache.keys()) {
-            if (key.startsWith(underlying + '_')) {
-                optionChainCache.delete(key);
-            }
-        }
-        console.log('[OptionChain] Cache cleared for underlying:', underlying);
-    } else {
-        optionChainCache.clear();
-        console.log('[OptionChain] Full cache cleared');
-    }
-    // Also update localStorage
-    saveCacheToStorage();
-};
+// Re-export clearOptionChainCache for external use
+export { clearOptionChainCache } from './optionChainCache';
 
 // Common F&O underlyings with their index exchanges
 export const UNDERLYINGS = [
@@ -280,7 +153,7 @@ export const getOptionChain = async (underlying, exchange = 'NFO', expiryDate = 
     }
 
     const cacheKey = getCacheKey(underlying, expiryDate);
-    const cached = optionChainCache.get(cacheKey);
+    const cached = getOptionChainFromCache(cacheKey);
 
     // Return cached data if valid and not forcing refresh
     if (!forceRefresh && isCacheValid(cached)) {
@@ -289,9 +162,8 @@ export const getOptionChain = async (underlying, exchange = 'NFO', expiryDate = 
     }
 
     // Rate limit protection: Don't call API too rapidly
-    const timeSinceLastCall = Date.now() - lastApiCallTime;
-    if (timeSinceLastCall < MIN_API_INTERVAL_MS) {
-        const waitTime = MIN_API_INTERVAL_MS - timeSinceLastCall;
+    if (shouldApplyRateLimit()) {
+        const waitTime = getRateLimitWaitTime();
         console.log('[OptionChain] Rate limit protection: waiting', waitTime, 'ms before API call');
 
         // If we have stale cache, return it instead of waiting
@@ -319,7 +191,7 @@ export const getOptionChain = async (underlying, exchange = 'NFO', expiryDate = 
         console.log('[OptionChain] Fetching fresh chain:', { underlying, exchange: indexExchange, expiryDate, strikeCount });
 
         // Update last API call time
-        lastApiCallTime = Date.now();
+        updateLastApiCallTime();
 
         // Call OpenAlgo Option Chain API with the correct exchange (NSE_INDEX/BSE_INDEX for indices, NSE/BSE for stocks)
         const result = await fetchOptionChainAPI(underlying, indexExchange, expiryDate, strikeCount);
@@ -402,14 +274,7 @@ export const getOptionChain = async (underlying, exchange = 'NFO', expiryDate = 
 
         // Store in cache only if we have valid data
         if (chain.length > 0) {
-            // Evict oldest entries if cache is at capacity
-            evictOldestEntries(optionChainCache, MAX_OPTION_CHAIN_CACHE_SIZE - 1);
-            optionChainCache.set(cacheKey, {
-                data: processedData,
-                timestamp: Date.now()
-            });
-            saveCacheToStorage(); // Persist to localStorage
-            console.log('[OptionChain] Cached data for:', cacheKey);
+            setOptionChainInCache(cacheKey, processedData);
         }
 
         return processedData;
@@ -441,51 +306,7 @@ export const getOptionChain = async (underlying, exchange = 'NFO', expiryDate = 
     }
 };
 
-// ==================== EXPIRY CACHE ====================
-// Cache expiry dates to reduce API calls (similar to option chain cache)
-const expiryCache = new Map();
-const EXPIRY_CACHE_TTL_MS = 300000; // 5 minutes cache
-const MAX_EXPIRY_CACHE_SIZE = 30; // Max entries to prevent memory leaks
-const EXPIRY_STORAGE_KEY = 'expiryCache';
-
-// Generate expiry cache key
-const getExpiryCacheKey = (underlying, exchange, instrumenttype) =>
-    `${underlying}_${exchange}_${instrumenttype}`;
-
-// Check if expiry cache entry is still valid
-const isExpiryCacheValid = (cacheEntry) => {
-    if (!cacheEntry) return false;
-    return Date.now() - cacheEntry.timestamp < EXPIRY_CACHE_TTL_MS;
-};
-
-// Load expiry cache from localStorage on init
-const loadExpiryCacheFromStorage = () => {
-    try {
-        const stored = localStorage.getItem(EXPIRY_STORAGE_KEY);
-        if (stored) {
-            const parsed = JSON.parse(stored);
-            Object.entries(parsed).forEach(([key, value]) => {
-                expiryCache.set(key, value);
-            });
-            console.log('[OptionChain] Loaded', expiryCache.size, 'expiry cache entries from storage');
-        }
-    } catch (e) {
-        console.warn('[OptionChain] Failed to load expiry cache from storage:', e.message);
-    }
-};
-
-// Save expiry cache to localStorage
-const saveExpiryCacheToStorage = () => {
-    try {
-        const obj = Object.fromEntries(expiryCache);
-        localStorage.setItem(EXPIRY_STORAGE_KEY, JSON.stringify(obj));
-    } catch (e) {
-        console.warn('[OptionChain] Failed to save expiry cache to storage:', e.message);
-    }
-};
-
-// Load expiry cache on module init
-loadExpiryCacheFromStorage();
+// Expiry cache functions imported from optionChainCache module
 
 /**
  * Get available expiries for an underlying using the dedicated Expiry API
@@ -514,9 +335,9 @@ export const getAvailableExpiries = async (underlying, exchange = null, instrume
 
         // Check cache first
         const cacheKey = getExpiryCacheKey(underlying, foExchange, instrumenttype);
-        const cached = expiryCache.get(cacheKey);
+        const cached = getExpiryFromCache(cacheKey);
 
-        if (isExpiryCacheValid(cached)) {
+        if (isCacheValid(cached, CACHE_CONFIG.EXPIRY_CACHE_TTL_MS)) {
             console.log('[OptionChain] Using cached expiries for:', cacheKey, '(age:', Math.round((Date.now() - cached.timestamp) / 1000), 's)');
             return cached.data;
         }
@@ -544,14 +365,8 @@ export const getAvailableExpiries = async (underlying, exchange = null, instrume
             return dateStr.replace(/-/g, '');
         });
 
-        // Cache the result with LRU eviction
-        evictOldestEntries(expiryCache, MAX_EXPIRY_CACHE_SIZE - 1);
-        expiryCache.set(cacheKey, {
-            data: expiries,
-            timestamp: Date.now()
-        });
-        saveExpiryCacheToStorage();
-        console.log('[OptionChain] Cached expiries for:', cacheKey);
+        // Cache the result using the cache module
+        setExpiryInCache(cacheKey, expiries);
 
         return expiries;
     } catch (error) {

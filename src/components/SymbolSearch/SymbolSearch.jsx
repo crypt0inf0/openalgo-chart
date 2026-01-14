@@ -7,100 +7,10 @@ import { useKeyboardNav, useListNavigation } from '../../hooks/useKeyboardNav';
 import { useSymbolHistory } from '../../hooks/useSymbolHistory';
 import { fuzzySearch } from '../../utils/fuzzySearch';
 
-// Filter tabs with their corresponding API parameters
-const FILTER_TABS = [
-    { label: 'All', exchange: null, instrumenttype: null },
-    { label: 'Stocks', exchange: 'NSE', instrumenttype: 'EQ' },
-    { label: 'Futures', exchange: 'NFO', instrumenttype: 'FUT' },
-    { label: 'Options', exchange: 'NFO', instrumenttype: null },
-    { label: 'Indices', exchange: 'NSE_INDEX', instrumenttype: null },
-];
-
-// Helper to get symbol icon based on symbol name
-const getSymbolIcon = (symbol, exchange, instrumenttype) => {
-    const sym = symbol.toUpperCase();
-
-    // Nifty 50
-    if ((sym === 'NIFTY' || sym.includes('NIFTY50')) && !sym.includes('BANK') && !sym.includes('NXT')) {
-        return { text: '50', color: '#2962ff', bgColor: '#e3f2fd' };
-    }
-    // Bank Nifty - bank icon
-    if (sym.includes('BANKNIFTY') || sym === 'BANKNIFTY') {
-        return { text: '🏦', color: null, bgColor: '#fff3e0', isFlag: true };
-    }
-    // CNX / Other indices with India flag
-    if (sym.includes('CNX') || sym.includes('NIFTY_MID') || sym.includes('CNXSMALLCAP')) {
-        return { text: '🇮🇳', color: null, bgColor: '#e8f5e9', isFlag: true };
-    }
-    // General Nifty related
-    if (sym.includes('NIFTY')) {
-        return { text: '50', color: '#2962ff', bgColor: '#e3f2fd' };
-    }
-    // IT index
-    if (sym.includes('CNXIT') || sym === 'CNXIT') {
-        return { text: '💻', color: null, bgColor: '#e3f2fd', isFlag: true };
-    }
-    // Default - first letter
-    return { text: sym.charAt(0), color: '#607d8b', bgColor: '#eceff1' };
-};
-
-// Get instrument type label
-const getInstrumentTypeLabel = (exchange, instrumenttype, symbol) => {
-    if (exchange === 'NSE_INDEX' || exchange === 'BSE_INDEX' || symbol.includes('INDEX') || symbol.includes('Index')) {
-        return 'index';
-    }
-    if (instrumenttype === 'FUT' || symbol.includes('-FUT') || symbol.includes('FUTURES')) {
-        return 'futures';
-    }
-    if (instrumenttype === 'CE' || instrumenttype === 'PE') {
-        return 'options';
-    }
-    if (instrumenttype === 'EQ') {
-        return 'stock';
-    }
-    return null;
-};
-
-// Get exchange badge
-const getExchangeBadge = (exchange) => {
-    const exch = (exchange || '').toUpperCase();
-
-    // BSE exchanges
-    if (exch === 'BSE_INDEX' || exch === 'BSE' || exch === 'BFO') {
-        return 'BSE';
-    }
-    // NSE exchanges
-    if (exch === 'NSE_INDEX' || exch === 'NSE' || exch === 'NFO') {
-        return 'NSE';
-    }
-    // MCX
-    if (exch === 'MCX') {
-        return 'MCX';
-    }
-    return exchange || 'NSE';
-};
-
-// Highlight matching text
-const HighlightText = ({ text, highlight }) => {
-    if (!highlight || !text) return <>{text}</>;
-
-    // Escape special regex characters to prevent crashes
-    const escapeRegex = (str) => str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const regex = new RegExp(`(${escapeRegex(highlight)})`, 'gi');
-    const parts = text.split(regex);
-
-    return (
-        <>
-            {parts.map((part, i) =>
-                regex.test(part) ? (
-                    <span key={i} className={styles.highlight}>{part}</span>
-                ) : (
-                    <span key={i}>{part}</span>
-                )
-            )}
-        </>
-    );
-};
+// Import extracted components, constants, and utils
+import { HighlightText } from './components';
+import { FILTER_TABS } from './constants';
+import { getSymbolIcon, getInstrumentTypeLabel, getExchangeBadge } from './utils';
 
 const SymbolSearch = ({ isOpen, onClose, onSelect, addedSymbols = [], isCompareMode = false, initialValue = '', onInitialValueUsed }) => {
     const [searchTerm, setSearchTerm] = useState('');

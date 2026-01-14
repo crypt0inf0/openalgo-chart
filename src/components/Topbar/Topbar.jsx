@@ -9,6 +9,9 @@ import {
     Plus, Star, Trash2, X, AlertCircle, Loader2, Layout as LayoutIcon, BarChart3, Bookmark
 } from 'lucide-react';
 
+// Import extracted components (ready for future use)
+// import { IndicatorDropdown, SnapshotMenu, LayoutDropdown } from './components';
+
 
 const Topbar = ({
     symbol, interval, chartType, indicators, favoriteIntervals, customIntervals,

@@ -33,11 +33,9 @@ import { useIsMobile, useCommandPalette, useGlobalShortcuts } from './hooks';
 import { useLocalStorage } from './hooks/useLocalStorage';
 import { useCloudWorkspaceSync } from './hooks/useCloudWorkspaceSync';
 import { useOILines } from './hooks/useOILines';
-import { useTradingData } from './hooks/useTradingData';
 import { useWatchlistHandlers } from './hooks/useWatchlistHandlers';
 import { useIndicatorHandlers } from './hooks/useIndicatorHandlers';
 import { useIntervalHandlers } from './hooks/useIntervalHandlers';
-import { useOrderHandlers } from './hooks/useOrderHandlers';
 import { useSymbolHandlers } from './hooks/useSymbolHandlers';
 import { useLayoutHandlers } from './hooks/useLayoutHandlers';
 import { useAlertHandlers } from './hooks/useAlertHandlers';
@@ -46,6 +44,7 @@ import { useUIHandlers } from './hooks/useUIHandlers';
 import { useANNScanner } from './hooks/useANNScanner';
 import { useTheme } from './context/ThemeContext';
 import { useUser } from './context/UserContext';
+import { OrderProvider } from './context/OrderContext';
 import { indicatorConfigs } from './components/IndicatorSettings/indicatorConfigs';
 
 import PositionTracker from './components/PositionTracker';
@@ -322,30 +321,6 @@ function AppContent({ isAuthenticated, setIsAuthenticated }) {
   const isMobile = useIsMobile();
   const [mobileTab, setMobileTab] = useState('chart');
   const [isWatchlistVisible, setIsWatchlistVisible] = useState(false);
-
-  // Trading Data (Orders/Positions) for visual trading
-  // Trading Data (Orders/Positions) for visual trading and Account Panel
-  // We fetch ALL data here to avoid duplicate API calls in child components
-  const {
-    activeOrders,
-    activePositions,
-    positions: allPositions,
-    orders: allOrders,
-    funds,
-    holdings,
-    trades,
-    refreshTradingData
-  } = useTradingData(isAuthenticated);
-
-  // Order handlers extracted to hook
-  const {
-    handleModifyOrder,
-    handleCancelOrder
-  } = useOrderHandlers({
-    activeOrders,
-    showToast,
-    refreshTradingData
-  });
 
   // Handle mobile tab changes
   const handleMobileTabChange = useCallback((tab) => {
@@ -1592,7 +1567,7 @@ function AppContent({ isAuthenticated, setIsAuthenticated }) {
   }
 
   return (
-    <>
+    <OrderProvider showToast={showToast}>
       <Layout
         isLeftToolbarVisible={showDrawingToolbar}
         isMobile={isMobile}
@@ -1617,12 +1592,6 @@ function AppContent({ isAuthenticated, setIsAuthenticated }) {
             onMaximize={handleAccountPanelMaximize}
             isToolbarVisible={showDrawingToolbar}
             showToast={showToast}
-            // Pass shared data to avoid duplicate fetching
-            positions={allPositions}
-            orders={allOrders}
-            holdings={holdings}
-            trades={trades}
-            funds={funds}
           />
         }
         isAccountPanelMinimized={isAccountPanelMinimized}
@@ -1928,11 +1897,6 @@ function AppContent({ isAuthenticated, setIsAuthenticated }) {
             onOpenOptionChain={handleOpenOptionChainForSymbol}
             oiLines={oiLines}
             showOILines={showOILines}
-            // Visual Trading Props
-            orders={activeOrders}
-            positions={activePositions}
-            onModifyOrder={handleModifyOrder}
-            onCancelOrder={handleCancelOrder}
           />
         }
       />
@@ -2098,7 +2062,7 @@ function AppContent({ isAuthenticated, setIsAuthenticated }) {
           />
         )}
       </Suspense>
-    </>
+    </OrderProvider>
   );
 }
 

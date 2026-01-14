@@ -5,6 +5,10 @@ import { subscribeToMultiTicker, getMultiOptionGreeks } from '../../services/ope
 import styles from './OptionChainModal.module.css';
 import classNames from 'classnames';
 
+// Import extracted components and format helpers
+import { formatOI, formatLTP, formatLtpChange, formatGreek, formatDelta, formatIv, formatTheta, formatVega, formatGamma } from './components';
+import { useOptionChainKeyboard } from './hooks';
+
 /**
  * OptionChainModal - Option Chain UI with proper date alignment
  */
@@ -691,14 +695,7 @@ const OptionChainModal = ({ isOpen, onClose, onSelectOption, initialSymbol }) =>
         handleOptionClick(symbol);
     }, [handleOptionClick]);
 
-    const formatOI = (oi) => {
-        if (!oi && oi !== 0) return '-';
-        if (oi >= 100000) return (oi / 100000).toFixed(2) + 'L';
-        if (oi >= 1000) return (oi / 1000).toFixed(2) + 'K';
-        return oi.toLocaleString('en-IN');
-    };
-
-    const formatLTP = (ltp) => (!ltp && ltp !== 0) ? '-' : ltp.toFixed(2);
+    // Helper functions (component-specific, keep inline)
     const getOIBarWidth = (oi) => oi ? Math.min((oi / maxOI) * 100, 100) : 0;
 
     const formatSpotChange = () => {
@@ -724,12 +721,6 @@ const OptionChainModal = ({ isOpen, onClose, onSelectOption, initialSymbol }) =>
         if (!data?.ltp || !data?.prevClose) return null;
         const change = ((data.ltp - data.prevClose) / data.prevClose) * 100;
         return change;
-    };
-
-    const formatLtpChange = (change) => {
-        if (change === null || change === undefined) return null;
-        const sign = change >= 0 ? '+' : '';
-        return sign + change.toFixed(2) + '%';
     };
 
     const renderRow = (row, isITM_CE, isITM_PE, rowIndex) => {
@@ -810,37 +801,6 @@ const OptionChainModal = ({ isOpen, onClose, onSelectOption, initialSymbol }) =>
                 </div>
             </div>
         );
-    };
-
-    // Format Greek values for display
-    const formatGreek = (value, decimals = 4) => {
-        if (value === null || value === undefined) return '-';
-        return value.toFixed(decimals);
-    };
-
-    const formatDelta = (value) => {
-        if (value === null || value === undefined) return '-';
-        return value.toFixed(2);
-    };
-
-    const formatIv = (value) => {
-        if (value === null || value === undefined) return '-';
-        return value.toFixed(1) + '%';
-    };
-
-    const formatTheta = (value) => {
-        if (value === null || value === undefined) return '-';
-        return value.toFixed(0);
-    };
-
-    const formatVega = (value) => {
-        if (value === null || value === undefined) return '-';
-        return value.toFixed(0);
-    };
-
-    const formatGamma = (value) => {
-        if (value === null || value === undefined) return '-';
-        return value.toFixed(4);
     };
 
     // Render Greeks row
