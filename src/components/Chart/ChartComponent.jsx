@@ -1275,31 +1275,20 @@ const ChartComponent = forwardRef(({
         }
     };
 
-    const updateVisualTradingData = useCallback(() => {
-        if (!visualTradingRef.current) return;
+    const initializeVisualTrading = (series) => {
+        if (!series) return;
 
+        // Filter orders and positions for current symbol
         const relevantOrders = orders.filter(o => areSymbolsEquivalent(o.symbol, symbol));
         const relevantPositions = positions.filter(p => areSymbolsEquivalent(p.symbol, symbol));
 
-        // Debug logging for missing orders
-        if (orders.length > 0 && relevantOrders.length === 0) {
-            console.warn('[VisualTrading] Orders exist but none matched symbol:', symbol,
-                'Available symbols:', orders.map(o => o.symbol));
-        }
-
-        visualTradingRef.current.setData(relevantOrders, relevantPositions);
-    }, [orders, positions, symbol]);
-
-    const initializeVisualTrading = (series) => {
-        if (!series) return;
         visualTradingRef.current = new VisualTrading({
-            orders: [],
-            positions: [],
+            orders: relevantOrders,
+            positions: relevantPositions,
             onModifyOrder: onModifyOrder,
             onCancelOrder: onCancelOrder
         });
         series.attachPrimitive(visualTradingRef.current);
-        updateVisualTradingData();
     };
 
     // Initialize chart once on mount
@@ -2674,20 +2663,16 @@ const ChartComponent = forwardRef(({
 
         const currentSym = symbolRef.current || symbol; // prefer Ref but fallback to prop
 
-        // Filter orders/positions for current symbol
-        // Use looser matching to handle "SYMBOL:Exch" vs "SYMBOL" mismatch
-        const normalize = s => s ? s.split(':')[0] : '';
-        const target = normalize(currentSym);
-
-        const relevantOrders = (orders || []).filter(o => normalize(o.symbol) === target);
-        const relevantPositions = (positions || []).filter(p => normalize(p.symbol) === target);
+        // Filter orders/positions for current symbol using consistent helper
+        const relevantOrders = (orders || []).filter(o => areSymbolsEquivalent(o.symbol, currentSym));
+        const relevantPositions = (positions || []).filter(p => areSymbolsEquivalent(p.symbol, currentSym));
 
         if (process.env.NODE_ENV === 'development') {
             console.log('[VisualTrading] Sync:', {
                 currentSym,
-                target,
                 totalOrders: (orders || []).length,
-                relevantOrders,
+                relevantOrders: relevantOrders.length,
+                relevantPositions: relevantPositions.length,
                 allOrderSymbols: (orders || []).map(o => o.symbol)
             });
         }
