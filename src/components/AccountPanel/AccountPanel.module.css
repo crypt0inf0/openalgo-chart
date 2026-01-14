@@ -454,6 +454,20 @@
   opacity: 0.5;
 }
 
+/* Partial Fill Indicator */
+.partialFill {
+  font-size: 10px;
+  opacity: 0.7;
+}
+
+/* Trade ID */
+.tradeId {
+  font-family: 'Roboto Mono', monospace;
+  font-size: 9px;
+  color: var(--tv-color-text-secondary, #787b86);
+  cursor: help;
+}
+
 /* Responsive */
 @media (max-width: 768px) {
   .headerCenter {
