@@ -36,6 +36,10 @@ export class VisualTrading implements ISeriesPrimitive<Time> {
     private _dragPrices: Map<string, number> = new Map();
     private _requestUpdate: () => void = () => { };
 
+    // Performance optimization: cache rendered data
+    private _cachedRendererData: OrderRendererData | null = null;
+    private _dataVersion: number = 0;
+
     constructor(options: VisualTradingOptions) {
         this._options = options;
         this._paneViews = [new VisualTradingPaneView()];
@@ -88,6 +92,11 @@ export class VisualTrading implements ISeriesPrimitive<Time> {
     setData(orders: any[], positions: any[]) {
         this._options.orders = orders;
         this._options.positions = positions;
+
+        // Invalidate cache when data changes
+        this._dataVersion++;
+        this._cachedRendererData = null;
+
         this.updateAllViews();
     }
 
@@ -176,7 +185,31 @@ export class VisualTrading implements ISeriesPrimitive<Time> {
         }
     };
 
+    private _isDragging(): boolean {
+        return this._draggingOrderId !== null;
+    }
+
     private _getRendererData(): OrderRendererData {
+        if (!this._series) return { orders: [], positions: [] };
+
+        // Performance optimization: Return cached data if not dragging and cache is valid
+        // During drag, we need to recalculate to show real-time price feedback
+        if (this._cachedRendererData && !this._isDragging()) {
+            return this._cachedRendererData;
+        }
+
+        // Calculate fresh data
+        const data = this._calculateRendererData();
+
+        // Cache the result if not dragging (dragging shows temporary state)
+        if (!this._isDragging()) {
+            this._cachedRendererData = data;
+        }
+
+        return data;
+    }
+
+    private _calculateRendererData(): OrderRendererData {
         if (!this._series) return { orders: [], positions: [] };
 
         const positions = this._options.positions.map(pos => {
@@ -303,7 +336,7 @@ export class VisualTrading implements ISeriesPrimitive<Time> {
         // Hit test orders
         // We assume 10px hit radius
         let foundOrder = null;
-        const data = this._getRendererData(); // Ideally optimize this to not recalculate every move
+        const data = this._getRendererData(); // Now optimized with caching!
 
         for (const order of data.orders) {
             if (Math.abs(order.y - y) < 10) {
