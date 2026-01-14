@@ -7,7 +7,7 @@ import { LogOut, Search, X, Filter } from 'lucide-react';
 import styles from '../AccountPanel.module.css';
 import { formatCurrency, sortData } from '../utils/accountFormatters';
 
-const PositionsTable = ({ positions, onRowClick, onExitPosition }) => {
+const PositionsTable = ({ positions, onRowClick, onExitPosition, lastUpdateTime = {} }) => {
     const [searchTerm, setSearchTerm] = useState('');
     const [filters, setFilters] = useState({
         exchange: [],
@@ -15,6 +15,14 @@ const PositionsTable = ({ positions, onRowClick, onExitPosition }) => {
     });
     const [showFilters, setShowFilters] = useState(false);
     const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' });
+
+    // Check if value was recently updated (within 1 second)
+    const isRecentlyUpdated = (symbol, exchange) => {
+        const key = `${symbol}-${exchange}`;
+        const updateTime = lastUpdateTime[key];
+        if (!updateTime) return false;
+        return Date.now() - updateTime < 1000; // 1 second pulse
+    };
 
     // Get unique values for filters
     const uniqueExchanges = useMemo(() => {
@@ -286,6 +294,9 @@ const PositionsTable = ({ positions, onRowClick, onExitPosition }) => {
                         const costBasis = Math.abs(avgPrice * qty);
                         const pnlPercent = costBasis > 0 ? (pnl / costBasis) * 100 : 0;
 
+                        // Check if recently updated for pulse animation
+                        const isPulsing = isRecentlyUpdated(pos.symbol, pos.exchange);
+
                         return (
                             <tr
                                 key={`${pos.symbol}-${pos.exchange}-${idx}`}
@@ -299,12 +310,16 @@ const PositionsTable = ({ positions, onRowClick, onExitPosition }) => {
                                     {pos.quantity > 0 ? '+' : ''}{pos.quantity}
                                 </td>
                                 <td className={styles.alignRight}>{formatCurrency(avgPrice)}</td>
-                                <td className={styles.alignRight}>{formatCurrency(ltp)}</td>
-                                <td className={styles.alignRight}>{formatCurrency(positionValue)}</td>
-                                <td className={`${styles.alignRight} ${pnl >= 0 ? styles.positive : styles.negative}`}>
+                                <td className={`${styles.alignRight} ${isPulsing ? styles.pulse : ''}`}>
+                                    {formatCurrency(ltp)}
+                                </td>
+                                <td className={`${styles.alignRight} ${isPulsing ? styles.pulse : ''}`}>
+                                    {formatCurrency(positionValue)}
+                                </td>
+                                <td className={`${styles.alignRight} ${pnl >= 0 ? styles.positive : styles.negative} ${isPulsing ? styles.pulse : ''}`}>
                                     {pnl >= 0 ? '+' : ''}{formatCurrency(pnl)}
                                 </td>
-                                <td className={`${styles.alignRight} ${pnlPercent >= 0 ? styles.positive : styles.negative}`}>
+                                <td className={`${styles.alignRight} ${pnlPercent >= 0 ? styles.positive : styles.negative} ${isPulsing ? styles.pulse : ''}`}>
                                     {pnlPercent >= 0 ? '+' : ''}{pnlPercent.toFixed(2)}%
                                 </td>
                                 <td className={styles.alignCenter}>

@@ -991,3 +991,63 @@
   gap: 6px;
   align-items: center;
 }
+
+/* Pulse Animation for Real-Time Updates */
+.pulse {
+  animation: pulseGlow 0.5s ease-in-out;
+}
+
+@keyframes pulseGlow {
+  0% {
+    background-color: transparent;
+  }
+  50% {
+    background-color: rgba(41, 98, 255, 0.2);
+  }
+  100% {
+    background-color: transparent;
+  }
+}
+
+/* WebSocket Connection Status */
+.connectionStatus {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  background-color: rgba(255, 255, 255, 0.05);
+}
+
+.connectionStatus.connected {
+  color: #26a69a;
+}
+
+.connectionStatus.disconnected {
+  color: #ef5350;
+}
+
+.connectionIndicator {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  animation: pulse-dot 2s ease-in-out infinite;
+}
+
+.connectionIndicator.connected {
+  background-color: #26a69a;
+}
+
+.connectionIndicator.disconnected {
+  background-color: #ef5350;
+}
+
+@keyframes pulse-dot {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}

@@ -1,7 +1,7 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { ChevronDown, ChevronUp, RefreshCw, X, Wallet, Minus, Maximize2, Minimize2, LogOut, XCircle } from 'lucide-react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { ChevronDown, ChevronUp, RefreshCw, X, Wallet, Minus, Maximize2, Minimize2, LogOut, XCircle, Wifi, WifiOff } from 'lucide-react';
 import styles from './AccountPanel.module.css';
-import { getFunds, getPositionBook, getOrderBook, getHoldings, getTradeBook, ping, placeOrder, cancelOrder } from '../../services/openalgo';
+import { getFunds, getPositionBook, getOrderBook, getHoldings, getTradeBook, ping, placeOrder, cancelOrder, subscribeToMultiTicker } from '../../services/openalgo';
 import { modifyOrder } from '../../services/orderService';
 import ExitPositionModal from '../ExitPositionModal';
 import ModifyOrderModal from './components/ModifyOrderModal';
@@ -43,6 +43,11 @@ const AccountPanel = ({
     // Modify Order Modal state
     const [isModifyModalOpen, setIsModifyModalOpen] = useState(false);
     const [selectedOrderForModify, setSelectedOrderForModify] = useState(null);
+
+    // WebSocket state for real-time P&L
+    const [isWebSocketConnected, setIsWebSocketConnected] = useState(false);
+    const [lastUpdateTime, setLastUpdateTime] = useState({});
+    const wsUnsubscribeRef = useRef(null);
 
     // Data states
     const [funds, setFunds] = useState(null);
@@ -110,8 +115,88 @@ const AccountPanel = ({
         }
     }, [isOpen, isAuthenticated, fetchAccountData, propOrders]);
 
-    // Removed the separate interval useEffect as it is now combined above
+    // WebSocket subscription for real-time P&L updates
+    useEffect(() => {
+        // Only subscribe if panel is open, authenticated, and we have positions
+        if (!isOpen || !isAuthenticated || !positions || positions.length === 0) {
+            // Cleanup previous subscription
+            if (wsUnsubscribeRef.current) {
+                wsUnsubscribeRef.current();
+                wsUnsubscribeRef.current = null;
+                setIsWebSocketConnected(false);
+            }
+            return;
+        }
 
+        // Get open positions (quantity !== 0)
+        const openPositions = positions.filter(p => p.quantity !== 0);
+        if (openPositions.length === 0) {
+            if (wsUnsubscribeRef.current) {
+                wsUnsubscribeRef.current();
+                wsUnsubscribeRef.current = null;
+                setIsWebSocketConnected(false);
+            }
+            return;
+        }
+
+        // Cleanup previous subscription before creating new one
+        if (wsUnsubscribeRef.current) {
+            wsUnsubscribeRef.current();
+        }
+
+        // Create subscription array
+        const subscriptions = openPositions.map(pos => ({
+            symbol: pos.symbol,
+            exchange: pos.exchange || 'NSE'
+        }));
+
+        console.log('[AccountPanel] Subscribing to WebSocket for', subscriptions.length, 'positions');
+
+        // Subscribe to WebSocket
+        const unsubscribe = subscribeToMultiTicker(subscriptions, (tickData) => {
+            // Update position with new LTP
+            setPositions(prevPositions => {
+                return prevPositions.map(pos => {
+                    if (pos.symbol === tickData.symbol && pos.exchange === tickData.exchange) {
+                        const newLtp = tickData.last;
+                        const qty = parseFloat(pos.quantity || 0);
+                        const avgPrice = parseFloat(pos.average_price || 0);
+
+                        // Calculate new P&L
+                        const newPnl = (newLtp - avgPrice) * qty;
+
+                        // Mark update time for pulse animation
+                        setLastUpdateTime(prev => ({
+                            ...prev,
+                            [`${pos.symbol}-${pos.exchange}`]: Date.now()
+                        }));
+
+                        return {
+                            ...pos,
+                            ltp: newLtp,
+                            pnl: newPnl
+                        };
+                    }
+                    return pos;
+                });
+            });
+
+            // Mark as connected on first update
+            setIsWebSocketConnected(true);
+        });
+
+        wsUnsubscribeRef.current = unsubscribe;
+        setIsWebSocketConnected(true);
+
+        // Cleanup on unmount
+        return () => {
+            if (wsUnsubscribeRef.current) {
+                wsUnsubscribeRef.current();
+                wsUnsubscribeRef.current = null;
+                setIsWebSocketConnected(false);
+            }
+        };
+    }, [isOpen, isAuthenticated, positions.map(p => `${p.symbol}-${p.exchange}`).join(',')]);
 
     // Calculate P&L summary - prefer broker's official P&L, fallback to manual calculation
     const calculatePnLSummary = () => {
@@ -603,7 +688,7 @@ const AccountPanel = ({
             case 'trades':
                 return <TradesTable trades={trades} onRowClick={handleRowClick} />;
             default:
-                return <PositionsTable positions={positions} onRowClick={handleRowClick} onExitPosition={handleExitPosition} />;
+                return <PositionsTable positions={positions} onRowClick={handleRowClick} onExitPosition={handleExitPosition} lastUpdateTime={lastUpdateTime} />;
         }
     };
 
@@ -616,6 +701,13 @@ const AccountPanel = ({
                     <span className={styles.title}>Account Manager</span>
                     {brokerName && (
                         <span className={styles.brokerBadge}>{brokerName}</span>
+                    )}
+                    {/* WebSocket Connection Status */}
+                    {activeTab === 'positions' && positions.filter(p => p.quantity !== 0).length > 0 && (
+                        <div className={`${styles.connectionStatus} ${isWebSocketConnected ? styles.connected : styles.disconnected}`}>
+                            {isWebSocketConnected ? <Wifi size={11} /> : <WifiOff size={11} />}
+                            <span>{isWebSocketConnected ? 'Live' : 'Offline'}</span>
+                        </div>
                     )}
                 </div>
 
