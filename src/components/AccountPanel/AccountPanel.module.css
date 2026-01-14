@@ -301,6 +301,10 @@
   color: #F23645 !important;
 }
 
+.warning {
+  color: #FFB800 !important;
+}
+
 /* Status Badges */
 .statusBadge {
   display: inline-block;

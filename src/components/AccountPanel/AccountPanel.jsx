@@ -4,28 +4,12 @@ import styles from './AccountPanel.module.css';
 import { getFunds, getPositionBook, getOrderBook, getHoldings, getTradeBook, ping, placeOrder, cancelOrder } from '../../services/openalgo';
 import ExitPositionModal from '../ExitPositionModal';
 
-// Tab definitions
-const TABS = [
-    { id: 'positions', label: 'Positions' },
-    { id: 'orders', label: 'Orders' },
-    { id: 'holdings', label: 'Holdings' },
-    { id: 'trades', label: 'Trades' },
-];
+// Import extracted components
+import { PositionsTable, OrdersTable, HoldingsTable, TradesTable } from './components';
 
-// Format currency values
-const formatCurrency = (value) => {
-    if (value === null || value === undefined) return '0.00';
-    const num = parseFloat(value);
-    return num.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-};
-
-// Format P&L with color class
-const formatPnL = (value) => {
-    const num = parseFloat(value) || 0;
-    const formatted = formatCurrency(Math.abs(num));
-    const sign = num >= 0 ? '+' : '-';
-    return { value: `${sign}${formatted}`, isPositive: num >= 0 };
-};
+// Import constants and formatters
+import { TABS, AUTO_REFRESH_INTERVAL_MS } from './constants/accountConstants';
+import { formatCurrency, formatPnL, calculateOrderStats } from './utils/accountFormatters';
 
 const AccountPanel = ({
     isOpen,
@@ -73,14 +57,8 @@ const AccountPanel = ({
     }, [propFunds, propPositions, propOrders, propHoldings, propTrades]);
 
     // Fetch all account data
-    // Calculate order stats locally to ensure consistency with table (handling Trigger Pending etc.)
-    const orderStats = (orders.orders || []).reduce((acc, o) => {
-        const s = (o.status || o.order_status || '').toUpperCase().replace(/\s+/g, '_');
-        if (['OPEN', 'PENDING', 'TRIGGER_PENDING', 'AMO_REQ_RECEIVED', 'VALIDATION_PENDING'].includes(s)) acc.open++;
-        else if (['COMPLETE', 'COMPLETED'].includes(s)) acc.completed++;
-        else if (['REJECTED', 'CANCELLED', 'CANCELED'].includes(s)) acc.rejected++;
-        return acc;
-    }, { open: 0, completed: 0, rejected: 0 });
+    // Calculate order stats using extracted utility
+    const orderStats = calculateOrderStats(orders.orders);
 
     const fetchAccountData = useCallback(async () => {
         if (!isAuthenticated) return;
@@ -120,8 +98,8 @@ const AccountPanel = ({
         if (isOpen && isAuthenticated && !isManaged) {
             fetchAccountData();
 
-            // Auto-refresh every 30 seconds when panel is open
-            const interval = setInterval(fetchAccountData, 30000);
+            // Auto-refresh when panel is open
+            const interval = setInterval(fetchAccountData, AUTO_REFRESH_INTERVAL_MS);
             return () => clearInterval(interval);
         }
     }, [isOpen, isAuthenticated, fetchAccountData, propOrders]);
@@ -129,30 +107,93 @@ const AccountPanel = ({
     // Removed the separate interval useEffect as it is now combined above
 
 
-    // Calculate P&L summary from positions
+    // Calculate P&L summary - prefer broker's official P&L, fallback to manual calculation
     const calculatePnLSummary = () => {
-        let unrealizedPnL = 0;
-        let realizedPnL = 0;
+        // Extract broker's official P&L fields from funds
+        const brokerRealizedPnL = parseFloat(funds?.m2mrealized || 0);
+        const brokerUnrealizedPnL = parseFloat(funds?.m2munrealized || 0);
 
+        // Manual calculation as fallback
+        let manualUnrealizedPnL = 0;
+        let manualRealizedPnL = 0;
+
+        // Manual unrealized P&L: Sum from open positions
         positions.forEach(pos => {
-            // Calculate unrealized P&L for open positions
             if (pos.quantity !== 0) {
-                unrealizedPnL += parseFloat(pos.pnl || 0);
+                manualUnrealizedPnL += parseFloat(pos.pnl || 0);
             }
         });
 
-        // Add realized P&L from today's trades
+        // Manual realized P&L: Calculate from trades
+        // Group trades by symbol to match buy-sell pairs
+        const tradesBySymbol = {};
         trades.forEach(trade => {
-            if (trade.action === 'SELL') {
-                realizedPnL += parseFloat(trade.trade_value || 0) - (parseFloat(trade.average_price || 0) * parseFloat(trade.quantity || 0));
+            const key = `${trade.symbol}-${trade.exchange}`;
+            if (!tradesBySymbol[key]) {
+                tradesBySymbol[key] = { buys: [], sells: [] };
             }
+            if (trade.action === 'BUY') {
+                tradesBySymbol[key].buys.push(trade);
+            } else if (trade.action === 'SELL') {
+                tradesBySymbol[key].sells.push(trade);
+            }
+        });
+
+        // Calculate realized P&L from matched trades
+        Object.values(tradesBySymbol).forEach(({ buys, sells }) => {
+            // Simple FIFO matching for realized P&L
+            sells.forEach(sell => {
+                const sellValue = parseFloat(sell.trade_value || 0);
+                const sellQty = parseFloat(sell.quantity || 0);
+                const sellPrice = parseFloat(sell.average_price || 0);
+
+                // Find matching buy cost basis (simplified - assumes trades are for closing positions)
+                let matchedCost = 0;
+                buys.forEach(buy => {
+                    const buyPrice = parseFloat(buy.average_price || 0);
+                    const buyQty = parseFloat(buy.quantity || 0);
+                    // Estimate cost basis proportionally
+                    matchedCost += buyPrice * buyQty;
+                });
+
+                // Realized P&L = Sell proceeds - Cost basis
+                if (matchedCost > 0) {
+                    manualRealizedPnL += sellValue - matchedCost;
+                } else {
+                    // If no matching buys, estimate based on sell value (rough approximation)
+                    manualRealizedPnL += sellValue - (sellPrice * sellQty);
+                }
+            });
+        });
+
+        // Use broker P&L if available and non-zero, otherwise use manual calculation
+        const unrealizedPnL = (funds?.m2munrealized !== undefined && funds?.m2munrealized !== null)
+            ? brokerUnrealizedPnL
+            : manualUnrealizedPnL;
+
+        const realizedPnL = (funds?.m2mrealized !== undefined && funds?.m2mrealized !== null)
+            ? brokerRealizedPnL
+            : manualRealizedPnL;
+
+        // Log for debugging
+        console.log('[AccountPanel] P&L Calculation:', {
+            broker: { realized: brokerRealizedPnL, unrealized: brokerUnrealizedPnL },
+            manual: { realized: manualRealizedPnL, unrealized: manualUnrealizedPnL },
+            used: { realized: realizedPnL, unrealized: unrealizedPnL },
+            source: (funds?.m2mrealized !== undefined) ? 'broker' : 'manual'
         });
 
         return { unrealizedPnL, realizedPnL };
     };
 
     const { unrealizedPnL, realizedPnL } = calculatePnLSummary();
+
+    // Extract additional margin information
     const availableMargin = parseFloat(funds?.availablecash || 0);
+    const usedMargin = parseFloat(funds?.utiliseddebits || 0);
+    const collateral = parseFloat(funds?.collateral || 0);
+    const totalMargin = availableMargin + usedMargin;
+    const marginUtilization = totalMargin > 0 ? (usedMargin / totalMargin) * 100 : 0;
 
     // Handle row click to navigate to symbol
     const handleRowClick = (symbol, exchange) => {
@@ -518,19 +559,19 @@ const AccountPanel = ({
         );
     };
 
-    // Render content based on active tab
+    // Render content based on active tab using extracted components
     const renderContent = () => {
         switch (activeTab) {
             case 'positions':
-                return renderPositions();
+                return <PositionsTable positions={positions} onRowClick={handleRowClick} onExitPosition={handleExitPosition} />;
             case 'orders':
-                return renderOrders();
+                return <OrdersTable orders={orders.orders || []} onRowClick={handleRowClick} onCancelOrder={handleCancelOrder} />;
             case 'holdings':
-                return renderHoldings();
+                return <HoldingsTable holdings={holdings.holdings || []} onRowClick={handleRowClick} />;
             case 'trades':
-                return renderTrades();
+                return <TradesTable trades={trades} onRowClick={handleRowClick} />;
             default:
-                return renderPositions();
+                return <PositionsTable positions={positions} onRowClick={handleRowClick} onExitPosition={handleExitPosition} />;
         }
     };
 
@@ -560,8 +601,24 @@ const AccountPanel = ({
                         </span>
                     </div>
                     <div className={styles.summaryItem}>
-                        <span className={styles.summaryLabel}>Margin</span>
+                        <span className={styles.summaryLabel}>Available</span>
                         <span className={styles.summaryValue}>₹{formatCurrency(availableMargin)}</span>
+                    </div>
+                    <div className={styles.summaryItem}>
+                        <span className={styles.summaryLabel}>Used</span>
+                        <span className={styles.summaryValue}>₹{formatCurrency(usedMargin)}</span>
+                    </div>
+                    {collateral > 0 && (
+                        <div className={styles.summaryItem}>
+                            <span className={styles.summaryLabel}>Collateral</span>
+                            <span className={styles.summaryValue}>₹{formatCurrency(collateral)}</span>
+                        </div>
+                    )}
+                    <div className={styles.summaryItem}>
+                        <span className={styles.summaryLabel}>Margin Used</span>
+                        <span className={`${styles.summaryValue} ${marginUtilization > 80 ? styles.negative : marginUtilization > 50 ? styles.warning : ''}`}>
+                            {marginUtilization.toFixed(1)}%
+                        </span>
                     </div>
                 </div>
 
