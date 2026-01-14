@@ -1051,3 +1051,42 @@
     opacity: 0.5;
   }
 }
+
+/* Cancel Order Modal Styles */
+.warningIcon {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 16px;
+}
+
+.cancelOrderDetails {
+  text-align: center;
+}
+
+.cancelMessage {
+  font-size: 16px;
+  font-weight: 500;
+  color: var(--text-primary);
+  margin-bottom: 20px;
+}
+
+.dangerBtn {
+  background-color: #ef4444;
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  transition: all 0.2s;
+}
+
+.dangerBtn:hover:not(:disabled) {
+  background-color: #dc2626;
+}
+
+.dangerBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}

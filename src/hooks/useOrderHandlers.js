@@ -31,49 +31,50 @@ export const useOrderHandlers = ({
         );
 
         if (!order) {
-            if (process.env.NODE_ENV === 'development') {
-                console.error('[App] Order mismatch! Available IDs:', activeOrders.map(o => o.orderid));
-            }
+            console.error('[App] Order mismatch! Available IDs:', activeOrders.map(o => o.orderid));
             showToast(`Order ${orderId} not found`, 'error');
             return;
         }
 
         try {
+            // Round price to 2 decimal places for Indian markets
+            const roundedPrice = parseFloat(newPrice.toFixed(2));
+
             const payload = {
                 orderid: orderId,
-                strategy: 'Manual',
+                strategy: order.strategy || 'MANUAL',  // Use order's strategy or default to MANUAL
                 exchange: order.exchange,
                 symbol: order.symbol,
                 action: order.action,
                 product: order.product,
                 pricetype: order.pricetype,
-                price: newPrice,
-                quantity: order.quantity,
-                disclosed_quantity: order.disclosed_quantity || 0,
+                price: roundedPrice,
+                quantity: parseInt(order.quantity),
+                disclosed_quantity: parseInt(order.disclosed_quantity || 0),
                 trigger_price: (order.pricetype === 'SL' || order.pricetype === 'SL-M')
-                    ? newPrice
+                    ? roundedPrice  // For SL orders, dragging modifies trigger price
                     : (parseFloat(order.trigger_price) || 0)
             };
 
-            if (process.env.NODE_ENV === 'development') {
-                console.log('[App] Modifying order:', payload);
-            }
+            console.log('[App] Modifying order with payload:', payload);
 
             const result = await modifyOrder(payload);
 
+            console.log('[App] Modify order result:', result);
+
             if (result.status === 'success') {
                 showToast(
-                    `${order.action} ${order.symbol} @ ₹${parseFloat(newPrice).toFixed(2)} (Qty: ${order.quantity})`,
+                    `Modified: ${order.action} ${order.symbol} @ ₹${roundedPrice} (Qty: ${order.quantity})`,
                     'success'
                 );
+                // Refresh trading data to update UI
                 refreshTradingData();
             } else {
-                showToast(result.message, 'error');
+                console.error('[App] Modify order failed:', result.message);
+                showToast(`Modify failed: ${result.message}`, 'error');
             }
         } catch (e) {
-            if (process.env.NODE_ENV === 'development') {
-                console.error('[App] Order modification error:', e);
-            }
+            console.error('[App] Order modification error:', e);
             showToast(e.message || 'Failed to modify order', 'error');
         }
     }, [activeOrders, showToast, refreshTradingData]);

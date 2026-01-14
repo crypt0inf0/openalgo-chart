@@ -1,12 +1,24 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import {
     getPositionBook,
     getOrderBook,
     getFunds,
     getHoldings,
-    getTradeBook
+    getTradeBook,
+    subscribeToMultiTicker
 } from '../services/openalgo';
 
+/**
+ * EVENT-DRIVEN Trading Data Hook
+ *
+ * Strategy:
+ * 1. Fetch data immediately when authenticated
+ * 2. Subscribe to price WebSocket for positions (existing)
+ * 3. Use event-driven updates for orders (fetch after operations)
+ * 4. Backup polling at 10 seconds (safety net for missed updates)
+ *
+ * This avoids aggressive polling while ensuring real-time updates.
+ */
 export const useTradingData = (isAuthenticated) => {
     const [positions, setPositions] = useState([]);
     const [orders, setOrders] = useState([]);
@@ -15,9 +27,11 @@ export const useTradingData = (isAuthenticated) => {
     const [trades, setTrades] = useState([]);
     const [activeOrders, setActiveOrders] = useState([]);
     const [activePositions, setActivePositions] = useState([]);
+    const [lastOrderUpdate, setLastOrderUpdate] = useState(Date.now());
 
     // Use refs to track if component is mounted to prevent state updates after unmount
     const isMounted = useRef(true);
+    const fetchInProgress = useRef(false);
 
     useEffect(() => {
         isMounted.current = true;
@@ -26,83 +40,15 @@ export const useTradingData = (isAuthenticated) => {
         };
     }, []);
 
-    useEffect(() => {
-        let intervalId;
+    // Shared fetch logic
+    const fetchData = useCallback(async (source = 'auto') => {
+        if (!isAuthenticated || fetchInProgress.current) return;
 
-        const fetchData = async () => {
-            if (!isAuthenticated) return;
-
-            try {
-                // Fetch all data in parallel
-                const [posData, orderData, fundsData, holdingsData, tradeData] = await Promise.all([
-                    getPositionBook(),
-                    getOrderBook(),
-                    getFunds(),
-                    getHoldings(),
-                    getTradeBook()
-                ]);
-
-                if (!isMounted.current) return;
-
-                // Positions
-                // getPositionBook returns array directly in service implementation or []
-                const positionsList = Array.isArray(posData) ? posData : [];
-                setPositions(positionsList);
-
-                if (positionsList.length > 0) {
-                    console.log('[useTradingData] Positions:', positionsList);
-                }
-
-                // Orders
-                // getOrderBook returns { orders: [], statistics: {} }
-                const orderList = Array.isArray(orderData.orders) ? orderData.orders : [];
-                setOrders(orderList);
-
-                // Funds
-                setFunds(fundsData || {});
-
-                // Holdings
-                const holdingsList = holdingsData && Array.isArray(holdingsData.holdings) ? holdingsData.holdings : [];
-                setHoldings(holdingsList);
-
-                // Trades
-                const tradeList = Array.isArray(tradeData) ? tradeData : [];
-                setTrades(tradeList);
-
-                // Filter Active Orders for Chart
-                // Status: OPEN, TRIGGER PENDING (with normalization), VALIDATION PENDING
-                const active = orderList.filter(o => {
-                    // Check both status and order_status fields for compatibility
-                    const status = (o.status || o.order_status || '').toUpperCase().replace(/\s+/g, '_'); // Normalize "Trigger Pending" -> "TRIGGER_PENDING"
-                    return ['OPEN', 'PENDING', 'TRIGGER_PENDING', 'VALIDATION_PENDING'].includes(status);
-                });
-                setActiveOrders(active);
-
-                // Active Positions for Chart (non-closed)
-                // Assuming all positions in book are open unless quantity is 0
-                // Some brokers remove closed positions from the book immediately
-                const activePos = positionsList.filter(p => parseFloat(p.quantity || 0) !== 0);
-                setActivePositions(activePos);
-
-            } catch (error) {
-                console.error("Error fetching trading data:", error);
-            }
-        };
-
-        // Initial fetch
-        fetchData();
-
-        // Poll every 3 seconds
-        intervalId = setInterval(fetchData, 3000);
-
-        return () => clearInterval(intervalId);
-    }, [isAuthenticated]);
-
-    // Function to manually refresh data (e.g. after placing an order)
-    const refreshTradingData = async () => {
-        if (!isAuthenticated) return;
-
+        fetchInProgress.current = true;
         try {
+            console.log(`[useTradingData] Fetching data (source: ${source})`);
+
+            // Fetch all data in parallel
             const [posData, orderData, fundsData, holdingsData, tradeData] = await Promise.all([
                 getPositionBook(),
                 getOrderBook(),
@@ -113,31 +59,85 @@ export const useTradingData = (isAuthenticated) => {
 
             if (!isMounted.current) return;
 
+            // Positions
             const positionsList = Array.isArray(posData) ? posData : [];
             setPositions(positionsList);
 
+            // Orders
             const orderList = Array.isArray(orderData.orders) ? orderData.orders : [];
-            setOrders(orderList);
 
+            // Log order updates for debugging
+            if (orderList.length > 0) {
+                console.log('[useTradingData] Orders updated:', orderList.length, 'orders', `(source: ${source})`);
+                const openOrders = orderList.filter(o => {
+                    const status = (o.status || o.order_status || '').toUpperCase().replace(/\s+/g, '_');
+                    return ['OPEN', 'PENDING', 'TRIGGER_PENDING', 'VALIDATION_PENDING'].includes(status);
+                });
+                if (openOrders.length > 0) {
+                    console.log('[useTradingData] Open orders:', openOrders.map(o => ({
+                        id: o.orderid,
+                        symbol: o.symbol,
+                        price: o.price,
+                        status: o.order_status || o.status
+                    })));
+                }
+            }
+
+            setOrders(orderList);
+            setLastOrderUpdate(Date.now());
+
+            // Funds
             setFunds(fundsData || {});
 
-            setHoldings(holdingsData && Array.isArray(holdingsData.holdings) ? holdingsData.holdings : []);
+            // Holdings
+            const holdingsList = holdingsData && Array.isArray(holdingsData.holdings) ? holdingsData.holdings : [];
+            setHoldings(holdingsList);
 
-            setTrades(Array.isArray(tradeData) ? tradeData : []);
+            // Trades
+            const tradeList = Array.isArray(tradeData) ? tradeData : [];
+            setTrades(tradeList);
 
+            // Filter Active Orders for Chart
             const active = orderList.filter(o => {
-                const status = (o.status || '').toUpperCase().replace(/\s+/g, '_');
+                const status = (o.status || o.order_status || '').toUpperCase().replace(/\s+/g, '_');
                 return ['OPEN', 'PENDING', 'TRIGGER_PENDING', 'VALIDATION_PENDING'].includes(status);
             });
             setActiveOrders(active);
 
+            // Active Positions for Chart
             const activePos = positionsList.filter(p => parseFloat(p.quantity || 0) !== 0);
             setActivePositions(activePos);
 
         } catch (error) {
-            console.error("Error refreshing trading data:", error);
+            console.error("[useTradingData] Error fetching trading data:", error);
+        } finally {
+            fetchInProgress.current = false;
         }
-    };
+    }, [isAuthenticated]);
+
+    // Initial fetch + backup polling (10 seconds - safety net only)
+    useEffect(() => {
+        if (!isAuthenticated) return;
+
+        // Initial fetch
+        fetchData('initial');
+
+        // Backup polling every 10 seconds (safety net for missed updates)
+        console.log('[useTradingData] Starting backup polling (10s interval)');
+        const intervalId = setInterval(() => fetchData('backup-poll'), 10000);
+
+        return () => {
+            console.log('[useTradingData] Stopping backup polling');
+            clearInterval(intervalId);
+        };
+    }, [isAuthenticated, fetchData]);
+
+    // EVENT-DRIVEN: Manual refresh after order operations (modify/cancel/place)
+    // This is called immediately after order operations for instant UI updates
+    const refreshTradingData = useCallback(async () => {
+        console.log('[useTradingData] EVENT-DRIVEN refresh triggered (order operation)');
+        await fetchData('event-driven');
+    }, [fetchData]);
 
     return {
         positions,

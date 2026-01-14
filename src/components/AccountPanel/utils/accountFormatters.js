@@ -27,13 +27,27 @@ export const formatPnL = (value) => {
 };
 
 /**
- * Check if order status is open/pending
+ * Check if order status is open/pending (cancellable)
  * @param {string} status - Order status
  * @returns {boolean}
  */
 export const isOpenOrderStatus = (status) => {
     const s = (status || '').toUpperCase().replace(/\s+/g, '_');
-    return ['OPEN', 'PENDING', 'TRIGGER_PENDING', 'AMO_REQ_RECEIVED', 'VALIDATION_PENDING'].includes(s);
+
+    // Expanded list of cancellable statuses across different brokers
+    const cancellableStatuses = [
+        'OPEN',
+        'PENDING',
+        'TRIGGER_PENDING',
+        'AMO_REQ_RECEIVED',
+        'VALIDATION_PENDING',
+        'NOT_TRIGGERED',        // For stop loss orders not yet triggered
+        'AFTER_MARKET_ORDER',   // AMO variant used by some brokers
+        'PENDING_APPROVAL',     // Some brokers require approval
+        'QUEUED'                // Order in queue waiting to be processed
+    ];
+
+    return cancellableStatuses.includes(s);
 };
 
 /**
@@ -43,10 +57,11 @@ export const isOpenOrderStatus = (status) => {
  */
 export const calculateOrderStats = (orders) => {
     return (orders || []).reduce((acc, o) => {
-        const s = (o.status || o.order_status || '').toUpperCase().replace(/\s+/g, '_');
-        if (['OPEN', 'PENDING', 'TRIGGER_PENDING', 'AMO_REQ_RECEIVED', 'VALIDATION_PENDING'].includes(s)) acc.open++;
-        else if (['COMPLETE', 'COMPLETED'].includes(s)) acc.completed++;
-        else if (['REJECTED', 'CANCELLED', 'CANCELED'].includes(s)) acc.rejected++;
+        const status = o.status || o.order_status || '';
+        // Use isOpenOrderStatus to check if order is open/pending
+        if (isOpenOrderStatus(status)) acc.open++;
+        else if (['COMPLETE', 'COMPLETED'].includes(status.toUpperCase().replace(/\s+/g, '_'))) acc.completed++;
+        else if (['REJECTED', 'CANCELLED', 'CANCELED'].includes(status.toUpperCase().replace(/\s+/g, '_'))) acc.rejected++;
         return acc;
     }, { open: 0, completed: 0, rejected: 0 });
 };

@@ -132,22 +132,32 @@ export const modifyOrder = async (orderDetails) => {
 
 /**
  * Cancel an existing order
- * @param {string|Object} orderDetails - Order ID or object with orderid
- * @returns {Promise<Object>} { status, message }
+ * @param {string|Object} orderDetails - Order ID or object with orderid/order
+ * @returns {Promise<Object>} { status, message, brokerResponse }
  */
 export const cancelOrder = async (orderDetails) => {
     try {
         const apiKey = getApiKey();
         if (!apiKey) throw new Error('API Key not found');
 
-        // Handle both string (ID only) and object input
-        const requestPayload = typeof orderDetails === 'string'
-            ? { orderid: orderDetails }
-            : orderDetails;
+        // Handle multiple input formats: string, { orderid }, or { order: {...} }
+        const order = orderDetails.order || orderDetails;
+        const orderid = typeof order === 'string' ? order : order.orderid;
+
+        // Log the order details being sent for debugging
+        console.log('[OrderService] Cancel Order Request:', {
+            orderid: orderid,
+            symbol: order.symbol || 'N/A',
+            status: order.order_status || 'N/A',
+            action: order.action || 'N/A',
+            quantity: order.quantity || 'N/A',
+            timestamp: new Date().toISOString()
+        });
 
         const requestBody = {
             apikey: apiKey,
-            ...requestPayload
+            orderid: orderid,
+            strategy: order.strategy || 'MANUAL'  // Required by broker API
         };
 
         logger.debug('[OpenAlgo] Cancel Order request:', requestBody);
@@ -161,10 +171,27 @@ export const cancelOrder = async (orderDetails) => {
 
         if (!response.ok) {
             const errorData = await response.json().catch(() => ({}));
+
+            // Log the full error response
+            console.error('[OrderService] Cancel Order HTTP Error:', {
+                status: response.status,
+                statusText: response.statusText,
+                errorData: errorData
+            });
+
             throw new Error(errorData.message || `Cancel order failed: ${response.status}`);
         }
 
         const data = await response.json();
+
+        // Log the full response for debugging
+        console.log('[OrderService] Cancel Order Response:', {
+            status: response.status,
+            data: data,
+            success: data.status === 'success',
+            timestamp: new Date().toISOString()
+        });
+
         logger.debug('[OpenAlgo] Cancel Order response:', data);
 
         if (data.status === 'success') {
@@ -173,16 +200,20 @@ export const cancelOrder = async (orderDetails) => {
                 message: data.message
             };
         } else {
+            // Include broker response in error for better debugging
+            console.error('[OrderService] Cancel failed:', data.message);
             return {
                 status: 'error',
-                message: data.message || 'Unknown error'
+                message: data.message || 'Unknown error',
+                brokerResponse: data
             };
         }
     } catch (error) {
         console.error('[OpenAlgo] Cancel Order error:', error);
         return {
             status: 'error',
-            message: error.message
+            message: error.message,
+            errorType: 'network'
         };
     }
 };

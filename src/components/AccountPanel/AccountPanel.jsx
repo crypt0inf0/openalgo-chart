@@ -5,13 +5,15 @@ import { getFunds, getPositionBook, getOrderBook, getHoldings, getTradeBook, pin
 import { modifyOrder } from '../../services/orderService';
 import ExitPositionModal from '../ExitPositionModal';
 import ModifyOrderModal from './components/ModifyOrderModal';
+import CancelOrderModal from './components/CancelOrderModal';
 
 // Import extracted components
 import { PositionsTable, OrdersTable, HoldingsTable, TradesTable } from './components';
 
 // Import constants and formatters
 import { TABS, AUTO_REFRESH_INTERVAL_MS } from './constants/accountConstants';
-import { formatCurrency, formatPnL, calculateOrderStats } from './utils/accountFormatters';
+import { formatCurrency, formatPnL, calculateOrderStats, isOpenOrderStatus } from './utils/accountFormatters';
+import { debugOrderCancellation } from './utils/orderDebugger';
 
 const AccountPanel = ({
     isOpen,
@@ -44,6 +46,11 @@ const AccountPanel = ({
     const [isModifyModalOpen, setIsModifyModalOpen] = useState(false);
     const [selectedOrderForModify, setSelectedOrderForModify] = useState(null);
 
+    // Cancel Order Modal state
+    const [isCancelModalOpen, setIsCancelModalOpen] = useState(false);
+    const [selectedOrderForCancel, setSelectedOrderForCancel] = useState(null);
+    const [isCancelling, setIsCancelling] = useState(false);
+
     // WebSocket state for real-time P&L
     const [isWebSocketConnected, setIsWebSocketConnected] = useState(false);
     const [lastUpdateTime, setLastUpdateTime] = useState({});
@@ -60,8 +67,25 @@ const AccountPanel = ({
     useEffect(() => {
         if (propFunds) setFunds(propFunds);
         if (propPositions) setPositions(propPositions);
+
         // App passes orders array, we expect object with orders array
-        if (propOrders) setOrders(prev => ({ ...prev, orders: propOrders }));
+        if (propOrders) {
+            console.log('[AccountPanel] Received updated orders from parent:', propOrders.length, 'orders');
+            const openOrders = propOrders.filter(o => {
+                const status = (o.status || o.order_status || '').toUpperCase().replace(/\s+/g, '_');
+                return ['OPEN', 'PENDING', 'TRIGGER_PENDING', 'VALIDATION_PENDING'].includes(status);
+            });
+            if (openOrders.length > 0) {
+                console.log('[AccountPanel] Open orders from props:', openOrders.map(o => ({
+                    id: o.orderid,
+                    symbol: o.symbol,
+                    price: o.price,
+                    status: o.order_status || o.status
+                })));
+            }
+            setOrders(prev => ({ ...prev, orders: propOrders }));
+        }
+
         // App passes holdings array, we expect object with holdings array
         if (propHoldings) setHoldings(prev => ({ ...prev, holdings: propHoldings }));
         if (propTrades) setTrades(propTrades);
@@ -106,12 +130,22 @@ const AccountPanel = ({
         // If props are provided (we check orders as a proxy), active fetching is handled by parent
         const isManaged = !!propOrders;
 
-        if (isOpen && isAuthenticated && !isManaged) {
-            fetchAccountData();
+        console.log('[AccountPanel] Data management check:', {
+            isOpen,
+            isAuthenticated,
+            isManaged,
+            note: isManaged ? 'Using parent event-driven updates' : 'Would use own polling (legacy mode)'
+        });
 
-            // Auto-refresh when panel is open
+        // IMPORTANT: If props are provided, parent (App.jsx) handles all data fetching
+        // with event-driven updates. No polling needed here.
+        if (isOpen && isAuthenticated && !isManaged) {
+            console.warn('[AccountPanel] Running in legacy mode - no props provided. Consider passing data from parent.');
+            fetchAccountData();
             const interval = setInterval(fetchAccountData, AUTO_REFRESH_INTERVAL_MS);
             return () => clearInterval(interval);
+        } else if (isManaged) {
+            console.log('[AccountPanel] ✓ Using parent event-driven system (recommended)');
         }
     }, [isOpen, isAuthenticated, fetchAccountData, propOrders]);
 
@@ -311,29 +345,123 @@ const AccountPanel = ({
         setTimeout(fetchAccountData, 1000);
     };
 
-    // Handle cancel order
+    // Handle cancel order - open modal after validation
     const handleCancelOrder = async (order, e) => {
         e.stopPropagation(); // Prevent row click
 
-        const confirmCancel = window.confirm(
-            `Cancel order for ${order.symbol}?\n\nOrder ID: ${order.orderid}`
-        );
-
-        if (!confirmCancel) return;
-
         try {
-            const result = await cancelOrder({ orderid: order.orderid });
+            // Step 1: Refresh order book to get latest status
+            console.log('[AccountPanel] Fetching latest order status before cancel...');
+            await fetchAccountData();
+
+            // Step 2: Find the order again with fresh status
+            const freshOrder = orders.orders?.find(o => o.orderid === order.orderid);
+
+            if (!freshOrder) {
+                console.warn('[AccountPanel] Order not found after refresh:', order.orderid);
+                if (showToast) {
+                    showToast('Order not found. It may have been filled or cancelled already.', 'warning');
+                }
+                return;
+            }
+
+            // Step 3: Check if status changed
+            if (freshOrder.order_status !== order.order_status) {
+                console.warn('[AccountPanel] Order status changed:', {
+                    orderid: order.orderid,
+                    oldStatus: order.order_status,
+                    newStatus: freshOrder.order_status
+                });
+            }
+
+            // Step 4: Debug the order before proceeding
+            debugOrderCancellation(freshOrder);
+
+            // Step 5: Validate status is still cancellable
+            if (!isOpenOrderStatus(freshOrder.order_status)) {
+                console.warn('[AccountPanel] Order is not cancellable:', {
+                    orderid: order.orderid,
+                    status: freshOrder.order_status
+                });
+                if (showToast) {
+                    showToast(
+                        `Cannot cancel order. Current status: ${freshOrder.order_status}`,
+                        'warning'
+                    );
+                }
+                return;
+            }
+
+            // Step 6: Show confirmation modal
+            setSelectedOrderForCancel(freshOrder);
+            setIsCancelModalOpen(true);
+        } catch (error) {
+            console.error('[AccountPanel] Cancel validation error:', error);
+            if (showToast) showToast(`Failed to validate order: ${error.message}`, 'error');
+        }
+    };
+
+    // Handle cancel modal close
+    const handleCancelModalClose = () => {
+        if (!isCancelling) {
+            setIsCancelModalOpen(false);
+            setSelectedOrderForCancel(null);
+        }
+    };
+
+    // Handle confirm cancel - actual cancellation
+    const handleConfirmCancel = async () => {
+        if (!selectedOrderForCancel) return;
+
+        setIsCancelling(true);
+        try {
+            // Proceed with cancellation
+            console.log('[AccountPanel] Attempting to cancel order:', {
+                orderid: selectedOrderForCancel.orderid,
+                symbol: selectedOrderForCancel.symbol,
+                status: selectedOrderForCancel.order_status,
+                action: selectedOrderForCancel.action,
+                quantity: selectedOrderForCancel.quantity,
+                price: selectedOrderForCancel.price
+            });
+
+            // Pass full order object for better logging
+            const result = await cancelOrder({ order: selectedOrderForCancel });
 
             if (result.status === 'success') {
+                console.log('[AccountPanel] Order cancelled successfully:', selectedOrderForCancel.orderid);
                 if (showToast) showToast(`Order cancelled successfully`, 'success');
+
+                // Close modal
+                setIsCancelModalOpen(false);
+                setSelectedOrderForCancel(null);
+
                 // Refresh data after successful cancel
                 setTimeout(fetchAccountData, 1000);
             } else {
-                if (showToast) showToast(`Cancel failed: ${result.message}`, 'error');
+                // Show detailed error message
+                const errorMsg = result.message || 'Failed to cancel order';
+
+                console.error('[AccountPanel] Cancel failed:', {
+                    orderid: selectedOrderForCancel.orderid,
+                    error: errorMsg,
+                    brokerResponse: result.brokerResponse,
+                    fullResult: result
+                });
+
+                // Show user-friendly error message
+                if (showToast) {
+                    const detailedMsg = result.brokerResponse
+                        ? `${errorMsg}`
+                        : errorMsg;
+                    showToast(`Cancel failed: ${detailedMsg}`, 'error');
+                }
             }
         } catch (error) {
-            console.error('Error cancelling order:', error);
-            if (showToast) showToast('Failed to cancel order', 'error');
+            console.error('[AccountPanel] Cancel error:', error);
+            if (showToast) showToast(`Failed to cancel order: ${error.message}`, 'error');
+        } finally {
+            setIsCancelling(false);
         }
     };
 
@@ -852,6 +980,15 @@ const AccountPanel = ({
                 onClose={() => setIsModifyModalOpen(false)}
                 onModifyComplete={handleModifyComplete}
                 showToast={showToast}
+            />
+
+            {/* Cancel Order Modal */}
+            <CancelOrderModal
+                isOpen={isCancelModalOpen}
+                order={selectedOrderForCancel}
+                onClose={handleCancelModalClose}
+                onConfirm={handleConfirmCancel}
+                isCancelling={isCancelling}
             />
         </div>
     );
