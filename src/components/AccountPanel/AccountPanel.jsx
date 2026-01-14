@@ -8,7 +8,7 @@ import CancelOrderModal from './components/CancelOrderModal';
 import { useOrders } from '../../context/OrderContext';
 
 // Import extracted components
-import { PositionsTable, OrdersTable, HoldingsTable, TradesTable } from './components';
+import { PositionsTable, ClosedPositionsTable, OrdersTable, HoldingsTable, TradesTable } from './components';
 
 // Import constants and formatters
 import { TABS, AUTO_REFRESH_INTERVAL_MS } from './constants/accountConstants';
@@ -59,6 +59,9 @@ const AccountPanel = ({
     const [isWebSocketConnected, setIsWebSocketConnected] = useState(false);
     const [lastUpdateTime, setLastUpdateTime] = useState({});
     const wsUnsubscribeRef = useRef(null);
+
+    // Closed positions visibility state
+    const [showClosedPositions, setShowClosedPositions] = useState(true);
 
     // Use context data directly (OrderContext provides all data)
     const funds = contextFunds;
@@ -760,8 +763,50 @@ const AccountPanel = ({
     // Render content based on active tab using extracted components
     const renderContent = () => {
         switch (activeTab) {
-            case 'positions':
-                return <PositionsTable positions={positions} onRowClick={handleRowClick} onExitPosition={handleExitPosition} />;
+            case 'positions': {
+                // Calculate counts
+                const openPositionsCount = positions.filter(p => p.quantity !== 0).length;
+                const closedPositionsCount = positions.filter(p => p.quantity === 0).length;
+
+                return (
+                    <div className={styles.tabContent}>
+                        {/* Active Positions Section */}
+                        <div className={styles.positionsSection}>
+                            <PositionsTable
+                                positions={positions}
+                                onRowClick={handleRowClick}
+                                onExitPosition={handleExitPosition}
+                                lastUpdateTime={lastUpdateTime}
+                            />
+                        </div>
+
+                        {/* Closed Positions Section */}
+                        {closedPositionsCount > 0 && (
+                            <div className={styles.closedSection}>
+                                <div
+                                    className={styles.sectionHeader}
+                                    onClick={() => setShowClosedPositions(!showClosedPositions)}
+                                    style={{ cursor: 'pointer' }}
+                                >
+                                    <h3>
+                                        Closed Positions ({closedPositionsCount})
+                                        <span className={styles.chevron}>
+                                            {showClosedPositions ? '▼' : '▶'}
+                                        </span>
+                                    </h3>
+                                </div>
+
+                                {showClosedPositions && (
+                                    <ClosedPositionsTable
+                                        positions={positions}
+                                        onRowClick={handleRowClick}
+                                    />
+                                )}
+                            </div>
+                        )}
+                    </div>
+                );
+            }
             case 'orders':
                 return <OrdersTable orders={orders.orders || []} onRowClick={handleRowClick} onCancelOrder={handleCancelOrder} onModifyOrder={handleModifyOrder} />;
             case 'holdings':

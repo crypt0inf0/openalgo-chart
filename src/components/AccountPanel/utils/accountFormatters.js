@@ -107,10 +107,32 @@ export const sortData = (data, sortConfig) => {
     });
 };
 
+/**
+ * Format timestamp to human-readable time for closed positions
+ * @param {string} timestamp - ISO timestamp
+ * @returns {string} - "2:30 PM" or "Today 2:30 PM"
+ */
+export const formatClosedTime = (timestamp) => {
+    if (!timestamp) return '-';
+
+    const date = new Date(timestamp);
+    const now = new Date();
+    const isToday = date.toDateString() === now.toDateString();
+
+    const timeString = date.toLocaleTimeString('en-US', {
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12: true
+    });
+
+    return isToday ? timeString : `${date.toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })} ${timeString}`;
+};
+
 export default {
     formatCurrency,
     formatPnL,
     isOpenOrderStatus,
     calculateOrderStats,
     sortData,
+    formatClosedTime,
 };
