@@ -65,6 +65,7 @@ import {
 import { saveAlertsForSymbol, loadAlertsForSymbol } from '../../services/alertService';
 import { usePaneMenu } from './hooks/usePaneMenu';
 import { useOrders } from '../../context/OrderContext';
+import { useUser } from '../../context/UserContext';
 
 const ChartComponent = forwardRef(({
     data: initialData = [],
@@ -98,6 +99,9 @@ const ChartComponent = forwardRef(({
     oiLines = null, // { maxCallOI, maxPutOI, maxPain } - OI levels to display as price lines
     showOILines = false // Whether to show OI lines
 }, ref) => {
+    // Get authentication status
+    const { isAuthenticated } = useUser();
+
     // Get orders and positions from OrderContext
     const { activeOrders: orders = [], activePositions: positions = [], onModifyOrder, onCancelOrder } = useOrders();
 
@@ -2102,8 +2106,15 @@ const ChartComponent = forwardRef(({
             }
         };
 
-        emaLastValueRef.current = null;
-        loadData();
+        // Only load data if authenticated
+        if (isAuthenticated === true) {
+            emaLastValueRef.current = null;
+            loadData();
+        } else {
+            // Not authenticated - set loading false and show empty chart
+            setIsLoading(false);
+            isActuallyLoadingRef.current = false;
+        }
 
         return () => {
             cancelled = true;
@@ -2125,7 +2136,7 @@ const ChartComponent = forwardRef(({
             strategyDataRef.current = {};
         };
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [symbol, exchange, interval, strategyConfig]);
+    }, [symbol, exchange, interval, strategyConfig, isAuthenticated]);
 
     const emaLastValueRef = useRef(null);
 
