@@ -1,18 +1,61 @@
 /**
  * HoldingsTable Component
- * Renders the holdings table for AccountPanel
+ * Renders the holdings table for AccountPanel with search and filter
  */
-import React from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
+import { Search, X, Filter } from 'lucide-react';
 import styles from '../AccountPanel.module.css';
 import { formatCurrency } from '../utils/accountFormatters';
 
 const HoldingsTable = ({ holdings, onRowClick }) => {
-    // Sort holdings by timestamp (latest first)
-    const sortedHoldings = [...(holdings || [])].sort((a, b) =>
-        (b.timestamp || '').localeCompare(a.timestamp || '')
-    );
+    const [searchTerm, setSearchTerm] = useState('');
+    const [filters, setFilters] = useState({
+        exchange: []
+    });
+    const [showFilters, setShowFilters] = useState(false);
 
-    if (sortedHoldings.length === 0) {
+    // Get unique values for filters
+    const uniqueExchanges = useMemo(() => {
+        return [...new Set(holdings.map(h => h.exchange).filter(Boolean))];
+    }, [holdings]);
+
+    // Filter and sort holdings
+    const sortedHoldings = useMemo(() => {
+        return holdings
+            .filter(holding => {
+                // Search filter
+                const matchesSearch = !searchTerm ||
+                    holding.symbol?.toLowerCase().includes(searchTerm.toLowerCase());
+
+                // Exchange filter
+                const matchesExchange = filters.exchange.length === 0 ||
+                    filters.exchange.includes(holding.exchange);
+
+                return matchesSearch && matchesExchange;
+            })
+            .sort((a, b) => (b.timestamp || '').localeCompare(a.timestamp || ''));
+    }, [holdings, searchTerm, filters]);
+
+    // Handle filter toggle
+    const handleFilterToggle = useCallback((filterType, value) => {
+        setFilters(prev => {
+            const currentFilters = prev[filterType];
+            const newFilters = currentFilters.includes(value)
+                ? currentFilters.filter(v => v !== value)
+                : [...currentFilters, value];
+            return { ...prev, [filterType]: newFilters };
+        });
+    }, []);
+
+    // Clear all filters
+    const handleClearFilters = useCallback(() => {
+        setSearchTerm('');
+        setFilters({ exchange: [] });
+    }, []);
+
+    const hasActiveFilters = searchTerm || filters.exchange.length > 0;
+
+    if (holdings.length === 0) {
         return (
             <div className={styles.emptyState}>
                 <span className={styles.emptyIcon}>💼</span>
@@ -22,7 +65,90 @@ const HoldingsTable = ({ holdings, onRowClick }) => {
     }
 
     return (
-        <div className={styles.tableWrapper}>
+        <div className={styles.tableContainer}>
+            {/* Search and Filter Bar */}
+            <div className={styles.tableControls}>
+                <div className={styles.searchBar}>
+                    <Search size={14} className={styles.searchIcon} />
+                    <input
+                        type="text"
+                        placeholder="Search symbol..."
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        className={styles.searchInput}
+                    />
+                    {searchTerm && (
+                        <X
+                            size={14}
+                            className={styles.clearIcon}
+                            onClick={() => setSearchTerm('')}
+                        />
+                    )}
+                </div>
+
+                <button
+                    className={`${styles.filterBtn} ${hasActiveFilters ? styles.filterActive : ''}`}
+                    onClick={() => setShowFilters(!showFilters)}
+                    title="Toggle filters"
+                >
+                    <Filter size={14} />
+                    <span>Filters</span>
+                    {hasActiveFilters && <span className={styles.filterCount}>
+                        {filters.exchange.length}
+                    </span>}
+                </button>
+
+                {hasActiveFilters && (
+                    <button
+                        className={styles.clearFiltersBtn}
+                        onClick={handleClearFilters}
+                        title="Clear all filters"
+                    >
+                        <X size={12} />
+                        <span>Clear</span>
+                    </button>
+                )}
+            </div>
+
+            {/* Filter Dropdowns */}
+            {showFilters && (
+                <div className={styles.filterPanel}>
+                    <div className={styles.filterGroup}>
+                        <label>Exchange</label>
+                        <div className={styles.filterOptions}>
+                            {uniqueExchanges.map(exchange => (
+                                <label key={exchange} className={styles.filterOption}>
+                                    <input
+                                        type="checkbox"
+                                        checked={filters.exchange.includes(exchange)}
+                                        onChange={() => handleFilterToggle('exchange', exchange)}
+                                    />
+                                    <span>{exchange}</span>
+                                </label>
+                            ))}
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Results Count */}
+            {hasActiveFilters && (
+                <div className={styles.resultsCount}>
+                    Showing {sortedHoldings.length} of {holdings.length} holdings
+                </div>
+            )}
+
+            {/* Table */}
+            {sortedHoldings.length === 0 ? (
+                <div className={styles.emptyState}>
+                    <span className={styles.emptyIcon}>🔍</span>
+                    <p>No holdings match your filters</p>
+                    <button className={styles.clearFiltersBtn} onClick={handleClearFilters}>
+                        Clear Filters
+                    </button>
+                </div>
+            ) : (
+                <div className={styles.tableWrapper}>
             <table className={styles.table}>
                 <colgroup>
                     <col style={{ width: '20%' }} />
@@ -82,6 +208,8 @@ const HoldingsTable = ({ holdings, onRowClick }) => {
                     })}
                 </tbody>
             </table>
+        </div>
+            )}
         </div>
     );
 };

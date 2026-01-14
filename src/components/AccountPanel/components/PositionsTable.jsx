@@ -1,19 +1,71 @@
 /**
  * PositionsTable Component
- * Renders the positions table for AccountPanel
+ * Renders the positions table for AccountPanel with search and filter
  */
-import React from 'react';
-import { LogOut } from 'lucide-react';
+import React, { useState, useMemo, useCallback } from 'react';
+import { LogOut, Search, X, Filter } from 'lucide-react';
 import styles from '../AccountPanel.module.css';
 import { formatCurrency } from '../utils/accountFormatters';
 
 const PositionsTable = ({ positions, onRowClick, onExitPosition }) => {
-    // Filter out positions with 0 quantity and sort by timestamp (latest first)
-    const openPositions = positions
-        .filter(p => p.quantity !== 0)
-        .sort((a, b) => (b.timestamp || '').localeCompare(a.timestamp || ''));
+    const [searchTerm, setSearchTerm] = useState('');
+    const [filters, setFilters] = useState({
+        exchange: [],
+        product: []
+    });
+    const [showFilters, setShowFilters] = useState(false);
 
-    if (openPositions.length === 0) {
+    // Get unique values for filters
+    const uniqueExchanges = useMemo(() => {
+        return [...new Set(positions.map(p => p.exchange).filter(Boolean))];
+    }, [positions]);
+
+    const uniqueProducts = useMemo(() => {
+        return [...new Set(positions.map(p => p.product).filter(Boolean))];
+    }, [positions]);
+
+    // Filter and sort positions
+    const filteredPositions = useMemo(() => {
+        return positions
+            .filter(p => p.quantity !== 0) // Only open positions
+            .filter(p => {
+                // Search filter
+                const matchesSearch = !searchTerm ||
+                    p.symbol?.toLowerCase().includes(searchTerm.toLowerCase());
+
+                // Exchange filter
+                const matchesExchange = filters.exchange.length === 0 ||
+                    filters.exchange.includes(p.exchange);
+
+                // Product filter
+                const matchesProduct = filters.product.length === 0 ||
+                    filters.product.includes(p.product);
+
+                return matchesSearch && matchesExchange && matchesProduct;
+            })
+            .sort((a, b) => (b.timestamp || '').localeCompare(a.timestamp || ''));
+    }, [positions, searchTerm, filters]);
+
+    // Handle filter toggle
+    const handleFilterToggle = useCallback((filterType, value) => {
+        setFilters(prev => {
+            const currentFilters = prev[filterType];
+            const newFilters = currentFilters.includes(value)
+                ? currentFilters.filter(v => v !== value)
+                : [...currentFilters, value];
+            return { ...prev, [filterType]: newFilters };
+        });
+    }, []);
+
+    // Clear all filters
+    const handleClearFilters = useCallback(() => {
+        setSearchTerm('');
+        setFilters({ exchange: [], product: [] });
+    }, []);
+
+    const hasActiveFilters = searchTerm || filters.exchange.length > 0 || filters.product.length > 0;
+
+    if (positions.filter(p => p.quantity !== 0).length === 0) {
         return (
             <div className={styles.emptyState}>
                 <span className={styles.emptyIcon}>📊</span>
@@ -23,7 +75,106 @@ const PositionsTable = ({ positions, onRowClick, onExitPosition }) => {
     }
 
     return (
-        <div className={styles.tableWrapper}>
+        <div className={styles.tableContainer}>
+            {/* Search and Filter Bar */}
+            <div className={styles.tableControls}>
+                <div className={styles.searchBar}>
+                    <Search size={14} className={styles.searchIcon} />
+                    <input
+                        type="text"
+                        placeholder="Search symbol..."
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        className={styles.searchInput}
+                    />
+                    {searchTerm && (
+                        <X
+                            size={14}
+                            className={styles.clearIcon}
+                            onClick={() => setSearchTerm('')}
+                        />
+                    )}
+                </div>
+
+                <button
+                    className={`${styles.filterBtn} ${hasActiveFilters ? styles.filterActive : ''}`}
+                    onClick={() => setShowFilters(!showFilters)}
+                    title="Toggle filters"
+                >
+                    <Filter size={14} />
+                    <span>Filters</span>
+                    {hasActiveFilters && <span className={styles.filterCount}>
+                        {filters.exchange.length + filters.product.length}
+                    </span>}
+                </button>
+
+                {hasActiveFilters && (
+                    <button
+                        className={styles.clearFiltersBtn}
+                        onClick={handleClearFilters}
+                        title="Clear all filters"
+                    >
+                        <X size={12} />
+                        <span>Clear</span>
+                    </button>
+                )}
+            </div>
+
+            {/* Filter Dropdowns */}
+            {showFilters && (
+                <div className={styles.filterPanel}>
+                    <div className={styles.filterGroup}>
+                        <label>Exchange</label>
+                        <div className={styles.filterOptions}>
+                            {uniqueExchanges.map(exchange => (
+                                <label key={exchange} className={styles.filterOption}>
+                                    <input
+                                        type="checkbox"
+                                        checked={filters.exchange.includes(exchange)}
+                                        onChange={() => handleFilterToggle('exchange', exchange)}
+                                    />
+                                    <span>{exchange}</span>
+                                </label>
+                            ))}
+                        </div>
+                    </div>
+
+                    <div className={styles.filterGroup}>
+                        <label>Product</label>
+                        <div className={styles.filterOptions}>
+                            {uniqueProducts.map(product => (
+                                <label key={product} className={styles.filterOption}>
+                                    <input
+                                        type="checkbox"
+                                        checked={filters.product.includes(product)}
+                                        onChange={() => handleFilterToggle('product', product)}
+                                    />
+                                    <span>{product}</span>
+                                </label>
+                            ))}
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Results Count */}
+            {hasActiveFilters && (
+                <div className={styles.resultsCount}>
+                    Showing {filteredPositions.length} of {positions.filter(p => p.quantity !== 0).length} positions
+                </div>
+            )}
+
+            {/* Table */}
+            {filteredPositions.length === 0 ? (
+                <div className={styles.emptyState}>
+                    <span className={styles.emptyIcon}>🔍</span>
+                    <p>No positions match your filters</p>
+                    <button className={styles.clearFiltersBtn} onClick={handleClearFilters}>
+                        Clear Filters
+                    </button>
+                </div>
+            ) : (
+                <div className={styles.tableWrapper}>
             <table className={styles.table}>
                 <colgroup>
                     <col style={{ width: '16%' }} />
@@ -52,7 +203,7 @@ const PositionsTable = ({ positions, onRowClick, onExitPosition }) => {
                     </tr>
                 </thead>
                 <tbody>
-                    {openPositions.map((pos, idx) => {
+                    {filteredPositions.map((pos, idx) => {
                         const pnl = parseFloat(pos.pnl || 0);
                         const avgPrice = parseFloat(pos.average_price || 0);
                         const ltp = parseFloat(pos.ltp || 0);
@@ -101,6 +252,8 @@ const PositionsTable = ({ positions, onRowClick, onExitPosition }) => {
                     })}
                 </tbody>
             </table>
+        </div>
+            )}
         </div>
     );
 };

@@ -1,18 +1,70 @@
 /**
  * TradesTable Component
- * Renders the trades table for AccountPanel
+ * Renders the trades table for AccountPanel with search and filter
  */
-import React from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
+import { Search, X, Filter } from 'lucide-react';
 import styles from '../AccountPanel.module.css';
 import { formatCurrency } from '../utils/accountFormatters';
 
 const TradesTable = ({ trades, onRowClick }) => {
-    // Sort trades by timestamp (latest first)
-    const sortedTrades = [...(trades || [])].sort((a, b) =>
-        (b.timestamp || '').localeCompare(a.timestamp || '')
-    );
+    const [searchTerm, setSearchTerm] = useState('');
+    const [filters, setFilters] = useState({
+        action: [],
+        exchange: []
+    });
+    const [showFilters, setShowFilters] = useState(false);
 
-    if (sortedTrades.length === 0) {
+    // Get unique values for filters
+    const uniqueActions = useMemo(() => {
+        return [...new Set(trades.map(t => t.action).filter(Boolean))];
+    }, [trades]);
+
+    const uniqueExchanges = useMemo(() => {
+        return [...new Set(trades.map(t => t.exchange).filter(Boolean))];
+    }, [trades]);
+
+    // Filter and sort trades
+    const sortedTrades = useMemo(() => {
+        return trades
+            .filter(trade => {
+                // Search filter
+                const matchesSearch = !searchTerm ||
+                    trade.symbol?.toLowerCase().includes(searchTerm.toLowerCase());
+
+                // Action filter
+                const matchesAction = filters.action.length === 0 ||
+                    filters.action.includes(trade.action);
+
+                // Exchange filter
+                const matchesExchange = filters.exchange.length === 0 ||
+                    filters.exchange.includes(trade.exchange);
+
+                return matchesSearch && matchesAction && matchesExchange;
+            })
+            .sort((a, b) => (b.timestamp || '').localeCompare(a.timestamp || ''));
+    }, [trades, searchTerm, filters]);
+
+    // Handle filter toggle
+    const handleFilterToggle = useCallback((filterType, value) => {
+        setFilters(prev => {
+            const currentFilters = prev[filterType];
+            const newFilters = currentFilters.includes(value)
+                ? currentFilters.filter(v => v !== value)
+                : [...currentFilters, value];
+            return { ...prev, [filterType]: newFilters };
+        });
+    }, []);
+
+    // Clear all filters
+    const handleClearFilters = useCallback(() => {
+        setSearchTerm('');
+        setFilters({ action: [], exchange: [] });
+    }, []);
+
+    const hasActiveFilters = searchTerm || filters.action.length > 0 || filters.exchange.length > 0;
+
+    if (trades.length === 0) {
         return (
             <div className={styles.emptyState}>
                 <span className={styles.emptyIcon}>📈</span>
@@ -22,7 +74,106 @@ const TradesTable = ({ trades, onRowClick }) => {
     }
 
     return (
-        <div className={styles.tableWrapper}>
+        <div className={styles.tableContainer}>
+            {/* Search and Filter Bar */}
+            <div className={styles.tableControls}>
+                <div className={styles.searchBar}>
+                    <Search size={14} className={styles.searchIcon} />
+                    <input
+                        type="text"
+                        placeholder="Search symbol..."
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        className={styles.searchInput}
+                    />
+                    {searchTerm && (
+                        <X
+                            size={14}
+                            className={styles.clearIcon}
+                            onClick={() => setSearchTerm('')}
+                        />
+                    )}
+                </div>
+
+                <button
+                    className={`${styles.filterBtn} ${hasActiveFilters ? styles.filterActive : ''}`}
+                    onClick={() => setShowFilters(!showFilters)}
+                    title="Toggle filters"
+                >
+                    <Filter size={14} />
+                    <span>Filters</span>
+                    {hasActiveFilters && <span className={styles.filterCount}>
+                        {filters.action.length + filters.exchange.length}
+                    </span>}
+                </button>
+
+                {hasActiveFilters && (
+                    <button
+                        className={styles.clearFiltersBtn}
+                        onClick={handleClearFilters}
+                        title="Clear all filters"
+                    >
+                        <X size={12} />
+                        <span>Clear</span>
+                    </button>
+                )}
+            </div>
+
+            {/* Filter Dropdowns */}
+            {showFilters && (
+                <div className={styles.filterPanel}>
+                    <div className={styles.filterGroup}>
+                        <label>Action</label>
+                        <div className={styles.filterOptions}>
+                            {uniqueActions.map(action => (
+                                <label key={action} className={styles.filterOption}>
+                                    <input
+                                        type="checkbox"
+                                        checked={filters.action.includes(action)}
+                                        onChange={() => handleFilterToggle('action', action)}
+                                    />
+                                    <span>{action}</span>
+                                </label>
+                            ))}
+                        </div>
+                    </div>
+
+                    <div className={styles.filterGroup}>
+                        <label>Exchange</label>
+                        <div className={styles.filterOptions}>
+                            {uniqueExchanges.map(exchange => (
+                                <label key={exchange} className={styles.filterOption}>
+                                    <input
+                                        type="checkbox"
+                                        checked={filters.exchange.includes(exchange)}
+                                        onChange={() => handleFilterToggle('exchange', exchange)}
+                                    />
+                                    <span>{exchange}</span>
+                                </label>
+                            ))}
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Results Count */}
+            {hasActiveFilters && (
+                <div className={styles.resultsCount}>
+                    Showing {sortedTrades.length} of {trades.length} trades
+                </div>
+            )}
+
+            {/* Table */}
+            {sortedTrades.length === 0 ? (
+                <div className={styles.emptyState}>
+                    <span className={styles.emptyIcon}>🔍</span>
+                    <p>No trades match your filters</p>
+                    <button className={styles.clearFiltersBtn} onClick={handleClearFilters}>
+                        Clear Filters
+                    </button>
+                </div>
+            ) : (
+                <div className={styles.tableWrapper}>
             <table className={styles.table}>
                 <colgroup>
                     <col style={{ width: '15%' }} />
@@ -79,6 +230,8 @@ const TradesTable = ({ trades, onRowClick }) => {
                     })}
                 </tbody>
             </table>
+        </div>
+            )}
         </div>
     );
 };
