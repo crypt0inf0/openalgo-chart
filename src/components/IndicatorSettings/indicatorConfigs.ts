@@ -377,6 +377,24 @@ export const indicatorConfigs: Record<string, IndicatorConfigDefinition> = {
             { key: 'lineWidth', label: 'Line Width', type: 'number', min: 1, max: 4, default: 2 },
         ],
     },
+    utBotAlerts: {
+        name: 'UT Bot Alerts',
+        fullName: 'UT Bot Alerts',
+        pane: 'main',
+        description: 'UT Bot Alerts indicator with Buy/Sell signals and trailing stop',
+        inputs: [
+            { key: 'keyValues', label: 'Key Value (Sensitivity)', type: 'number', min: 1, max: 10, default: 1 },
+            { key: 'atrPeriod', label: 'ATR Period', type: 'number', min: 1, max: 100, default: 10 },
+        ],
+        style: [
+            { key: 'upColor', label: 'Buy Signal', type: 'color', default: '#26A69A' },
+            { key: 'downColor', label: 'Sell Signal', type: 'color', default: '#EF5350' },
+            { key: 'stopColor', label: 'Trailing Stop Line', type: 'color', default: '#2196F3' },
+            { key: 'lineWidth', label: 'Line Width', type: 'number', min: 1, max: 5, default: 1 },
+            { key: 'showSignals', label: 'Show Buy/Sell Labels', type: 'boolean', default: true },
+            { key: 'showBarColor', label: 'Color Bars', type: 'boolean', default: true },
+        ],
+    },
 };
 
 

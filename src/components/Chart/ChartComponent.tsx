@@ -26,7 +26,8 @@ import {
     calculateATR,
     calculateStochastic,
     calculateVWAP,
-    calculateSupertrend
+    calculateSupertrend,
+    calculateUTBotAlerts
 } from '../../utils/indicators';
 
 import { calculateTPO } from '../../utils/indicators/tpo';
@@ -3002,6 +3003,18 @@ const ChartComponent = forwardRef<any, ChartComponentProps>(({
                         }
                         if (hmResult.wmaLine && hmResult.wmaLine.length > 0 && series.wma) {
                             series.wma.setData(hmResult.wmaLine);
+                        }
+                        break;
+                    }
+                    case 'utBotAlerts': {
+                        const { keyValues = 1, atrPeriod = 10 } = ind;
+                        const result = calculateUTBotAlerts(data, keyValues, atrPeriod);
+                        if (result && result.length > 0) {
+                            const lineData = result.map(d => ({
+                                time: d.time,
+                                value: d.trailingStop
+                            }));
+                            series.setData(lineData);
                         }
                         break;
                     }

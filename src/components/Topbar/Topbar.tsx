@@ -720,6 +720,7 @@ const Topbar: React.FC<TopbarProps> = ({
                                                             <div className={styles.dropdownSection}>Trend</div>
                                                             <div className={styles.dropdownItem} onClick={(e) => { e.stopPropagation(); onAddIndicator?.('supertrend'); }}>Supertrend</div>
                                                             <div className={styles.dropdownItem} onClick={(e) => { e.stopPropagation(); onAddIndicator?.('ichimoku'); }}>Ichimoku Cloud</div>
+                                                            <div className={styles.dropdownItem} onClick={(e) => { e.stopPropagation(); onAddIndicator?.('utBotAlerts'); }}>UT Bot Alerts</div>
                                                             <div className={styles.dropdownDivider}></div>
                                                             <div className={styles.dropdownSection}>Volume</div>
                                                             <div className={styles.dropdownItem} onClick={(e) => { e.stopPropagation(); onAddIndicator?.('volume'); }}>Volume</div>

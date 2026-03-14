@@ -16,7 +16,8 @@ import {
     calculateSupertrend,
     calculateADX,
     calculateIchimoku,
-    calculatePivotPoints
+    calculatePivotPoints,
+    calculateUTBotAlerts
 } from '../../../utils/indicators';
 import { calculateANNStrategy } from '../../../utils/indicators/annStrategy';
 import { calculateHilengaMilenga } from '../../../utils/indicators/hilengaMilenga';
@@ -445,6 +446,56 @@ export const updatePineSeries = (series: any, ind: IndicatorConfig, data: OHLCDa
 };
 
 /**
+ * Update UT Bot Alerts series
+ * @returns markers for signals
+ */
+export const updateUTBotAlertsSeries = (series: any, ind: IndicatorConfig, data: OHLCData[], isVisible: boolean): ChartMarker[] => {
+    const markers: ChartMarker[] = [];
+
+    series.applyOptions({
+        visible: isVisible,
+        color: ind.stopColor || '#2196F3',
+        lineWidth: ind.lineWidth || 1
+    });
+
+    const result = calculateUTBotAlerts(data, ind.keyValues || 1, ind.atrPeriod || 10);
+
+    if (result && result.length > 0) {
+        // Set trailing stop line data
+        const lineData = result.map(d => ({
+            time: d.time,
+            value: d.trailingStop
+        }));
+        series.setData(lineData);
+
+        // Collect markers
+        if (ind.showSignals !== false && isVisible) {
+            result.forEach(d => {
+                if (d.buy) {
+                    markers.push({
+                        time: d.time,
+                        position: 'belowBar',
+                        color: ind.upColor || '#26A69A',
+                        shape: 'arrowUp',
+                        text: 'Buy'
+                    });
+                } else if (d.sell) {
+                    markers.push({
+                        time: d.time,
+                        position: 'aboveBar',
+                        color: ind.downColor || '#EF5350',
+                        shape: 'arrowDown',
+                        text: 'Sell'
+                    });
+                }
+            });
+        }
+    }
+
+    return markers;
+};
+
+/**
  * Main update function - updates series for any indicator type
  * @returns markers (for indicators that generate markers like ANN Strategy)
  */
@@ -481,6 +532,9 @@ export const updateIndicatorSeries = (series: any, ind: IndicatorConfig, data: O
         case 'supertrend':
             updateSupertrendSeries(series, ind, data, isVisible);
             return [];
+
+        case 'utBotAlerts':
+            return updateUTBotAlertsSeries(series, ind, data, isVisible);
 
         case 'volume':
             updateVolumeSeries(series, ind, data, isVisible);

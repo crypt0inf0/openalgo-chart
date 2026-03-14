@@ -23,6 +23,7 @@ export { calculateATR } from './atr';
 
 // Trend
 export { calculateSupertrend } from './supertrend';
+export { calculateUTBotAlerts } from './utBotAlerts';
 
 // Volume
 export { calculateVolume, calculateVolumeMA, calculateEnhancedVolume } from './volume';

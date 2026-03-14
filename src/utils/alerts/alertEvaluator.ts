@@ -10,7 +10,7 @@ import logger from '../logger';
  * Indicator data for a single bar
  */
 export interface IndicatorData {
-    [key: string]: number | undefined;
+    [key: string]: number | boolean | undefined;
 }
 
 /**
@@ -27,7 +27,7 @@ export interface EvaluationCondition {
     type: AlertConditionType;
     indicator: string;
     series?: string;
-    value?: number;
+    value?: number | boolean;
     series1?: string;
     series2?: string;
     zone?: [number, number];
@@ -80,45 +80,40 @@ export class AlertEvaluator {
                 return false;
             }
 
+            // Pre-calculate common typed values to avoid TypeScript errors with boolean values
+            const curVal = series ? currentIndicator[series] as number : undefined;
+            const prevVal = series && previousIndicator ? previousIndicator[series] as number : undefined;
+            const curLine1 = series1 ? currentIndicator[series1] as number : undefined;
+            const prevLine1 = series1 && previousIndicator ? previousIndicator[series1] as number : undefined;
+            const curLine2 = series2 ? currentIndicator[series2] as number : undefined;
+            const prevLine2 = series2 && previousIndicator ? previousIndicator[series2] as number : undefined;
+            const numValue = value as number;
+            const numThreshold = comparison ? currentIndicator[comparison] as number : undefined;
+
             switch (type) {
                 case ALERT_CONDITION_TYPES.CROSSES_ABOVE:
                     if (requiresPrice && comparison) {
-                        // Price crosses above indicator value (e.g., price crosses VWAP)
-                        const threshold = currentIndicator[comparison];
-                        return this.checkCrossAbove(currentPrice, previousPrice, threshold);
+                        return this.checkCrossAbove(currentPrice, previousPrice, numThreshold);
                     } else if (comparison) {
-                        // One indicator series crosses above another (e.g., price crosses upper band)
-                        const currentValue = series ? currentIndicator[series] : undefined;
-                        const previousValue = series && previousIndicator ? previousIndicator[series] : undefined;
-                        const threshold = currentIndicator[comparison];
-                        return this.checkCrossAbove(currentValue, previousValue, threshold);
+                        return this.checkCrossAbove(curVal, prevVal, numThreshold);
                     } else {
-                        // Indicator crosses above a fixed value (e.g., RSI > 70)
-                        const currentValue = series ? currentIndicator[series] : undefined;
-                        const previousValue = series && previousIndicator ? previousIndicator[series] : undefined;
-                        return this.checkCrossAbove(currentValue, previousValue, value);
+                        return this.checkCrossAbove(curVal, prevVal, numValue);
                     }
 
                 case ALERT_CONDITION_TYPES.CROSSES_BELOW:
                     if (requiresPrice && comparison) {
-                        const threshold = currentIndicator[comparison];
-                        return this.checkCrossBelow(currentPrice, previousPrice, threshold);
+                        return this.checkCrossBelow(currentPrice, previousPrice, numThreshold);
                     } else if (comparison) {
-                        const currentValue = series ? currentIndicator[series] : undefined;
-                        const previousValue = series && previousIndicator ? previousIndicator[series] : undefined;
-                        const threshold = currentIndicator[comparison];
-                        return this.checkCrossBelow(currentValue, previousValue, threshold);
+                        return this.checkCrossBelow(curVal, prevVal, numThreshold);
                     } else {
-                        const currentValue = series ? currentIndicator[series] : undefined;
-                        const previousValue = series && previousIndicator ? previousIndicator[series] : undefined;
-                        return this.checkCrossBelow(currentValue, previousValue, value);
+                        return this.checkCrossBelow(curVal, prevVal, numValue);
                     }
 
                 case ALERT_CONDITION_TYPES.GREATER_THAN:
-                    return this.checkGreaterThan(series ? currentIndicator[series] : undefined, value);
+                    return this.checkGreaterThan(curVal, numValue);
 
                 case ALERT_CONDITION_TYPES.LESS_THAN:
-                    return this.checkLessThan(series ? currentIndicator[series] : undefined, value);
+                    return this.checkLessThan(curVal, numValue);
 
                 case ALERT_CONDITION_TYPES.EQUALS:
                     return this.checkEquals(
@@ -128,62 +123,31 @@ export class AlertEvaluator {
                     );
 
                 case ALERT_CONDITION_TYPES.LINE_CROSSES_ABOVE:
-                    // One line crosses above another (e.g., MACD crosses signal)
-                    return this.checkLineCrossAbove(
-                        series1 ? currentIndicator[series1] : undefined,
-                        series1 && previousIndicator ? previousIndicator[series1] : undefined,
-                        series2 ? currentIndicator[series2] : undefined,
-                        series2 && previousIndicator ? previousIndicator[series2] : undefined
-                    );
+                    return this.checkLineCrossAbove(curLine1, prevLine1, curLine2, prevLine2);
 
                 case ALERT_CONDITION_TYPES.LINE_CROSSES_BELOW:
-                    return this.checkLineCrossBelow(
-                        series1 ? currentIndicator[series1] : undefined,
-                        series1 && previousIndicator ? previousIndicator[series1] : undefined,
-                        series2 ? currentIndicator[series2] : undefined,
-                        series2 && previousIndicator ? previousIndicator[series2] : undefined
-                    );
+                    return this.checkLineCrossBelow(curLine1, prevLine1, curLine2, prevLine2);
 
                 case ALERT_CONDITION_TYPES.ENTERS_ZONE:
-                    return this.checkEntersZone(
-                        series ? currentIndicator[series] : undefined,
-                        series && previousIndicator ? previousIndicator[series] : undefined,
-                        zone
-                    );
+                    return this.checkEntersZone(curVal, prevVal, zone);
 
                 case ALERT_CONDITION_TYPES.EXITS_ZONE:
-                    return this.checkExitsZone(
-                        series ? currentIndicator[series] : undefined,
-                        series && previousIndicator ? previousIndicator[series] : undefined,
-                        zone
-                    );
+                    return this.checkExitsZone(curVal, prevVal, zone);
 
                 case ALERT_CONDITION_TYPES.WITHIN_ZONE:
-                    return this.checkWithinZone(series ? currentIndicator[series] : undefined, zone);
+                    return this.checkWithinZone(curVal, zone);
 
                 case ALERT_CONDITION_TYPES.OUTSIDE_ZONE:
-                    return this.checkOutsideZone(series ? currentIndicator[series] : undefined, zone);
+                    return this.checkOutsideZone(curVal, zone);
 
                 case ALERT_CONDITION_TYPES.INCREASES_BY:
-                    return this.checkIncreasesBy(
-                        series ? currentIndicator[series] : undefined,
-                        series && previousIndicator ? previousIndicator[series] : undefined,
-                        value
-                    );
+                    return this.checkIncreasesBy(curVal, prevVal, numValue);
 
                 case ALERT_CONDITION_TYPES.DECREASES_BY:
-                    return this.checkDecreasesBy(
-                        series ? currentIndicator[series] : undefined,
-                        series && previousIndicator ? previousIndicator[series] : undefined,
-                        value
-                    );
+                    return this.checkDecreasesBy(curVal, prevVal, numValue);
 
                 case ALERT_CONDITION_TYPES.CHANGES_BY:
-                    return this.checkChangesBy(
-                        series ? currentIndicator[series] : undefined,
-                        series && previousIndicator ? previousIndicator[series] : undefined,
-                        value
-                    );
+                    return this.checkChangesBy(curVal, prevVal, numValue);
 
                 default:
                     logger.warn(`[AlertEvaluator] Unknown condition type: ${type}`);
@@ -385,9 +349,9 @@ export class AlertEvaluator {
      * @returns Whether the value changed to the target
      */
     checkEquals(
-        currentValue: number | undefined,
-        previousValue: number | undefined,
-        target: number | undefined
+        currentValue: number | boolean | undefined,
+        previousValue: number | boolean | undefined,
+        target: number | boolean | undefined
     ): boolean {
         if (currentValue === undefined || previousValue === undefined || target === undefined) {
             return false;

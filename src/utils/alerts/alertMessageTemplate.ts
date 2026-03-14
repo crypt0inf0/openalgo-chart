@@ -52,6 +52,15 @@ export interface SingleValueIndicatorData {
 }
 
 /**
+ * UT Bot Alerts indicator data
+ */
+export interface UTBotAlertsIndicatorData {
+    buy?: boolean;
+    sell?: boolean;
+    trailingStop?: number;
+}
+
+/**
  * All indicator data types
  */
 export interface IndicatorsData {
@@ -64,6 +73,7 @@ export interface IndicatorsData {
     sma?: SingleValueIndicatorData;
     ema?: SingleValueIndicatorData;
     atr?: SingleValueIndicatorData;
+    utBotAlerts?: UTBotAlertsIndicatorData;
 }
 
 /**
@@ -124,6 +134,7 @@ export interface IndicatorPlaceholders {
     sma: PlaceholderToken[];
     ema: PlaceholderToken[];
     atr: PlaceholderToken[];
+    utBotAlerts: PlaceholderToken[];
 }
 
 /**
@@ -217,6 +228,11 @@ export const processAlertMessage = (template: string, data: MessageTemplateData)
         // ATR
         if (indicators.atr !== undefined) {
             message = message.replace(/\{\{atr\}\}/g, formatValue(indicators.atr.value));
+        }
+
+        // UT Bot Alerts
+        if (indicators.utBotAlerts !== undefined) {
+            message = message.replace(/\{\{utBotAlerts\.trailingStop\}\}/g, formatValue(indicators.utBotAlerts.trailingStop));
         }
     }
 
@@ -334,6 +350,9 @@ export const AVAILABLE_PLACEHOLDERS: AvailablePlaceholders = {
         ],
         atr: [
             { token: '{{atr}}', description: 'ATR value' },
+        ],
+        utBotAlerts: [
+            { token: '{{utBotAlerts.trailingStop}}', description: 'UT Bot Trailing Stop Value' },
         ],
     },
 };
