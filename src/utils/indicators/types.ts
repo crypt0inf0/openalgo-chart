@@ -155,3 +155,14 @@ export interface EnhancedVolumeOptions {
  * Anchored VWAP anchor type
  */
 export type AnchorType = 'time' | 'high' | 'low' | 'session';
+
+/**
+ * UT Bot Alerts data point
+ */
+export interface UTBotAlertsPoint {
+  time: number;
+  trailingStop: number;
+  buy: boolean;
+  sell: boolean;
+  trend: 1 | -1;
+}

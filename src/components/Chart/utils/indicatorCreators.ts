@@ -537,6 +537,19 @@ export const createPineSeries = (chart: any, ind: IndicatorConfig, isVisible: bo
 };
 
 /**
+ * Create UT Bot Alerts series (overlay line for trailing stop)
+ */
+export const createUTBotAlertsSeries = (chart: any, isVisible: boolean): any => {
+    return chart.addSeries(LineSeries, {
+        lineWidth: 1,
+        priceLineVisible: false,
+        lastValueVisible: isVisible,
+        crosshairMarkerVisible: true,
+        title: 'UT Bot'
+    });
+};
+
+/**
  * Main factory function - creates series for any indicator type
  */
 export const createIndicatorSeries = (chart: any, ind: IndicatorConfig, isVisible: boolean = true): SeriesResult | null => {
@@ -573,6 +586,9 @@ export const createIndicatorSeries = (chart: any, ind: IndicatorConfig, isVisibl
 
         case 'supertrend':
             return { series: createSupertrendSeries(chart, isVisible) };
+
+        case 'utBotAlerts':
+            return { series: createUTBotAlertsSeries(chart, isVisible) };
 
         case 'volume':
             return { series: createVolumeSeries(chart, ind) };

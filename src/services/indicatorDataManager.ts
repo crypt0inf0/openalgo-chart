@@ -14,6 +14,7 @@ import {
   calculateEMA,
   calculateATR,
 } from '../utils/indicators';
+import { calculateUTBotAlerts } from '../utils/indicators/utBotAlerts';
 import logger from '../utils/logger';
 
 // ==================== TYPES ====================
@@ -96,6 +97,7 @@ interface IndicatorsConfig {
   sma?: SMAConfig | undefined;
   ema?: EMAConfig | undefined;
   atr?: ATRConfig | undefined;
+  utBotAlerts?: { keyValues?: number; atrPeriod?: number } | undefined;
 }
 
 /** RSI data point */
@@ -231,6 +233,7 @@ interface IndicatorResults {
   sma?: ValueResult | undefined;
   ema?: ValueResult | undefined;
   atr?: ValueResult | undefined;
+  utBotAlerts?: any | undefined;
 }
 
 /** Cache entry */
@@ -571,6 +574,30 @@ export class IndicatorDataManager {
       }
     }
 
+    // UT Bot Alerts
+    if (indicators.utBotAlerts) {
+      const utBotData = calculateUTBotAlerts(
+        ohlcData as any,
+        indicators.utBotAlerts.keyValues || 1,
+        indicators.utBotAlerts.atrPeriod || 10
+      );
+      if (utBotData && utBotData.length >= 2) {
+        const latest = utBotData[utBotData.length - 1];
+        const previous = utBotData[utBotData.length - 2];
+        results.utBotAlerts = {
+          buy: latest?.buy,
+          sell: latest?.sell,
+          trailingStop: latest?.trailingStop,
+          previous: {
+            buy: previous?.buy,
+            sell: previous?.sell,
+            trailingStop: previous?.trailingStop,
+          },
+          time: latest?.time,
+        };
+      }
+    }
+
     return results;
   }
 
@@ -775,6 +802,28 @@ export class IndicatorDataManager {
             const prev = atrResult[atrResult.length - 2];
             current = { value: latest?.value, time: latest?.time };
             previous = { value: prev?.value, time: prev?.time };
+          }
+          break;
+        }
+
+        case 'utbotalerts': {
+          // Main thread execution for smaller indicators works perfectly fine
+          const utBotResult = calculateUTBotAlerts(slicedData as any, 1, 10);
+          if (utBotResult && utBotResult.length >= 2) {
+            const latest = utBotResult[utBotResult.length - 1];
+            const prev = utBotResult[utBotResult.length - 2];
+            current = {
+                buy: latest?.buy,
+                sell: latest?.sell,
+                trailingStop: latest?.trailingStop,
+                time: latest?.time
+            };
+            previous = {
+                buy: prev?.buy,
+                sell: prev?.sell,
+                trailingStop: prev?.trailingStop,
+                time: prev?.time
+            };
           }
           break;
         }

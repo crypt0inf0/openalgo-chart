@@ -50,7 +50,7 @@ export interface BaseAlertCondition {
     description: string;
     series?: string;
     defaultValue?: number;
-    value?: number;
+    value?: number | boolean;
     valueRange?: ValueRange;
     valueStep?: number;
     zone?: [number, number];
@@ -113,7 +113,7 @@ export interface LineCrossBelowCondition extends BaseAlertCondition {
  */
 export interface EqualsCondition extends BaseAlertCondition {
     type: typeof ALERT_CONDITION_TYPES.EQUALS;
-    value: number;
+    value: number | boolean;
 }
 
 /**
@@ -530,6 +530,31 @@ export const INDICATOR_ALERT_CONFIGS: IndicatorAlertConfigMap = {
                 defaultValue: 5,
                 valueRange: { min: 0, max: 1000 },
                 valueStep: 0.1,
+            },
+        ],
+    },
+
+    utBotAlerts: {
+        id: 'utBotAlerts',
+        name: 'UT Bot Alerts',
+        description: 'UT Bot Buy/Sell Signals',
+        series: ['buy', 'sell'],
+        defaultConditions: [
+            {
+                id: 'utbot_buy',
+                type: ALERT_CONDITION_TYPES.EQUALS,
+                label: 'Buy Signal',
+                description: 'Alert when a Buy signal is generated',
+                series: 'buy',
+                value: true,
+            },
+            {
+                id: 'utbot_sell',
+                type: ALERT_CONDITION_TYPES.EQUALS,
+                label: 'Sell Signal',
+                description: 'Alert when a Sell signal is generated',
+                series: 'sell',
+                value: true,
             },
         ],
     },

@@ -82,6 +82,7 @@ export const IndicatorDropdown: React.FC<IndicatorDropdownProps> = ({ position, 
             <SectionHeader>Trend</SectionHeader>
             <IndicatorItem id="supertrend" label="Supertrend" onClick={handleClick} />
             <IndicatorItem id="ichimoku" label="Ichimoku Cloud" onClick={handleClick} />
+            <IndicatorItem id="utBotAlerts" label="UT Bot Alerts" onClick={handleClick} />
 
             <DropdownDivider />
             <SectionHeader>Trend Strength</SectionHeader>
