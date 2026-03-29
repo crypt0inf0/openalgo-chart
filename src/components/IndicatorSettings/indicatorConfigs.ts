@@ -327,6 +327,40 @@ export const indicatorConfigs: Record<string, IndicatorConfigDefinition> = {
         ],
     },
 
+    cpr: {
+        name: 'CPR',
+        fullName: 'Central Pivot Range',
+        pane: 'main',
+        category: 'overlap',
+        description: 'Calculates daily Pivot (P), Bottom Central Pivot (BC), Top Central Pivot (TC) from previous day\'s High, Low, Close. Narrow CPR = trend day; Wide CPR = ranging day.',
+        inputs: [
+            {
+                key: 'timeframe',
+                label: 'Timeframe',
+                type: 'select',
+                options: [
+                    { value: 'daily', label: 'Daily' },
+                    { value: 'weekly', label: 'Weekly' },
+                    { value: 'monthly', label: 'Monthly' },
+                ],
+                default: 'daily',
+            },
+            { key: 'showLabels', label: 'Show Labels', type: 'boolean', default: true },
+            { key: 'showWidth', label: 'Show CPR Width Label', type: 'boolean', default: false },
+        ],
+        style: [
+            { key: 'pivotColor', label: 'Pivot (P)', type: 'color', default: '#FF9800' },
+            { key: 'bcColor', label: 'Bottom CP (BC)', type: 'color', default: '#26A69A' },
+            { key: 'tcColor', label: 'Top CP (TC)', type: 'color', default: '#EF5350' },
+            { key: 'lineWidth', label: 'Line Width', type: 'number', min: 1, max: 5, default: 2 },
+            { key: 'lineStyle', label: 'Line Style', type: 'select', options: [
+                { value: '0', label: 'Solid' },
+                { value: '1', label: 'Dotted' },
+                { value: '2', label: 'Dashed' },
+            ], default: '0' },
+        ],
+    },
+
     pivotPoints: {
         name: 'Pivot Points',
         fullName: 'Pivot Points',
@@ -377,6 +411,86 @@ export const indicatorConfigs: Record<string, IndicatorConfigDefinition> = {
             { key: 'lineWidth', label: 'Line Width', type: 'number', min: 1, max: 4, default: 2 },
         ],
     },
+
+    redCandleZones: {
+        name: 'Red Candle Zones',
+        fullName: 'Red Candle Supply/Demand Zones',
+        pane: 'main',
+        category: 'overlap',
+        description: 'Tracks the intraday highest and lowest valid red candle per day. Highest → Supply Zone (red). Lowest → Demand Zone (green). Zones extend from the root candle to end of day.',
+        inputs: [
+            { key: 'minBodyPct', label: 'Min Body % of Range', type: 'number', min: 10, max: 90, step: 5, default: 40 },
+            { key: 'showSupply', label: 'Show Supply Zones', type: 'boolean', default: true },
+            { key: 'showDemand', label: 'Show Demand Zones', type: 'boolean', default: true },
+        ],
+        style: [
+            { key: 'supplyHighColor', label: 'Supply High Line', type: 'color', default: '#EF5350' },
+            { key: 'supplyLowColor', label: 'Supply Low Line', type: 'color', default: '#EF535060' },
+            { key: 'demandHighColor', label: 'Demand High Line', type: 'color', default: '#26A69A60' },
+            { key: 'demandLowColor', label: 'Demand Low Line', type: 'color', default: '#26A69A' },
+            { key: 'lineWidth', label: 'Line Width', type: 'number', min: 1, max: 4, default: 1 },
+            { key: 'lineStyle', label: 'Line Style', type: 'select', options: [
+                { value: '0', label: 'Solid' },
+                { value: '2', label: 'Dashed' },
+            ], default: '0' },
+        ],
+    },
+
+    vwapBands: {
+        name: 'VWAP + Bands',
+        fullName: 'VWAP with Standard Deviation Bands',
+        pane: 'main',
+        category: 'overlap',
+        description: 'Session VWAP with optional StdDev bands (±1σ and ±2σ). Similar to Bollinger Bands anchored to VWAP.',
+        inputs: [
+            { key: 'resetPeriod', label: 'Reset Period', type: 'select', options: [
+                { value: 'session', label: 'Session (Daily)' },
+                { value: 'week', label: 'Weekly' },
+                { value: 'month', label: 'Monthly' },
+            ], default: 'session' },
+            { key: 'showBand1', label: 'Show ±1σ Bands', type: 'boolean', default: true },
+            { key: 'showBand2', label: 'Show ±2σ Bands', type: 'boolean', default: true },
+            { key: 'band1Mult', label: 'Band 1 Multiplier', type: 'number', min: 0.1, max: 5, step: 0.1, default: 1.0 },
+            { key: 'band2Mult', label: 'Band 2 Multiplier', type: 'number', min: 0.1, max: 10, step: 0.1, default: 2.0 },
+        ],
+        style: [
+            { key: 'vwapColor', label: 'VWAP Color', type: 'color', default: '#FF9800' },
+            { key: 'band1Color', label: '±1σ Band Color', type: 'color', default: '#2962FF80' },
+            { key: 'band2Color', label: '±2σ Band Color', type: 'color', default: '#9C27B080' },
+            { key: 'lineWidth', label: 'VWAP Width', type: 'number', min: 1, max: 5, default: 2 },
+        ],
+    },
+    marketBias: {
+        name: 'Market Bias (CEREBR)',
+        fullName: 'Market Bias (CEREBR) by Professeur_X',
+        pane: 'main',
+        category: 'trend',
+        description: 'Deeply smoothed Heikin Ashi bias oscillator.',
+        inputs: [
+            { key: 'haLen', label: 'Period', type: 'number', min: 1, max: 500, default: 100 },
+            { key: 'haLen2', label: 'Smoothing', type: 'number', min: 1, max: 500, default: 100 },
+            { key: 'oscLen', label: 'Oscillator Period', type: 'number', min: 1, max: 100, default: 7 },
+            { key: 'showHa', label: 'Show HA Candles', type: 'boolean', default: true },
+            { key: 'showMb', label: 'Show Bias Band', type: 'boolean', default: true },
+        ],
+        style: [
+            { key: 'colBull', label: 'Bullish Color', type: 'color', default: '#00FF00' },
+            { key: 'colBear', label: 'Bearish Color', type: 'color', default: '#FF0000' }
+        ]
+    },
+    srVolumeBoxes: {
+        name: 'SR High Volume Boxes',
+        fullName: 'Support and Resistance (High Volume Boxes)',
+        pane: 'main',
+        category: 'overlap',
+        description: 'Finds Support and Resistance zones based on pivot points with highest positive/negative volume delta.',
+        inputs: [
+            { key: 'lookbackPeriod', label: 'Lookback Period', type: 'number', min: 1, max: 200, default: 20 },
+            { key: 'volLen', label: 'Delta Volume Filter Length', type: 'number', min: 1, max: 50, default: 2 },
+            { key: 'boxWidth', label: 'Box Width (xATR)', type: 'number', min: 0.1, max: 10, step: 0.1, default: 1 },
+        ],
+        style: []
+    }
 };
 
 

@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useCallback, useRef } from 'react';
 import type { KeyboardEvent, DragEvent, MouseEvent } from 'react';
-import { Plus } from 'lucide-react';
+import { Plus, Library } from 'lucide-react';
 import styles from './Watchlist.module.css';
 import classNames from 'classnames';
 import WatchlistSelector from './WatchlistSelector';
@@ -8,6 +8,7 @@ import WatchlistItem from './WatchlistItem';
 import WatchlistSection from './WatchlistSection';
 import SymbolTooltip from './SymbolTooltip';
 import ContextMenu from './ContextMenu';
+import StockLibrary from './StockLibrary';
 import { useSmartTooltip } from '../../hooks/useSmartTooltip';
 
 // Import extracted hooks
@@ -91,6 +92,9 @@ export interface WatchlistProps {
     // Favorites props
     favoriteWatchlists?: WatchlistData[];
     onToggleFavorite?: (id: string, emoji: string | null) => void;
+    // Stock Library
+    showStockLibrary?: boolean;
+    onToggleStockLibrary?: () => void;
 }
 
 const SkeletonRow: React.FC = () => (
@@ -134,7 +138,13 @@ const Watchlist: React.FC<WatchlistProps> = ({
     // Favorites props
     favoriteWatchlists = [],
     onToggleFavorite,
+    // Stock Library
+    showStockLibrary: showStockLibraryProp,
+    onToggleStockLibrary,
 }) => {
+    const [showLibraryInternal, setShowLibraryInternal] = useState(false);
+    const showLibrary = showStockLibraryProp !== undefined ? showStockLibraryProp : showLibraryInternal;
+    const toggleLibrary = onToggleStockLibrary ?? (() => setShowLibraryInternal(v => !v));
     const hasMultipleWatchlists = watchlists.length > 0 && onSwitchWatchlist;
     const [sortConfig, setSortConfig] = useState<SortConfig>({ key: null, direction: 'asc' });
     const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
@@ -483,6 +493,13 @@ const Watchlist: React.FC<WatchlistProps> = ({
                 )}
 
                 <div className={styles.actions}>
+                    <span title="Stock Library – browse &amp; discover stocks" style={{ cursor: 'pointer' }}>
+                        <Library
+                            size={16}
+                            className={classNames(styles.icon, { [styles.iconActive]: showLibrary })}
+                            onClick={toggleLibrary}
+                        />
+                    </span>
                     <span title="Add symbol"><Plus size={16} className={styles.icon} onClick={onAddClick} /></span>
                 </div>
             </div>
@@ -547,6 +564,19 @@ const Watchlist: React.FC<WatchlistProps> = ({
                     Chg% {sortConfig.key === 'chgP' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
                 </span>
             </div>
+
+            {/* Stock Library overlay */}
+            {showLibrary && (
+                <StockLibrary
+                    watchlists={watchlists as any}
+                    activeWatchlistId={activeWatchlistId}
+                    onClose={toggleLibrary}
+                    onSwitchWatchlist={onSwitchWatchlist ?? (() => {})}
+                    onCreateWatchlist={onCreateWatchlist ?? (() => {})}
+                    onImport={onImport ?? (() => {})}
+                    onSymbolSelect={onSymbolSelect}
+                />
+            )}
 
             <div
                 className={styles.list}

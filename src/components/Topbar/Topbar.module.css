@@ -247,7 +247,7 @@
     min-width: 180px;
     z-index: 2000;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
-    max-height: 400px;
+    max-height: 600px;
     overflow-y: auto;
 }
 

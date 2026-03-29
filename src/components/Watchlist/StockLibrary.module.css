@@ -1,0 +1,450 @@
+/* Stock Library Panel - Kite-inspired */
+
+.overlay {
+    position: absolute;
+    inset: 0;
+    background: var(--tv-color-platform-background);
+    display: flex;
+    flex-direction: column;
+    z-index: 10;
+    overflow: hidden;
+}
+
+/* ── Header ── */
+.header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--tv-color-border);
+    flex-shrink: 0;
+    gap: 8px;
+}
+
+.closeBtn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: var(--tv-color-text-secondary);
+    padding: 4px;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+    transition: color 0.15s;
+}
+
+.closeBtn:hover {
+    color: var(--tv-color-text-primary);
+}
+
+/* ── Tabs ── */
+.tabBar {
+    display: flex;
+    align-items: center;
+    padding: 0 12px;
+    border-bottom: 1px solid var(--tv-color-border);
+    gap: 0;
+    flex-shrink: 0;
+}
+
+.tab {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--tv-color-text-secondary);
+    padding: 9px 12px 8px;
+    cursor: pointer;
+    position: relative;
+    background: none;
+    border: none;
+    transition: color 0.15s;
+    white-space: nowrap;
+}
+
+.tab:hover {
+    color: var(--tv-color-text-primary);
+}
+
+.tabActive {
+    color: var(--tv-color-brand, #2962ff);
+}
+
+.tabActive::after {
+    content: '';
+    position: absolute;
+    bottom: -1px;
+    left: 0;
+    width: 100%;
+    height: 2px;
+    background-color: var(--tv-color-brand, #2962ff);
+    border-radius: 1px;
+}
+
+.tabSpacer {
+    flex: 1;
+}
+
+.newListBtn {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--tv-color-brand, #2962ff);
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 4px 6px;
+    border-radius: 4px;
+    white-space: nowrap;
+    transition: background 0.15s;
+}
+
+.newListBtn:hover {
+    background: var(--tv-color-toolbar-button-background-hover);
+}
+
+/* ── Search Bar ── */
+.searchBar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--tv-color-border);
+    flex-shrink: 0;
+}
+
+.searchIcon {
+    color: var(--tv-color-text-secondary);
+    flex-shrink: 0;
+}
+
+.searchInput {
+    flex: 1;
+    background: none;
+    border: none;
+    outline: none;
+    color: var(--tv-color-text-primary);
+    font-size: 13px;
+}
+
+.searchInput::placeholder {
+    color: var(--tv-color-text-secondary);
+}
+
+.clearSearchBtn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: var(--tv-color-text-secondary);
+    display: flex;
+    align-items: center;
+    padding: 2px;
+    border-radius: 3px;
+}
+
+.clearSearchBtn:hover {
+    color: var(--tv-color-text-primary);
+}
+
+/* ── Scrollable Content ── */
+.content {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+}
+
+.content::-webkit-scrollbar {
+    width: 4px;
+}
+
+.content::-webkit-scrollbar-thumb {
+    background: var(--tv-color-border);
+    border-radius: 2px;
+}
+
+/* ── My Lists Tab ── */
+.myListItem {
+    display: flex;
+    align-items: center;
+    padding: 9px 12px;
+    cursor: pointer;
+    border-bottom: 1px solid transparent;
+    transition: background 0.1s;
+    gap: 8px;
+}
+
+.myListItem:hover {
+    background: var(--tv-color-toolbar-button-background-hover);
+}
+
+.myListItemActive {
+    background: var(--tv-color-toolbar-button-background-hover);
+    border-left: 2px solid var(--tv-color-brand, #2962ff);
+    padding-left: 10px;
+}
+
+.myListIcon {
+    color: var(--tv-color-text-secondary);
+    flex-shrink: 0;
+}
+
+.myListName {
+    flex: 1;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--tv-color-text-primary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.myListCount {
+    font-size: 11px;
+    color: var(--tv-color-text-secondary);
+    flex-shrink: 0;
+}
+
+.myListActions {
+    display: flex;
+    gap: 4px;
+    opacity: 0;
+    transition: opacity 0.15s;
+    flex-shrink: 0;
+}
+
+.myListItem:hover .myListActions {
+    opacity: 1;
+}
+
+.switchBtn {
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--tv-color-brand, #2962ff);
+    background: none;
+    border: 1px solid var(--tv-color-brand, #2962ff);
+    border-radius: 3px;
+    padding: 2px 6px;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background 0.15s;
+}
+
+.switchBtn:hover {
+    background: var(--tv-color-brand, #2962ff);
+    color: #fff;
+}
+
+/* ── Discover Tab ── */
+.segmentHeader {
+    padding: 10px 12px 4px;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    color: var(--tv-color-text-secondary);
+    text-transform: uppercase;
+}
+
+.groupRow {
+    display: flex;
+    align-items: center;
+    padding: 8px 12px;
+    cursor: pointer;
+    gap: 8px;
+    transition: background 0.1s;
+    position: relative;
+}
+
+.groupRow:hover {
+    background: var(--tv-color-toolbar-button-background-hover);
+}
+
+.groupRowActive {
+    background: var(--tv-color-toolbar-button-background-hover);
+}
+
+.groupIcon {
+    color: var(--tv-color-text-secondary);
+    flex-shrink: 0;
+}
+
+.groupIconActive {
+    color: var(--tv-color-brand, #2962ff);
+}
+
+.groupName {
+    flex: 1;
+    font-size: 13px;
+    color: var(--tv-color-text-primary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.groupNameActive {
+    color: var(--tv-color-brand, #2962ff);
+    font-weight: 500;
+}
+
+.groupActions {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex-shrink: 0;
+}
+
+.addGroupBtn {
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--tv-color-brand, #2962ff);
+    background: none;
+    border: 1px solid var(--tv-color-brand, #2962ff);
+    border-radius: 3px;
+    padding: 2px 7px;
+    cursor: pointer;
+    white-space: nowrap;
+    opacity: 0;
+    transition: opacity 0.15s, background 0.15s;
+}
+
+.groupRow:hover .addGroupBtn {
+    opacity: 1;
+}
+
+.addGroupBtn:hover {
+    background: var(--tv-color-brand, #2962ff);
+    color: #fff;
+}
+
+.groupChevron {
+    color: var(--tv-color-text-secondary);
+    flex-shrink: 0;
+    transition: transform 0.2s ease;
+}
+
+.groupChevronOpen {
+    transform: rotate(90deg);
+}
+
+.groupCount {
+    font-size: 11px;
+    color: var(--tv-color-text-secondary);
+}
+
+/* ── Stock Rows (inside expanded group) ── */
+.stockList {
+    border-bottom: 1px solid var(--tv-color-border);
+    background: var(--tv-color-platform-background);
+}
+
+.stockRow {
+    display: flex;
+    align-items: center;
+    padding: 7px 12px 7px 32px;
+    cursor: pointer;
+    gap: 6px;
+    border-bottom: 1px solid transparent;
+    transition: background 0.1s;
+}
+
+.stockRow:hover {
+    background: var(--tv-color-toolbar-button-background-hover);
+}
+
+.stockSymbol {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--tv-color-text-primary);
+    min-width: 80px;
+    flex-shrink: 0;
+}
+
+.stockName {
+    flex: 1;
+    font-size: 11px;
+    color: var(--tv-color-text-secondary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.stockExchange {
+    font-size: 10px;
+    color: var(--tv-color-text-secondary);
+    opacity: 0.7;
+    flex-shrink: 0;
+    min-width: 28px;
+    text-align: right;
+}
+
+.addStockBtn {
+    background: none;
+    border: none;
+    color: var(--tv-color-brand, #2962ff);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    padding: 2px;
+    opacity: 0;
+    border-radius: 3px;
+    transition: opacity 0.15s, background 0.15s;
+}
+
+.stockRow:hover .addStockBtn {
+    opacity: 1;
+}
+
+.addStockBtn:hover {
+    background: var(--tv-color-brand, #2962ff);
+    color: #fff;
+}
+
+/* ── Create List Input ── */
+.createListRow {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--tv-color-border);
+    background: var(--tv-color-toolbar-button-background-hover);
+    flex-shrink: 0;
+}
+
+.createListInput {
+    flex: 1;
+    background: var(--tv-color-platform-background);
+    border: 1px solid var(--tv-color-brand, #2962ff);
+    border-radius: 4px;
+    padding: 4px 8px;
+    font-size: 13px;
+    color: var(--tv-color-text-primary);
+    outline: none;
+}
+
+.iconBtn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: var(--tv-color-text-secondary);
+    display: flex;
+    align-items: center;
+    padding: 3px;
+    border-radius: 3px;
+    transition: color 0.15s;
+}
+
+.iconBtn:hover {
+    color: var(--tv-color-text-primary);
+}
+
+.iconBtnGreen:hover {
+    color: var(--tv-color-up, #26a69a);
+}
+
+/* ── Empty State ── */
+.emptyState {
+    padding: 30px 20px;
+    text-align: center;
+    color: var(--tv-color-text-secondary);
+    font-size: 13px;
+}

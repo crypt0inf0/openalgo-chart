@@ -46,6 +46,7 @@ import { useToolHandlers } from './hooks/useToolHandlers';
 import { useUIHandlers } from './hooks/useUIHandlers';
 import { useIndicatorAlertHandlers } from './hooks/useIndicatorAlertHandlers';
 import { useANNScanner } from './hooks/useANNScanner';
+import { useCPRScanner } from './hooks/useCPRScanner';
 import { useToastManager } from './hooks/useToastManager';
 import { useTheme } from './context/ThemeContext';
 import { useUI } from './context/UIContext';
@@ -68,7 +69,9 @@ import CompareOptionsDialog from './components/Chart/CompareOptionsDialog';
 const SectorHeatmapModal = lazy(() => import('./components/SectorHeatmap/SectorHeatmapModal'));
 const DepthOfMarket = lazy(() => import('./components/DepthOfMarket/DepthOfMarket'));
 const ANNScanner = lazy(() => import('./components/ANNScanner/ANNScanner'));
+const CPRScanner = lazy(() => import('./components/CPRScanner/CPRScanner'));
 const ChartTemplatesDialog = lazy(() => import('./components/ChartTemplates/ChartTemplatesDialog'));
+const AutoSpreadBuilder = lazy(() => import('./components/AutoSpreadBuilder/AutoSpreadBuilder'));
 const ShortcutsSettings = lazy(() => import('./components/ShortcutsSettings/ShortcutsSettings'));
 const IndicatorSettingsDialog = lazy(() => import('./components/IndicatorSettings/IndicatorSettingsDialog'));
 const PineScriptEditor = lazy(() => import('./components/PineEditor/PineScriptEditor'));
@@ -237,6 +240,7 @@ function AppContent({ isAuthenticated, setIsAuthenticated }) {
   // Alert dialog state (isAlertOpen is now from UIContext)
   const [alertPrice, setAlertPrice] = useState(null);
   const [isIndicatorAlertOpen, setIsIndicatorAlertOpen] = useState(false);
+  const [isAutoSpreadOpen, setIsAutoSpreadOpen] = useState(false);
   const [indicatorAlertToEdit, setIndicatorAlertToEdit] = useState(null);
   const [indicatorAlertInitialIndicator, setIndicatorAlertInitialIndicator] = useState(null);
 
@@ -397,6 +401,20 @@ function AppContent({ isAuthenticated, setIsAuthenticated }) {
 
   // ANN Scanner background scan handlers
   const { startAnnScan, cancelAnnScan } = useANNScanner(annScannerState, setAnnScannerState);
+
+  // CPR Scanner persisted state
+  const [cprScannerState, setCPRScannerState] = useState({
+    results: [],
+    isScanning: false,
+    progress: { current: 0, total: 0 },
+    lastScanTime: null,
+    scanError: null,
+    narrowThreshold: 0.1,
+    source: 'fno',
+  });
+
+  // CPR Scanner background scan handlers
+  const { startCPRScan, cancelCPRScan } = useCPRScanner(cprScannerState as any, setCPRScannerState as any);
 
   // Confirm Dialog State
   const [confirmDialogState, setConfirmDialogState] = useState({
@@ -805,6 +823,35 @@ function AppContent({ isAuthenticated, setIsAuthenticated }) {
     showSnapshotToast,
     showToast
   });
+
+  const handleAutoSpread = useCallback((leftSpread: any, rightSpread: any) => {
+    handleLayoutChange('2-vertical');
+    setTimeout(() => {
+      setCharts((prev: any) => {
+        if (!Array.isArray(prev)) return prev;
+        
+        return prev.map((chart: any) => {
+          if (chart.id === 1) {
+            return { 
+              ...chart, 
+              strategyConfig: leftSpread, 
+              symbol: leftSpread.legs.map((l:any) => l.symbol).join('/'), 
+              exchange: leftSpread.exchange 
+            };
+          }
+          if (chart.id === 2) {
+            return { 
+              ...chart, 
+              strategyConfig: rightSpread, 
+              symbol: rightSpread.legs.map((l:any) => l.symbol).join('/'), 
+              exchange: rightSpread.exchange 
+            };
+          }
+          return chart;
+        });
+      });
+    }, 100);
+  }, [handleLayoutChange, setCharts]);
 
   // Alert handlers extracted to hook
   const {
@@ -1908,6 +1955,7 @@ function AppContent({ isAuthenticated, setIsAuthenticated }) {
             onTemplatesClick={handleTemplatesClick}
             onChartTemplatesClick={handleChartTemplatesClick}
             onStraddleClick={() => setIsStraddlePickerOpen(true)}
+            onAutoSpreadClick={() => setIsAutoSpreadOpen(true)}
 
             strategyConfig={(activeChart as any)?.strategyConfig}
             onIndicatorAlertClick={() => {
@@ -2161,6 +2209,52 @@ function AppContent({ isAuthenticated, setIsAuthenticated }) {
                 onCancelScan={cancelAnnScan}
               />
             </Suspense>
+          ) : activeRightPanel === 'cpr_scanner' ? (
+            <Suspense fallback={<div style={{ padding: 20 }}>Loading CPR Scanner...</div>}>
+              <CPRScanner
+                watchlistSymbols={(watchlistSymbols as any[])
+                  .filter((s: any) => !(typeof s === 'string' && s.startsWith('###')))
+                  .map((s: any) => typeof s === 'string'
+                    ? { symbol: s, exchange: 'NSE' }
+                    : { symbol: s.symbol, exchange: s.exchange || 'NSE' }
+                  )}
+                onSymbolSelect={(symData: any) => {
+                  const symbol = typeof symData === 'string' ? symData : symData.symbol;
+                  const exchange = typeof symData === 'string' ? 'NSE' : (symData.exchange || 'NSE');
+                  setCharts((prev: any[]) => prev.map((chart: any) =>
+                    chart.id === activeChartId ? { ...chart, symbol, exchange, strategyConfig: null } : chart
+                  ));
+                }}
+                isAuthenticated={isAuthenticated}
+                onAddToWatchlist={(symbolData: any) => {
+                  const { symbol, exchange } = symbolData;
+                  const existsInWatchlist = (watchlistSymbols as any[]).some((s: any) => {
+                    if (typeof s === 'string') return s === symbol;
+                    return s.symbol === symbol && s.exchange === exchange;
+                  });
+                  if (!existsInWatchlist) {
+                    setWatchlistsState((prev: any) => ({
+                      ...prev,
+                      lists: prev.lists.map((wl: any) =>
+                        wl.id === prev.activeListId
+                          ? { ...wl, symbols: [...wl.symbols, { symbol, exchange: exchange || 'NSE' }] }
+                          : wl
+                      ),
+                    }));
+                  }
+                }}
+                showToast={showToast}
+                isScanning={cprScannerState.isScanning}
+                results={cprScannerState.results}
+                progress={cprScannerState.progress}
+                lastScanTime={cprScannerState.lastScanTime}
+                scanError={cprScannerState.scanError}
+                narrowThreshold={cprScannerState.narrowThreshold}
+                onNarrowThresholdChange={(v: number) => setCPRScannerState((prev: any) => ({ ...prev, narrowThreshold: v }))}
+                onStartScan={(stocks: any[], threshold: number, toast: any) => startCPRScan(stocks, { narrowThreshold: threshold }, toast)}
+                onCancelScan={cancelCPRScan}
+              />
+            </Suspense>
           ) : activeRightPanel === 'dom' ? (
             <Suspense fallback={<div style={{ padding: 20 }}>Loading DOM...</div>}>
               <DepthOfMarket
@@ -2311,7 +2405,18 @@ function AppContent({ isAuthenticated, setIsAuthenticated }) {
           />
         )
       }
-      {/* Global Alert Popup Restored */}
+
+      {isAutoSpreadOpen && (
+        <Suspense fallback={null}>
+          <AutoSpreadBuilder
+            isOpen={isAutoSpreadOpen}
+            onClose={() => setIsAutoSpreadOpen(false)}
+            onPlotSpreads={handleAutoSpread}
+          />
+        </Suspense>
+      )}
+
+      {/* Global Alert Notification Popup */}
       <GlobalAlertPopup
         alerts={globalAlertPopups as any}
         onDismiss={(alertId: any) => setGlobalAlertPopups((prev: any[]) => prev.filter((a: any) => a.id !== alertId))}

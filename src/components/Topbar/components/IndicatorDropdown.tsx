@@ -86,15 +86,20 @@ export const IndicatorDropdown: React.FC<IndicatorDropdownProps> = ({ position, 
             <DropdownDivider />
             <SectionHeader>Trend Strength</SectionHeader>
             <IndicatorItem id="adx" label="ADX" onClick={handleClick} />
+            <IndicatorItem id="marketBias" label="Market Bias (CEREBR)" onClick={handleClick} />
 
             <DropdownDivider />
             <SectionHeader>Support/Resistance</SectionHeader>
+            <IndicatorItem id="cpr" label="Central Pivot Range (CPR)" onClick={handleClick} />
             <IndicatorItem id="pivotPoints" label="Pivot Points" onClick={handleClick} />
+            <IndicatorItem id="redCandleZones" label="Red Candle Zones" onClick={handleClick} />
+            <IndicatorItem id="srVolumeBoxes" label="SR Volume Boxes" onClick={handleClick} />
 
             <DropdownDivider />
             <SectionHeader>Volume</SectionHeader>
             <IndicatorItem id="volume" label="Volume" onClick={handleClick} />
             <IndicatorItem id="vwap" label="VWAP" onClick={handleClick} />
+            <IndicatorItem id="vwapBands" label="VWAP + Bands" onClick={handleClick} />
 
             <DropdownDivider />
             <SectionHeader>Market Profile</SectionHeader>

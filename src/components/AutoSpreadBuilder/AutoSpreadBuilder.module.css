@@ -1,0 +1,236 @@
+.overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(3px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+}
+
+.modal {
+  background: var(--tv-color-pane-background, #1e222d);
+  border: 1px solid var(--tv-color-border, #2a2e39);
+  border-radius: 8px;
+  width: 440px;
+  max-width: 90vw;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  color: var(--tv-color-text-primary, #d1d4dc);
+  font-family: -apple-system, BlinkMacSystemFont, 'Trebuchet MS', Roboto, Ubuntu, sans-serif;
+  overflow: hidden;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--tv-color-border, #2a2e39);
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.header h2 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: #fb8c00;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.closeBtn {
+  background: transparent;
+  border: none;
+  color: var(--tv-color-text-secondary, #787b86);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px;
+  border-radius: 4px;
+  transition: all 0.2s;
+}
+
+.closeBtn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--tv-color-text-primary, #d1d4dc);
+}
+
+.body {
+  padding: 20px;
+}
+
+.description {
+  font-size: 13px;
+  color: var(--tv-color-text-secondary, #787b86);
+  margin-top: 0;
+  margin-bottom: 20px;
+  line-height: 1.5;
+}
+
+.formGroup {
+  margin-bottom: 20px;
+}
+
+.formGroup label {
+  display: block;
+  font-size: 13px;
+  font-weight: 500;
+  margin-bottom: 8px;
+  color: var(--tv-color-text-primary, #d1d4dc);
+}
+
+.input {
+  width: 100%;
+  background: var(--tv-color-input-background, #131722);
+  border: 1px solid var(--tv-color-border, #2a2e39);
+  color: var(--tv-color-text-primary, #d1d4dc);
+  border-radius: 4px;
+  padding: 10px 12px;
+  font-size: 14px;
+  outline: none;
+  transition: border-color 0.2s;
+  box-sizing: border-box;
+}
+
+.input:focus {
+  border-color: #2962ff;
+}
+
+.buttonGroup {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 24px;
+}
+
+.cancelBtn {
+  background: transparent;
+  border: 1px solid var(--tv-color-border, #2a2e39);
+  color: var(--tv-color-text-primary, #d1d4dc);
+  padding: 8px 16px;
+  border-radius: 4px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.cancelBtn:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.generateBtn {
+  background: #2962ff;
+  border: none;
+  color: white;
+  padding: 8px 20px;
+  border-radius: 4px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: background 0.2s;
+}
+
+.generateBtn:hover:not(:disabled) {
+  background: #1e53e5;
+}
+
+.generateBtn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.spinner {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.errorAlert {
+  background: rgba(239, 83, 80, 0.1);
+  border-left: 3px solid #ef5350;
+  padding: 10px 14px;
+  border-radius: 0 4px 4px 0;
+  color: #ff8a80;
+  font-size: 13px;
+  margin-bottom: 20px;
+}
+
+.formRow {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.formRow .formGroup {
+  margin-bottom: 0;
+  flex: 1;
+}
+
+.previewBox {
+  margin-top: 16px;
+  margin-bottom: 20px;
+  background: rgba(41, 98, 255, 0.05);
+  border: 1px dashed rgba(41, 98, 255, 0.4);
+  border-radius: 6px;
+  padding: 14px;
+  transition: all 0.2s ease;
+}
+
+.previewBox.loading {
+  opacity: 0.6;
+}
+
+.previewTitle {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: #2962ff;
+  font-weight: 600;
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.previewContent {
+  font-size: 13px;
+  color: var(--tv-color-text-primary, #d1d4dc);
+  line-height: 1.5;
+}
+
+.previewHighlight {
+  color: #fb8c00;
+  font-weight: 600;
+}
+
+.skeleton {
+  height: 16px;
+  background: linear-gradient(90deg, rgba(255,255,255,0.05) 25%, rgba(255,255,255,0.1) 50%, rgba(255,255,255,0.05) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+  border-radius: 4px;
+  margin-bottom: 6px;
+  width: 100%;
+}
+
+.skeleton.short {
+  width: 70%;
+}
+
+@keyframes shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}

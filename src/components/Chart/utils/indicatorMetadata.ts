@@ -228,6 +228,14 @@ export const INDICATOR_REGISTRY: Record<string, IndicatorMetadata> = {
     description: 'Price Action Range Strategy'
   },
 
+  cpr: {
+    cleanupType: INDICATOR_CLEANUP_TYPES.SERIES_ARRAY,
+    pane: 'main',
+    hasPane: false,
+    arrayRef: 'cprSeriesRef',
+    description: 'Central Pivot Range (Pivot, BC, TC)'
+  },
+
   // ==================== PINE SCRIPT ====================
   pine: {
     cleanupType: INDICATOR_CLEANUP_TYPES.SIMPLE_SERIES,

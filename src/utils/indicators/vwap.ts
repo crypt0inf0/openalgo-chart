@@ -80,24 +80,8 @@ export const calculateVWAP = (
   for (let i = 0; i < data.length; i++) {
     const candle = data[i];
     // If ignoreVolume is true, treat volume as 1 for all candles (Equal Weight)
-    const volume = ignoreVolume ? 1 : (candle.volume || 0);
-
-    // Handle candles with no volume - use typical price as fallback
-    // Only applies if we're NOT ignoring volume (since if ignoreVolume is true, volume is effectively 1)
-    if (volume === 0 && !ignoreVolume) {
-      // Calculate price based on source even for 0 volume, to have a value
-      let price: number;
-      switch (sourceKey) {
-        case 'close': price = candle.close; break;
-        case 'open': price = candle.open; break;
-        case 'high': price = candle.high; break;
-        case 'low': price = candle.low; break;
-        case 'hlc3': default: price = (candle.high + candle.low + candle.close) / 3; break;
-      }
-      const fallbackValue = vwapData.length > 0 ? vwapData[vwapData.length - 1].value : price;
-      vwapData.push({ time: candle.time, value: fallbackValue });
-      continue;
-    }
+    // For instruments with 0 volume (like indices), default to 1 for TWAP calculation
+    const volume = ignoreVolume || !candle.volume ? 1 : candle.volume;
 
     // Check if we need to reset (new trading session)
     if (resetDaily) {
@@ -418,12 +402,24 @@ export const calculateVWAPBands = (
     }
 
     if (volume === 0) {
-      const lastVwap = vwapData.length > 0 ? vwapData[vwapData.length - 1].value : 0;
-      vwapData.push({ time: candle.time, value: lastVwap });
-      upperBand1.push({ time: candle.time, value: lastVwap });
-      lowerBand1.push({ time: candle.time, value: lastVwap });
-      upperBand2.push({ time: candle.time, value: lastVwap });
-      lowerBand2.push({ time: candle.time, value: lastVwap });
+      // Fallback: If volume is 0 (common for indices like NIFTY 50), use an effective volume of 1.
+      // This effectively calculates a Time-Weighted Average Price (TWAP) for instruments without volume.
+      const effectiveVolume = 1;
+      const typicalPrice = (candle.high + candle.low + candle.close) / 3;
+
+      cumTPV += typicalPrice * effectiveVolume;
+      cumVolume += effectiveVolume;
+      cumTPVSquared += typicalPrice * typicalPrice * effectiveVolume;
+
+      const vwap = cumTPV / cumVolume;
+      const variance = (cumTPVSquared / cumVolume) - (vwap * vwap);
+      const stdDev = Math.sqrt(Math.max(0, variance));
+
+      vwapData.push({ time: candle.time, value: vwap });
+      upperBand1.push({ time: candle.time, value: vwap + stdDev });
+      lowerBand1.push({ time: candle.time, value: vwap - stdDev });
+      upperBand2.push({ time: candle.time, value: vwap + (stdDev * stdDevMultiplier) });
+      lowerBand2.push({ time: candle.time, value: vwap - (stdDev * stdDevMultiplier) });
       continue;
     }
 

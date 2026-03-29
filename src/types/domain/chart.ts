@@ -45,12 +45,17 @@ export type IndicatorType =
   | 'supertrend'
   | 'volume'
   | 'pivotPoints'
+  | 'cpr'
   | 'ichimoku'
   | 'adx'
   | 'cci'
   | 'mfi'
   | 'obv'
-  | 'willr';
+  | 'willr'
+  | 'redCandleZones'
+  | 'vwapBands'
+  | 'marketBias'
+  | 'srVolumeBoxes';
 
 /** Base indicator configuration */
 export interface IndicatorConfig {
@@ -129,6 +134,17 @@ export interface VolumeIndicator extends IndicatorConfig {
   maColor?: string;
 }
 
+/** CPR (Central Pivot Range) indicator settings */
+export interface CPRIndicator extends IndicatorConfig {
+  type: 'cpr';
+  pivotColor: string;
+  bcColor: string;
+  tcColor: string;
+  lineWidth?: number;
+  lineStyle?: number;
+  timeframe?: 'daily' | 'weekly' | 'monthly';
+}
+
 /** Pivot Points indicator settings */
 export interface PivotPointsIndicator extends IndicatorConfig {
   type: 'pivotPoints';
@@ -136,6 +152,52 @@ export interface PivotPointsIndicator extends IndicatorConfig {
   pivotColor: string;
   supportColor: string;
   resistanceColor: string;
+}
+
+/** Red Candle Zones indicator settings */
+export interface RedCandleZonesIndicator extends IndicatorConfig {
+  type: 'redCandleZones';
+  minBodyPct: number;
+  showSupply: boolean;
+  showDemand: boolean;
+  supplyHighColor: string;
+  supplyLowColor: string;
+  demandHighColor: string;
+  demandLowColor: string;
+  lineWidth?: number;
+  lineStyle?: string;
+}
+
+/** VWAP Bands indicator settings */
+export interface VWAPBandsIndicator extends IndicatorConfig {
+  type: 'vwapBands';
+  resetPeriod: 'session' | 'week' | 'month';
+  showBand1: boolean;
+  showBand2: boolean;
+  band1Mult: number;
+  band2Mult: number;
+  vwapColor: string;
+  band1Color: string;
+  band2Color: string;
+  lineWidth?: number;
+}
+
+export interface MarketBiasIndicator extends IndicatorConfig {
+  type: 'marketBias';
+  haLen?: number;
+  haLen2?: number;
+  oscLen?: number;
+  showHa?: boolean;
+  showMb?: boolean;
+  colBull?: string;
+  colBear?: string;
+}
+
+export interface SRVolumeBoxesIndicator extends IndicatorConfig {
+  type: 'srVolumeBoxes';
+  lookbackPeriod?: number;
+  volLen?: number;
+  boxWidth?: number;
 }
 
 /** Union of all indicator types */
@@ -147,7 +209,12 @@ export type Indicator =
   | BollingerIndicator
   | SupertrendIndicator
   | VolumeIndicator
+  | CPRIndicator
   | PivotPointsIndicator
+  | RedCandleZonesIndicator
+  | VWAPBandsIndicator
+  | MarketBiasIndicator
+  | SRVolumeBoxesIndicator
   | IndicatorConfig;
 
 /** Drawing tool type */

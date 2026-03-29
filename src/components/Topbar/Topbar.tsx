@@ -81,6 +81,7 @@ export interface TopbarProps {
     onTemplatesClick?: () => void;
     onChartTemplatesClick?: () => void;
     onStraddleClick?: () => void;
+    onAutoSpreadClick?: () => void;
     strategyConfig?: StrategyConfig | null;
     onOptionsClick?: () => void;
     onHeatmapClick?: () => void;
@@ -98,7 +99,7 @@ const Topbar: React.FC<TopbarProps> = ({
     onDownloadImage, onCopyImage, onFullScreen,
     layout, onLayoutChange, onSaveLayout, onAlertClick, onIndicatorAlertClick, onCompareClick, onReplayClick,
     isReplayMode = false, onSettingsClick, onTemplatesClick, onChartTemplatesClick,
-    onStraddleClick, strategyConfig = null,
+    onStraddleClick, onAutoSpreadClick, strategyConfig = null,
     onOptionsClick, onHeatmapClick, onAddIndicator,
     onPineEditorClick, isPineEditorOpen = false
 }) => {
@@ -504,6 +505,20 @@ const Topbar: React.FC<TopbarProps> = ({
                                                         </div>
                                                     </button>
                                                 </Tooltip>
+                                                {/* Auto Spread Builder Button */}
+                                                <Tooltip content="Auto Spread Builder (9:15 AM ATM Combiner)" position="bottom">
+                                                    <button
+                                                        className={classNames(styles.button, styles.iconButton)}
+                                                        aria-label="Auto Spread Builder"
+                                                        onClick={onAutoSpreadClick}
+                                                    >
+                                                        <div className={styles.icon}>
+                                                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="#fb8c00" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                                                <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
+                                                            </svg>
+                                                        </div>
+                                                    </button>
+                                                </Tooltip>
                                             </div>
 
                                             {/* Timeframes - abbreviated for space */}
@@ -709,6 +724,7 @@ const Topbar: React.FC<TopbarProps> = ({
                                                             <div className={styles.dropdownSection}>Oscillators</div>
                                                             <div className={styles.dropdownItem} onClick={(e) => { e.stopPropagation(); onAddIndicator?.('rsi'); }}>RSI</div>
                                                             <div className={styles.dropdownItem} onClick={(e) => { e.stopPropagation(); onAddIndicator?.('stochastic'); }}>Stochastic</div>
+                                                            <div className={styles.dropdownItem} onClick={(e) => { e.stopPropagation(); onAddIndicator?.('hilengaMilenga'); }}>Hilenga-Milenga</div>
                                                             <div className={styles.dropdownDivider}></div>
                                                             <div className={styles.dropdownSection}>Momentum</div>
                                                             <div className={styles.dropdownItem} onClick={(e) => { e.stopPropagation(); onAddIndicator?.('macd'); }}>MACD</div>
@@ -721,9 +737,31 @@ const Topbar: React.FC<TopbarProps> = ({
                                                             <div className={styles.dropdownItem} onClick={(e) => { e.stopPropagation(); onAddIndicator?.('supertrend'); }}>Supertrend</div>
                                                             <div className={styles.dropdownItem} onClick={(e) => { e.stopPropagation(); onAddIndicator?.('ichimoku'); }}>Ichimoku Cloud</div>
                                                             <div className={styles.dropdownDivider}></div>
+                                                            <div className={styles.dropdownSection}>Trend Strength</div>
+                                                            <div className={styles.dropdownItem} onClick={(e) => { e.stopPropagation(); onAddIndicator?.('adx'); }}>ADX</div>
+                                                            <div className={styles.dropdownItem} onClick={(e) => { e.stopPropagation(); onAddIndicator?.('marketBias'); }}>Market Bias (CEREBR)</div>
+                                                            <div className={styles.dropdownDivider}></div>
+                                                            <div className={styles.dropdownSection}>Support / Resistance</div>
+                                                            <div className={styles.dropdownItem} onClick={(e) => { e.stopPropagation(); onAddIndicator?.('cpr'); }}>Central Pivot Range (CPR)</div>
+                                                            <div className={styles.dropdownItem} onClick={(e) => { e.stopPropagation(); onAddIndicator?.('pivotPoints'); }}>Pivot Points</div>
+                                                            <div className={styles.dropdownItem} onClick={(e) => { e.stopPropagation(); onAddIndicator?.('redCandleZones'); }}>Red Candle Zones</div>
+                                                            <div className={styles.dropdownItem} onClick={(e) => { e.stopPropagation(); onAddIndicator?.('srVolumeBoxes'); }}>SR High Volume Boxes</div>
+                                                            <div className={styles.dropdownDivider}></div>
                                                             <div className={styles.dropdownSection}>Volume</div>
                                                             <div className={styles.dropdownItem} onClick={(e) => { e.stopPropagation(); onAddIndicator?.('volume'); }}>Volume</div>
                                                             <div className={styles.dropdownItem} onClick={(e) => { e.stopPropagation(); onAddIndicator?.('vwap'); }}>VWAP</div>
+                                                            <div className={styles.dropdownItem} onClick={(e) => { e.stopPropagation(); onAddIndicator?.('vwapBands'); }}>VWAP + Bands</div>
+                                                            <div className={styles.dropdownDivider}></div>
+                                                            <div className={styles.dropdownSection}>Market Profile</div>
+                                                            <div className={styles.dropdownItem} onClick={(e) => { e.stopPropagation(); onAddIndicator?.('tpo'); }}>TPO Profile (30m)</div>
+                                                            <div className={styles.dropdownDivider}></div>
+                                                            <div className={styles.dropdownSection}>Strategy</div>
+                                                            <div className={styles.dropdownItem} onClick={(e) => { e.stopPropagation(); onAddIndicator?.('firstCandle'); }}>First Red Candle</div>
+                                                            <div className={styles.dropdownItem} onClick={(e) => { e.stopPropagation(); onAddIndicator?.('rangeBreakout'); }}>Range Breakout</div>
+                                                            <div className={styles.dropdownItem} onClick={(e) => { e.stopPropagation(); onAddIndicator?.('annStrategy'); }}>ANN Strategy</div>
+                                                            <div className={styles.dropdownDivider}></div>
+                                                            <div className={styles.dropdownSection}>Risk Management</div>
+                                                            <div className={styles.dropdownItem} onClick={(e) => { e.stopPropagation(); onAddIndicator?.('riskCalculator'); }}>Risk Calculator</div>
                                                         </div>
                                                     )}
                                                 </div>

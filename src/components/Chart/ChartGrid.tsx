@@ -3,7 +3,7 @@ import type { MouseEvent, MutableRefObject } from 'react';
 import styles from './ChartGrid.module.css';
 import ChartComponent from './ChartComponent';
 
-type LayoutType = '1' | '2' | '3' | '4';
+type LayoutType = '1' | '2' | '3' | '4' | '2-vertical';
 
 interface Indicator {
     type: string;
@@ -82,6 +82,7 @@ const ChartGrid: React.FC<ChartGridProps> = ({
             case '2': return styles.grid2;
             case '3': return styles.grid3;
             case '4': return styles.grid4;
+            case '2-vertical': return styles.grid2vertical;
             default: return styles.grid1;
         }
     };

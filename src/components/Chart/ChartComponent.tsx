@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState, useImperativeHandle, forwardRef, us
 import {
     createChart,
     LineSeries,
+    CandlestickSeries,
     createSeriesMarkers
 } from 'lightweight-charts';
 import styles from './ChartComponent.module.css';
@@ -26,13 +27,19 @@ import {
     calculateATR,
     calculateStochastic,
     calculateVWAP,
-    calculateSupertrend
+    calculateSupertrend,
+    calculateTPO,
+    calculateFirstCandle,
+    calculateRangeBreakout,
+    calculatePriceActionRange,
+    calculateVWAPBands,
+    calculatePivotPoints,
+    calculateRedCandleZones,
+    calculateMarketBias,
+    calculateSRVolumeBoxes
 } from '../../utils/indicators';
 
-import { calculateTPO } from '../../utils/indicators/tpo';
-import { calculateFirstCandle } from '../../utils/indicators/firstCandle';
-import { calculateRangeBreakout } from '../../utils/indicators/rangeBreakout';
-import { calculatePriceActionRange } from '../../utils/indicators/priceActionRange';
+
 import { calculateANNStrategy } from '../../utils/indicators/annStrategy';
 import { calculateHilengaMilenga } from '../../utils/indicators/hilengaMilenga';
 import { calculateRiskPosition, autoDetectSide } from '../../utils/indicators/riskCalculator';
@@ -372,6 +379,12 @@ const ChartComponent = forwardRef<any, ChartComponentProps>(({
     const firstCandleSeriesRef = useRef([]); // Array of line series for all days' high/low
     const priceActionRangeSeriesRef = useRef([]); // Array of line series for PAR support/resistance
     const rangeBreakoutSeriesRef = useRef([]); // Array of line series for range breakout high/low
+    const cprSeriesRef = useRef([]); // Array of line series for CPR (Pivot, BC, TC per day)
+    const redCandleZonesSeriesRef = useRef([]); // Array of line series for Red Candle Zones
+    const marketBiasSeriesRef = useRef({ candles: null, band: null }); // Market Bias refs
+    const srVolumeBoxesSeriesRef = useRef([]); // Array of Candlestick/Line series for SR Volume Boxes
+    const pivotPointsSeriesRef = useRef([]); // Array of line series for Pivot Points
+    const vwapBandsSeriesRef = useRef({ center: null, upper1: null, lower1: null, upper2: null, lower2: null }); // VWAP bands
     const annStrategySeriesRef = useRef(null); // ANN Strategy prediction series
     const annStrategyPaneRef = useRef(null); // ANN Strategy pane reference
     const riskCalculatorPrimitiveRef = useRef(null); // Risk Calculator draggable primitive
@@ -3331,6 +3344,108 @@ const ChartComponent = forwardRef<any, ChartComponentProps>(({
             setRiskCalculatorResults(null);
         }
 
+        // ==================== CPR (CENTRAL PIVOT RANGE) INDICATOR ====================
+        const cprInd = indicatorsArray?.find(ind => ind.type === 'cpr');
+        const cprEnabled = cprInd && cprInd.visible !== false;
+
+        if (cprEnabled && cprInd && data && data.length > 0 && chartRef.current) {
+            const pivotColor  = cprInd.pivotColor || '#FF9800';
+            const bcColor     = cprInd.bcColor    || '#26A69A';
+            const tcColor     = cprInd.tcColor    || '#EF5350';
+            const lineWidth   = cprInd.lineWidth  || 2;
+            const lineStyle   = parseInt(cprInd.lineStyle ?? '0', 10);
+
+            // ── Group candles by date ──────────────────────────────────────────────
+            // data is already sorted by time (unix seconds)
+            const dayMap = new Map(); // date-string → { h, l, c, candles[] }
+            for (const bar of data) {
+                const d = new Date(bar.time * 1000);
+                const key = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`;
+                if (!dayMap.has(key)) dayMap.set(key, { h: bar.high, l: bar.low, c: bar.close, candles: [bar] });
+                else {
+                    const entry = dayMap.get(key);
+                    if (bar.high > entry.h) entry.h = bar.high;
+                    if (bar.low  < entry.l) entry.l = bar.low;
+                    entry.c = bar.close; // last candle = day close
+                    entry.candles.push(bar);
+                }
+            }
+
+            const sortedDays = Array.from(dayMap.entries()).sort((a, b) => a[0] < b[0] ? -1 : 1);
+
+            // ── Calculate CPR levels for each day using PREVIOUS day values ────────
+            //   Pivot (P) = (Prev_H + Prev_L + Prev_C) / 3
+            //   BC        = (Prev_H + Prev_L) / 2
+            //   TC        = 2 * P - BC
+            const cprDays = [];
+            for (let i = 1; i < sortedDays.length; i++) {
+                const [, prev] = sortedDays[i - 1];
+                const [, cur ]  = sortedDays[i];
+
+                const P  = (prev.h + prev.l + prev.c) / 3;
+                const BC = (prev.h + prev.l) / 2;
+                const TC = 2 * P - BC;
+
+                const startTime = cur.candles[0].time;
+                const endTime   = cur.candles[cur.candles.length - 1].time;
+
+                cprDays.push({ P, BC, TC, startTime, endTime });
+            }
+
+            // ── Recreate series array if count changed (3 series per day) ─────────
+            const neededSeriesCount = cprDays.length * 3;
+            if (cprSeriesRef.current.length !== neededSeriesCount) {
+                for (const s of cprSeriesRef.current) {
+                    try { chartRef.current.removeSeries(s); } catch (e) { /* ignore */ }
+                }
+                cprSeriesRef.current = [];
+            }
+
+            // ── Create / update LineSeries for each day ───────────────────────────
+            let si = 0;
+            for (const day of cprDays) {
+                const { P, BC, TC, startTime, endTime } = day;
+                const configs = [
+                    { value: P,  color: pivotColor },  // Pivot
+                    { value: BC, color: bcColor    },  // Bottom Central Pivot
+                    { value: TC, color: tcColor    },  // Top Central Pivot
+                ];
+                for (const { value, color } of configs) {
+                    if (!cprSeriesRef.current[si]) {
+                        cprSeriesRef.current[si] = chartRef.current.addSeries(LineSeries, {
+                            color,
+                            lineWidth,
+                            lineStyle,
+                            priceLineVisible: false,
+                            lastValueVisible: false,
+                            crosshairMarkerVisible: false,
+                        });
+                    } else {
+                        cprSeriesRef.current[si].applyOptions({ color, lineWidth, lineStyle });
+                    }
+                    cprSeriesRef.current[si].setData([
+                        { time: startTime, value },
+                        { time: endTime,   value },
+                    ]);
+                    si++;
+                }
+            }
+
+            // Track type for cleanup
+            if (cprInd?.id) {
+                indicatorTypesMap.current.set(cprInd.id, 'cpr');
+            }
+
+        } else if (!cprEnabled) {
+            // Clean up CPR series when disabled
+            if (chartRef.current) {
+                for (const s of cprSeriesRef.current) {
+                    try { chartRef.current.removeSeries(s); } catch (e) { /* ignore */ }
+                }
+            }
+            cprSeriesRef.current = [];
+        }
+
         // ==================== PRICE ACTION RANGE (PAR) INDICATOR ====================
         const parIndicator = indicatorsArray?.find(i => i.type === 'priceActionRange');
         const parEnabled = parIndicator && parIndicator.visible !== false;
@@ -3407,6 +3522,439 @@ const ChartComponent = forwardRef<any, ChartComponentProps>(({
             logger.debug('[MANUAL CLEANUP] PAR array cleared');
         }
 
+        // ==================== RED CANDLE ZONES INDICATOR ====================
+        const rcIndicator = indicatorsArray?.find(i => i.type === 'redCandleZones');
+        const rcEnabled = rcIndicator && rcIndicator.visible !== false;
+
+        if (rcEnabled && chartRef.current && data.length > 0) {
+            const minBodyPct = rcIndicator.minBodyPct ?? 40;
+            const showSupply = rcIndicator.showSupply !== false;
+            const showDemand = rcIndicator.showDemand !== false;
+
+            const res = calculateRedCandleZones(data, { minBodyPct });
+
+            // Count needed series (2 lines per zone = 1 box)
+            const neededSeriesCount = (showSupply ? res.supplyZones.length * 2 : 0) + 
+                                      (showDemand ? res.demandZones.length * 2 : 0);
+
+            if (redCandleZonesSeriesRef.current.length !== neededSeriesCount) {
+                for (const s of redCandleZonesSeriesRef.current) {
+                    try { chartRef.current.removeSeries(s); } catch (e) {}
+                }
+                redCandleZonesSeriesRef.current = [];
+            }
+
+            let sIdx = 0;
+            
+            // Helper to draw a zone (high + low lines)
+            const drawZoneLines = (zones, highColor, lowColor, lineWidth, lineStyle) => {
+                for (const zone of zones) {
+                    // High Line
+                    if (!redCandleZonesSeriesRef.current[sIdx]) {
+                        redCandleZonesSeriesRef.current[sIdx] = chartRef.current.addSeries(LineSeries, {
+                            color: highColor, lineWidth, lineStyle: parseInt(lineStyle || '0', 10),
+                            priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false
+                        });
+                    }
+                    redCandleZonesSeriesRef.current[sIdx].setData([
+                        { time: zone.startTime, value: zone.high },
+                        { time: zone.endTime, value: zone.high }
+                    ]);
+                    sIdx++;
+
+                    // Low Line
+                    if (!redCandleZonesSeriesRef.current[sIdx]) {
+                        redCandleZonesSeriesRef.current[sIdx] = chartRef.current.addSeries(LineSeries, {
+                            color: lowColor, lineWidth, lineStyle: parseInt(lineStyle || '0', 10),
+                            priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false
+                        });
+                    }
+                    redCandleZonesSeriesRef.current[sIdx].setData([
+                        { time: zone.startTime, value: zone.low },
+                        { time: zone.endTime, value: zone.low }
+                    ]);
+                    sIdx++;
+                }
+            };
+
+            if (showSupply) drawZoneLines(res.supplyZones, rcIndicator.supplyHighColor || '#EF5350', rcIndicator.supplyLowColor || '#EF535060', rcIndicator.lineWidth || 1, rcIndicator.lineStyle || '0');
+            if (showDemand) drawZoneLines(res.demandZones, rcIndicator.demandHighColor || '#26A69A60', rcIndicator.demandLowColor || '#26A69A', rcIndicator.lineWidth || 1, rcIndicator.lineStyle || '0');
+
+            if (rcIndicator.id) {
+                indicatorTypesMap.current.set(rcIndicator.id, 'redCandleZones');
+                indicatorSeriesMap.current.set(rcIndicator.id, redCandleZonesSeriesRef.current);
+            }
+        } else if (!rcEnabled) {
+            for (const s of redCandleZonesSeriesRef.current) {
+                try { chartRef.current.removeSeries(s); } catch (e) {}
+            }
+            redCandleZonesSeriesRef.current = [];
+        }
+
+        // ==================== MARKET BIAS INDICATOR ====================
+        const mbIndicator = indicatorsArray?.find(i => i.type === 'marketBias');
+        const mbEnabled = mbIndicator && mbIndicator.visible !== false;
+
+        if (mbEnabled && chartRef.current && data.length > 0) {
+            const res = calculateMarketBias(
+                data,
+                mbIndicator.haLen || 100,
+                mbIndicator.haLen2 || 100,
+                mbIndicator.oscLen || 7
+            );
+
+            const refs = marketBiasSeriesRef.current;
+            const showHa = mbIndicator.showHa !== false;
+            const showMb = mbIndicator.showMb !== false;
+
+            // 1. Render Band (as Candlestick Series matching High2->Low2)
+            if (showMb && res.h2.length > 0) {
+                if (!refs.band) {
+                    refs.band = chartRef.current.addSeries(CandlestickSeries, {
+                        upColor: '#26A69A', downColor: '#EF5350', borderVisible: false, wickVisible: false, priceLineVisible: false, lastValueVisible: false
+                    });
+                }
+                const bandData = [];
+                for (let i = 0; i < res.h2.length; i++) {
+                    const time = res.h2[i].time;
+                    const high = res.h2[i].value;
+                    const low = res.l2[i].value;
+                    const sig = res.sigColors[i];
+                    
+                    const baseBull = (mbIndicator.colBull || '#00FF00').slice(0, 7);
+                    const baseBear = (mbIndicator.colBear || '#FF0000').slice(0, 7);
+
+                    let color = 'rgba(120, 120, 120, 0.2)'; // default
+                    if (sig === 'strongBull') color = baseBull + 'A6'; // 35% transparent pine = ~65% solid
+                    else if (sig === 'weakBull') color = baseBull + '40'; // 75% transparent pine = ~25% solid
+                    else if (sig === 'strongBear') color = baseBear + 'A6';
+                    else if (sig === 'weakBear') color = baseBear + '40';
+
+                    bandData.push({ time, open: high, high: high, low: low, close: low, color });
+                }
+                refs.band.setData(bandData);
+            } else if (refs.band) {
+                refs.band.setData([]);
+            }
+
+            // 2. Render Smoothed HA Candles
+            if (showHa && res.o2.length > 0) {
+                if (!refs.candles) {
+                    refs.candles = chartRef.current.addSeries(CandlestickSeries, {
+                        upColor: '#26A69A', downColor: '#EF5350', borderVisible: true, wickVisible: true, priceLineVisible: false, lastValueVisible: false
+                    });
+                }
+                const candleData = [];
+                for (let i = 0; i < res.o2.length; i++) {
+                    const time = res.o2[i].time;
+                    const o = res.o2[i].value;
+                    const h = res.h2[i].value;
+                    const l = res.l2[i].value;
+                    const c = res.c2[i].value;
+                    const dir = res.candleColors[i]; // 'bull' or 'bear'
+                    
+                    const color = dir === 'bull' ? (mbIndicator.colBull || '#00FF00') : (mbIndicator.colBear || '#FF0000');
+                    candleData.push({ time, open: o, high: h, low: l, close: c, color, borderColor: color, wickColor: color });
+                }
+                refs.candles.setData(candleData);
+            } else if (refs.candles) {
+                refs.candles.setData([]);
+            }
+
+            if (mbIndicator.id) {
+                indicatorTypesMap.current.set(mbIndicator.id, 'marketBias');
+                indicatorSeriesMap.current.set(mbIndicator.id, marketBiasSeriesRef.current);
+            }
+        } else if (!mbEnabled) {
+            const refs = marketBiasSeriesRef.current;
+            if (refs.band) { try { chartRef.current.removeSeries(refs.band); } catch (e) {} refs.band = null; }
+            if (refs.candles) { try { chartRef.current.removeSeries(refs.candles); } catch (e) {} refs.candles = null; }
+        }
+
+        // ==================== SR HIGH VOLUME BOXES ====================
+        const srIndicator = indicatorsArray?.find(i => i.type === 'srVolumeBoxes');
+        const srEnabled = srIndicator && srIndicator.visible !== false;
+
+        if (srEnabled && chartRef.current && data.length > 0) {
+            const res = calculateSRVolumeBoxes(
+                data,
+                srIndicator.lookbackPeriod || 20,
+                srIndicator.volLen || 2,
+                srIndicator.boxWidth || 1
+            );
+
+            // Combine boxes
+            const allBoxes = [...res.supportBoxes, ...res.resistanceBoxes];
+            // Sort by start index
+            allBoxes.sort((a, b) => a.startIndex - b.startIndex);
+
+            // We need 1 Candlestick series per box. 
+            // Plus 1 invisible Line series for all the makers.
+            const neededSeriesCount = allBoxes.length + 1; // +1 for markers
+
+            if (srVolumeBoxesSeriesRef.current.length > neededSeriesCount) {
+                for (let i = neededSeriesCount; i < srVolumeBoxesSeriesRef.current.length; i++) {
+                    const s = srVolumeBoxesSeriesRef.current[i];
+                    if (s) { try { chartRef.current.removeSeries(s); } catch(e){} }
+                }
+                srVolumeBoxesSeriesRef.current = srVolumeBoxesSeriesRef.current.slice(0, neededSeriesCount);
+            }
+
+            let markerSeries = srVolumeBoxesSeriesRef.current[0];
+            if (!markerSeries) {
+                markerSeries = chartRef.current.addSeries(LineSeries, {
+                    lineWidth: 0, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false
+                });
+                srVolumeBoxesSeriesRef.current[0] = markerSeries;
+            }
+
+            const markers = [];
+
+            // Update boxes (starting from index 1 in the ref array)
+            for (let i = 0; i < allBoxes.length; i++) {
+                const box = allBoxes[i];
+                const sIdx = i + 1;
+                
+                if (!srVolumeBoxesSeriesRef.current[sIdx]) {
+                    srVolumeBoxesSeriesRef.current[sIdx] = chartRef.current.addSeries(CandlestickSeries, {
+                        borderVisible: false, wickVisible: false, priceLineVisible: false, lastValueVisible: false
+                    });
+                }
+                
+                const series = srVolumeBoxesSeriesRef.current[sIdx];
+                const boxData = [];
+
+                const baseSupColor = 'rgba(0, 255, 0, 0.3)'; // Default green translucent
+                const brokenSupColor = 'rgba(255, 0, 0, 0.15)'; // Red and translucent if broken
+                const baseResColor = 'rgba(255, 0, 0, 0.3)';
+                const brokenResColor = 'rgba(0, 255, 0, 0.15)';
+
+                const isSup = box.type === 'support';
+                const fillColor = isSup 
+                    ? (box.broken ? brokenSupColor : baseSupColor) 
+                    : (box.broken ? brokenResColor : baseResColor);
+                
+                const borderColor = isSup
+                    ? (box.broken ? 'red' : 'green')
+                    : (box.broken ? 'green' : 'red');
+
+                series.applyOptions({
+                    upColor: fillColor, downColor: fillColor,
+                    borderColor: borderColor, borderVisible: true
+                });
+
+                for (let j = box.startIndex; j <= box.endIndex; j++) {
+                    if (j < data.length) {
+                        boxData.push({
+                            time: data[j].time,
+                            open: box.top,
+                            high: box.top,
+                            low: box.bottom,
+                            close: box.bottom,
+                            color: fillColor
+                        });
+                    }
+                }
+                series.setData(boxData);
+
+                // Add markers for holds and breaks
+                box.holds.forEach(idx => {
+                    if (idx < data.length) {
+                        markers.push({
+                            time: data[idx].time,
+                            position: isSup ? 'belowBar' : 'aboveBar',
+                            color: isSup ? '#20ca26' : '#e92929',
+                            shape: isSup ? 'arrowUp' : 'arrowDown',
+                            text: isSup ? 'Sup Hold' : 'Res Hold',
+                            size: 1
+                        });
+                    }
+                });
+
+                box.breaks.forEach(idx => {
+                    if (idx < data.length) {
+                        markers.push({
+                            time: data[idx].time,
+                            position: isSup ? 'belowBar' : 'aboveBar',
+                            color: isSup ? '#7e1e1e' : '#2b6d2d',
+                            shape: 'circle',
+                            text: isSup ? 'Break Sup' : 'Break Res',
+                            size: 1
+                        });
+                    }
+                });
+            }
+
+            // Sync marker series data space and set markers
+            const markerData = data.map(d => ({ time: d.time, value: d.close }));
+            markerSeries.setData(markerData);
+            
+            // Sort markers by time as required by lightweight-charts
+            markers.sort((a, b) => a.time - b.time);
+            
+            // Deduplicate markers: lightweight-charts throws "data must be asc ordered" 
+            // if multiple markers share the exact same time.
+            const uniqueMarkers = [];
+            let lastTime = -1;
+            for (const m of markers) {
+                if (m.time !== lastTime) {
+                    uniqueMarkers.push(m);
+                    lastTime = m.time;
+                } else {
+                    // Combine text for markers at the same time
+                    const lastMarker = uniqueMarkers[uniqueMarkers.length - 1];
+                    if (lastMarker && !lastMarker.text.includes(m.text)) {
+                        lastMarker.text += ` + ${m.text}`;
+                    }
+                }
+            }
+            markerSeries.setMarkers(uniqueMarkers);
+
+            if (srIndicator.id) {
+                indicatorTypesMap.current.set(srIndicator.id, 'srVolumeBoxes');
+                indicatorSeriesMap.current.set(srIndicator.id, srVolumeBoxesSeriesRef.current);
+            }
+        } else if (!srEnabled) {
+            for (const s of srVolumeBoxesSeriesRef.current) {
+                try { chartRef.current.removeSeries(s); } catch (e) {}
+            }
+            srVolumeBoxesSeriesRef.current = [];
+        }
+
+        // ==================== PIVOT POINTS INDICATOR ====================
+        const ppIndicator = indicatorsArray?.find(i => i.type === 'pivotPoints');
+        const ppEnabled = ppIndicator && ppIndicator.visible !== false;
+
+        if (ppEnabled && chartRef.current && data.length > 0) {
+            const pivotType = ppIndicator.pivotType || 'traditional';
+            const timeframe = ppIndicator.timeframe || 'daily';
+            const res = calculatePivotPoints(data, pivotType, timeframe);
+
+            // 7 levels per day (P, R1-R3, S1-S3). Count unique days to know needed series.
+            // But calculatePivotPoints gives us point-by-point, like VWAP.
+            // Wait, calculatePivotPoints returns continuous time-series arrays for each level.
+            
+            // Collect all non-empty series we need to plot
+            const seriesKeysToMap = [
+                { key: 'pivot', color: ppIndicator.pivotColor || '#FF9800' },
+                { key: 'r1', color: ppIndicator.resistanceColor || '#EF5350' },
+                { key: 'r2', color: ppIndicator.resistanceColor || '#EF5350' },
+                { key: 'r3', color: ppIndicator.resistanceColor || '#EF5350' },
+                { key: 's1', color: ppIndicator.supportColor || '#26A69A' },
+                { key: 's2', color: ppIndicator.supportColor || '#26A69A' },
+                { key: 's3', color: ppIndicator.supportColor || '#26A69A' },
+            ];
+
+            const lw = ppIndicator.lineWidth || 1;
+            
+            // Adjust the refs array length if needed
+            if (pivotPointsSeriesRef.current.length !== seriesKeysToMap.length) {
+                for (const s of pivotPointsSeriesRef.current) {
+                    if(s) try { chartRef.current.removeSeries(s); } catch (e) {}
+                }
+                pivotPointsSeriesRef.current = new Array(seriesKeysToMap.length).fill(null);
+            }
+
+            seriesKeysToMap.forEach((sk, idx) => {
+                if(res[sk.key] && res[sk.key].length > 0) {
+                    if (!pivotPointsSeriesRef.current[idx]) {
+                        pivotPointsSeriesRef.current[idx] = chartRef.current.addSeries(LineSeries, {
+                            color: sk.color, lineWidth: lw, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false
+                        });
+                    } else {
+                        pivotPointsSeriesRef.current[idx].applyOptions({ color: sk.color, lineWidth: lw });
+                    }
+                    pivotPointsSeriesRef.current[idx].setData(res[sk.key]);
+                } else if(pivotPointsSeriesRef.current[idx]) {
+                    pivotPointsSeriesRef.current[idx].setData([]);
+                }
+            });
+
+            if (ppIndicator.id) indicatorTypesMap.current.set(ppIndicator.id, 'pivotPoints');
+        } else if (!ppEnabled) {
+             for (const s of pivotPointsSeriesRef.current) {
+                if(s) try { chartRef.current.removeSeries(s); } catch (e) {}
+            }
+            pivotPointsSeriesRef.current = [];
+        }
+
+        // ==================== VWAP BANDS INDICATOR ====================
+        const vwapBandsInd = indicatorsArray?.find(i => i.type === 'vwapBands');
+        const vbwEnabled = vwapBandsInd && vwapBandsInd.visible !== false;
+
+        if (vbwEnabled && chartRef.current && data.length > 0) {
+            // Note: Since this behaves mostly like a standard indicator, we might overlap with standard VWAP handler in updateIndicatorSeries.
+            // But this draws bands, so we handle it similarly. 
+            // Better yet, updateIndicatorSeries doesn't natively do 5 lines for one series entry without a custom draw method.
+            // calculateVWAPBands returns { vwap, upperBand1, lowerBand1, upperBand2, lowerBand2 }
+            const res = calculateVWAPBands(data, vwapBandsInd.band1Mult || 1, true); // true = resetDaily
+            const res2 = calculateVWAPBands(data, vwapBandsInd.band2Mult || 2, true);
+            
+            const refs = vwapBandsSeriesRef.current;
+            const drawBand = (key, lineData, color, width) => {
+                if (lineData && lineData.length > 0) {
+                    const validData = lineData.filter(d => !isNaN(d.value) && d.value !== null);
+                    if (validData.length > 0) {
+                        if(!refs[key]) {
+                            refs[key] = chartRef.current.addSeries(LineSeries, {
+                                color: color, lineWidth: width, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false
+                            });
+                        } else {
+                            refs[key].applyOptions({ color: color, lineWidth: width });
+                        }
+                        refs[key].setData(validData);
+                    } else if (refs[key]) {
+                        refs[key].setData([]);
+                    }
+                }
+            };
+            
+            const lw = vwapBandsInd.lineWidth || 2;
+            const b1color = vwapBandsInd.band1Color || '#2962FF80';
+            const b2color = vwapBandsInd.band2Color || '#9C27B080';
+
+            // Also VWAP line handled by standard createIndicatorSeries? Wait, 'vwapBands' isn't handled by default unless metadata mapped.
+            // We'll draw the VWAP center line explicitly here!
+            if(!refs.center) {
+                refs.center = chartRef.current.addSeries(LineSeries, {
+                     color: vwapBandsInd.vwapColor || '#FF9800', lineWidth: lw, priceLineVisible: true, lastValueVisible: true, crosshairMarkerVisible: true
+                });
+            } else {
+                refs.center.applyOptions({ color: vwapBandsInd.vwapColor || '#FF9800', lineWidth: lw });
+            }
+            const validVwap = res.vwap.filter(d => !isNaN(d.value) && d.value !== null);
+            refs.center.setData(validVwap);
+            
+            if (vwapBandsInd.showBand1 !== false) {
+                drawBand('upper1', res.upperBand1, b1color, 1);
+                drawBand('lower1', res.lowerBand1, b1color, 1);
+            } else {
+                if(refs.upper1) refs.upper1.setData([]);
+                if(refs.lower1) refs.lower1.setData([]);
+            }
+            
+            if (vwapBandsInd.showBand2 !== false) {
+                drawBand('upper2', res2.upperBand2, b2color, 1);
+                drawBand('lower2', res2.lowerBand2, b2color, 1);
+            } else {
+                if(refs.upper2) refs.upper2.setData([]);
+                if(refs.lower2) refs.lower2.setData([]);
+            }
+
+            if (vwapBandsInd.id) {
+                indicatorTypesMap.current.set(vwapBandsInd.id, 'vwapBands');
+                indicatorSeriesMap.current.set(vwapBandsInd.id, vwapBandsSeriesRef.current);
+            }
+        } else if (!vbwEnabled) {
+            const refs = vwapBandsSeriesRef.current;
+            for(const [key, s] of Object.entries(refs)) {
+                if(s) {
+                     try { chartRef.current.removeSeries(s); } catch (e) {}
+                     refs[key as keyof typeof refs] = null;
+                }
+            }
+        }
+
         // --- UNIFIED CLEANUP LOGIC ---
         // Identify IDs that are no longer in the list
         const idsToRemove = [];
@@ -3441,7 +3989,13 @@ const ChartComponent = forwardRef<any, ChartComponentProps>(({
                 riskCalculatorPrimitiveRef,
                 firstCandleSeriesRef,
                 rangeBreakoutSeriesRef,
-                priceActionRangeSeriesRef
+                priceActionRangeSeriesRef,
+                cprSeriesRef,
+                redCandleZonesSeriesRef,
+                marketBiasSeriesRef,
+                srVolumeBoxesSeriesRef,
+                pivotPointsSeriesRef,
+                vwapBandsSeriesRef
             }
         };
 

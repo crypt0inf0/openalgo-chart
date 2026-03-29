@@ -55,6 +55,17 @@ export { calculateIchimoku, getCloudData } from './ichimoku';
 // Pivot Points
 export { calculatePivotPoints } from './pivotPoints';
 
+// Red Candle Zones
+export { calculateRedCandleZones } from './redCandleZones';
+
+// Market Bias
+export { calculateMarketBias } from './marketBias';
+export type { MarketBiasResult } from './marketBias';
+
+// SR Volume Boxes
+export { calculateSRVolumeBoxes } from './srVolumeBoxes';
+export type { SRVolumeBoxesResult, SRBox } from './srVolumeBoxes';
+
 // Time Utilities (IST market hours, time windows)
 export * from './timeUtils';
 

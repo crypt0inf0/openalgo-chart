@@ -6,6 +6,7 @@
     flex-direction: column;
     color: var(--tv-color-text-primary);
     overflow: hidden;
+    position: relative;
 }
 
 .header {
@@ -34,6 +35,10 @@
 
 .icon:hover {
     color: var(--tv-color-text-primary);
+}
+
+.iconActive {
+    color: var(--tv-color-brand, #2962ff) !important;
 }
 
 .tabs {
