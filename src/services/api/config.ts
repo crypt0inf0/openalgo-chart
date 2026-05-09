@@ -85,16 +85,34 @@ export const getWebSocketUrl = (): string => {
 };
 
 /**
- * Check if user is authenticated with OpenAlgo
- * OpenAlgo stores API key in localStorage after login
+ * Fetch the API key from the Flask session (only works when served under /chart by Flask).
+ * Returns the key string on success, null otherwise.
+ */
+export const fetchApiKeyFromServer = async (): Promise<string | null> => {
+  try {
+    const response = await fetch('/chart/config');
+    if (!response.ok) return null;
+    const data = await response.json();
+    return typeof data.api_key === 'string' ? data.api_key : null;
+  } catch {
+    return null;
+  }
+};
+
+/**
+ * Check if user is authenticated with OpenAlgo.
+ * First tries to auto-fetch the API key from the Flask session, then falls
+ * back to the key stored in localStorage (e.g. manual entry in dev mode).
  */
 export const checkAuth = async (): Promise<boolean> => {
   try {
-    const apiKey = getString(STORAGE_KEYS.OA_API_KEY, '');
-    if (!apiKey || apiKey.trim() === '') {
-      return false;
+    const serverKey = await fetchApiKeyFromServer();
+    if (serverKey) {
+      localStorage.setItem(STORAGE_KEYS.OA_API_KEY, serverKey);
+      return true;
     }
-    return true;
+    const apiKey = getString(STORAGE_KEYS.OA_API_KEY, '');
+    return apiKey.trim() !== '';
   } catch (error) {
     logger.error('[ApiConfig] Auth check failed:', error);
     return false;
