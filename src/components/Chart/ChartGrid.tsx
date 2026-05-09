@@ -22,17 +22,6 @@ interface StrategyConfig {
     [key: string]: unknown;
 }
 
-interface Alert {
-    id: string;
-    [key: string]: unknown;
-}
-
-interface AlertEvent {
-    type: string;
-    alert: Alert;
-    [key: string]: unknown;
-}
-
 interface Chart {
     id: string;
     symbol: string;
@@ -55,11 +44,8 @@ export interface ChartGridProps {
     onActiveChartChange: (chartId: string) => void;
     onMaximizeChart?: (chartId: string) => void;
     chartRefs: MutableRefObject<Record<string, ChartRef | null>>;
-    onAlertsSync?: (chartId: string, symbol: string, exchange: string, alerts: Alert[]) => void;
     onDrawingsSync?: (drawings: unknown[]) => void;
-    onAlertTriggered?: (chartId: string, symbol: string, exchange: string, event: AlertEvent) => void;
     onReplayModeChange?: (chartId: string, isActive: boolean) => void;
-    onOHLCDataUpdate?: (data: unknown) => void;
     [key: string]: unknown; // Additional chart props
 }
 
@@ -70,11 +56,8 @@ const ChartGrid: React.FC<ChartGridProps> = ({
     onActiveChartChange,
     onMaximizeChart,
     chartRefs,
-    onAlertsSync,
     onDrawingsSync,
-    onAlertTriggered,
     onReplayModeChange,
-    onOHLCDataUpdate,
     ...chartProps
 }) => {
     const getGridClass = (): string => {
@@ -113,11 +96,8 @@ const ChartGrid: React.FC<ChartGridProps> = ({
                         symbol={chart.symbol}
                         exchange={chart.exchange || 'NSE'}
                         interval={chart.interval}
-                        onAlertsSync={onAlertsSync ? (alerts: Alert[]) => onAlertsSync(chart.id, chart.symbol, chart.exchange || 'NSE', alerts) : undefined}
                         onDrawingsSync={onDrawingsSync}
-                        onAlertTriggered={onAlertTriggered ? (evt: AlertEvent) => onAlertTriggered(chart.id, chart.symbol, chart.exchange || 'NSE', evt) : undefined}
                         onReplayModeChange={onReplayModeChange ? (isActive: boolean) => onReplayModeChange(chart.id, isActive) : undefined}
-                        onOHLCDataUpdate={onOHLCDataUpdate}
                         {...chartProps}
                         indicators={chart.indicators}
                         comparisonSymbols={chart.comparisonSymbols}

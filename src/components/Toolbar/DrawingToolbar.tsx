@@ -52,49 +52,30 @@ const DrawingToolbar: React.FC<DrawingToolbarProps> = ({
             id: 'lines_group',
             items: [
                 { id: 'trendline', icon: Icons.TrendLineIcon, label: 'Trend Line' },
-                { id: 'arrow', icon: Icons.ArrowIcon, label: 'Arrow' },
                 { id: 'ray', icon: Icons.RayIcon, label: 'Ray' },
-                { id: 'extended_line', icon: Icons.ExtendedLineIcon, label: 'Extended Line' },
-                { id: 'horizontal_ray', icon: Icons.HorizontalRayIcon, label: 'Horizontal Ray' },
                 { id: 'horizontal', icon: Icons.HorizontalLineIcon, label: 'Horizontal Line' },
                 { id: 'vertical', icon: Icons.VerticalLineIcon, label: 'Vertical Line' },
-                { id: 'cross_line', icon: Icons.CrossLineIcon, label: 'Cross Line' },
                 { id: 'parallel_channel', icon: Icons.ParallelChannelIcon, label: 'Parallel Channel' }
             ]
         },
         {
             id: 'fib_group',
             items: [
-                { id: 'fibonacci', icon: Icons.FibRetracementIcon, label: 'Fib Retracement' },
-                { id: 'fib_extension', icon: Icons.FibExtensionIcon, label: 'Trend-Based Fib Extension' }
+                { id: 'fibonacci', icon: Icons.FibRetracementIcon, label: 'Fib Retracement' }
             ]
         },
         {
             id: 'shapes_group',
             items: [
                 { id: 'brush', icon: Icons.BrushIcon, label: 'Brush' },
-                { id: 'highlighter', icon: Icons.HighlighterIcon, label: 'Highlighter' },
-                { id: 'rectangle', icon: Icons.RectangleIcon, label: 'Rectangle' },
-                { id: 'circle', icon: Icons.CircleIcon, label: 'Circle' },
-                { id: 'triangle', icon: Icons.TriangleIcon, label: 'Triangle' },
-                { id: 'arc', icon: Icons.ArcIcon, label: 'Arc' },
-                { id: 'path', icon: Icons.PathIcon, label: 'Path' }
+                { id: 'rectangle', icon: Icons.RectangleIcon, label: 'Rectangle' }
             ]
         },
         {
             id: 'text_group',
             items: [
                 { id: 'text', icon: Icons.TextIcon, label: 'Text' },
-                { id: 'callout', icon: Icons.CalloutIcon, label: 'Callout' },
-                { id: 'price_label', icon: Icons.TextIcon, label: 'Price Label' }
-            ]
-        },
-        {
-            id: 'patterns_group',
-            items: [
-                { id: 'elliott_impulse', icon: Icons.ElliottWaveIcon, label: 'Elliott Impulse Wave (12345)' },
-                { id: 'elliott_correction', icon: Icons.ElliottCorrectionIcon, label: 'Elliott Correction Wave (ABC)' },
-                { id: 'head_and_shoulders', icon: Icons.ElliottWaveIcon, label: 'Head & Shoulders' }
+                { id: 'callout', icon: Icons.CalloutIcon, label: 'Callout' }
             ]
         },
         {
@@ -102,7 +83,6 @@ const DrawingToolbar: React.FC<DrawingToolbarProps> = ({
             items: [
                 { id: 'prediction', icon: Icons.LongPositionIcon, label: 'Long Position' },
                 { id: 'prediction_short', icon: Icons.ShortPositionIcon, label: 'Short Position' },
-                { id: 'date_range', icon: Icons.DateRangeIcon, label: 'Date Range' },
                 { id: 'price_range', icon: Icons.PriceRangeIcon, label: 'Price Range' },
                 { id: 'date_price_range', icon: Icons.DatePriceRangeIcon, label: 'Date & Price Range' }
             ]
@@ -334,7 +314,7 @@ const DrawingToolbar: React.FC<DrawingToolbarProps> = ({
                             </div>
                         )}
                         {/* Separators between specific groups */}
-                        {(index === 0 || index === 1 || index === 2 || index === 3 || index === 4 || index === 5 || index === 6 || index === 8 || index === 11) && (
+                        {(index === 0 || index === 1 || index === 2 || index === 3 || index === 4 || index === 5 || index === 7 || index === 10) && (
                             <div className={styles.separator} />
                         )}
                     </React.Fragment>

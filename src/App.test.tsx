@@ -4,7 +4,6 @@ import App from './App';
 import { UserProvider } from './context/UserContext';
 import { ThemeProvider } from './context/ThemeContext';
 import { UIProvider } from './context/UIContext';
-import { AlertProvider } from './context/AlertContext';
 
 // Mock child components to isolate App testing
 vi.mock('./components/Layout/Layout', () => ({
@@ -34,9 +33,7 @@ describe('App Component', () => {
             <UserProvider>
                 <ThemeProvider>
                     <UIProvider>
-                        <AlertProvider>
-                            <App />
-                        </AlertProvider>
+                        <App />
                     </UIProvider>
                 </ThemeProvider>
             </UserProvider>

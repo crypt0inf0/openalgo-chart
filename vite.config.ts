@@ -6,7 +6,10 @@ import { fileURLToPath } from 'url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 // https://vite.dev/config/
-export default defineConfig({
+export default defineConfig(({ command }) => ({
+  // In production the app is served at /chart/ by Flask.
+  // In dev the Vite server runs at the root so proxying works normally.
+  base: command === 'build' ? '/chart/' : '/',
   plugins: [react()],
   resolve: {
     alias: {
@@ -40,4 +43,4 @@ export default defineConfig({
       },
     },
   },
-});
+}));

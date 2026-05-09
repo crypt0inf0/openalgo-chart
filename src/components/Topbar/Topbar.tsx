@@ -7,7 +7,7 @@ import { getIntervals } from '../../services/openalgo';
 import { logger } from '../../utils/logger';
 import Tooltip from '../Tooltip/Tooltip';
 import {
-    Plus, Star, Trash2, X, AlertCircle, Loader2, Layout as LayoutIcon, BarChart3, Bookmark
+    Plus, Star, Trash2, X
 } from 'lucide-react';
 
 interface ChartType {
@@ -25,11 +25,6 @@ interface Timeframe {
 interface CustomInterval {
     label: string;
     value: string;
-}
-
-interface StrategyConfig {
-    displayName: string;
-    [key: string]: unknown;
 }
 
 interface DropdownPosition {
@@ -72,21 +67,12 @@ export interface TopbarProps {
     layout?: string;
     onLayoutChange?: (layout: string) => void;
     onSaveLayout?: () => void;
-    onAlertClick?: () => void;
-    onIndicatorAlertClick?: () => void;
     onCompareClick?: () => void;
     onReplayClick?: () => void;
     isReplayMode?: boolean;
     onSettingsClick?: () => void;
-    onTemplatesClick?: () => void;
-    onChartTemplatesClick?: () => void;
-    onStraddleClick?: () => void;
-    strategyConfig?: StrategyConfig | null;
     onOptionsClick?: () => void;
-    onHeatmapClick?: () => void;
     onAddIndicator?: (indicator: string) => void;
-    onPineEditorClick?: () => void;
-    isPineEditorOpen?: boolean;
 }
 
 const Topbar: React.FC<TopbarProps> = ({
@@ -96,11 +82,9 @@ const Topbar: React.FC<TopbarProps> = ({
     onToggleFavorite, onAddCustomInterval, onRemoveCustomInterval,
     onUndo, onRedo, onMenuClick, theme, onToggleTheme,
     onDownloadImage, onCopyImage, onFullScreen,
-    layout, onLayoutChange, onSaveLayout, onAlertClick, onIndicatorAlertClick, onCompareClick, onReplayClick,
-    isReplayMode = false, onSettingsClick, onTemplatesClick, onChartTemplatesClick,
-    onStraddleClick, strategyConfig = null,
-    onOptionsClick, onHeatmapClick, onAddIndicator,
-    onPineEditorClick, isPineEditorOpen = false
+    layout, onLayoutChange, onSaveLayout, onCompareClick, onReplayClick,
+    isReplayMode = false, onSettingsClick,
+    onOptionsClick, onAddIndicator,
 }) => {
 
     const [showIndicators, setShowIndicators] = useState(false);
@@ -487,23 +471,6 @@ const Topbar: React.FC<TopbarProps> = ({
                                                         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 28 28" width="28" height="28"><path fill="currentColor" d="M13.5 6a8.5 8.5 0 1 0 0 17 8.5 8.5 0 0 0 0-17zM4 14.5a9.5 9.5 0 1 1 19 0 9.5 9.5 0 0 1-19 0z"></path><path fill="currentColor" d="M9 14h4v-4h1v4h4v1h-4v4h-1v-4H9v-1z"></path></svg>
                                                     </div>
                                                 </button>
-                                                {/* Strategy Chart Button */}
-                                                <Tooltip content={strategyConfig ? strategyConfig.displayName : "Create Option Strategy Chart"} position="bottom">
-                                                    <button
-                                                        className={classNames(styles.button, styles.iconButton, { [styles.isActive]: !!strategyConfig })}
-                                                        aria-label="Option Strategy Chart"
-                                                        onClick={onStraddleClick}
-                                                    >
-                                                        <div className={styles.icon}>
-                                                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                                                <path d="M3 17l6-6 4 4 8-8" />
-                                                                <path d="M17 7h4v4" />
-                                                                <path d="M3 7l6 6 4-4 8 8" />
-                                                                <path d="M17 17h4v-4" />
-                                                            </svg>
-                                                        </div>
-                                                    </button>
-                                                </Tooltip>
                                             </div>
 
                                             {/* Timeframes - abbreviated for space */}
@@ -727,47 +694,11 @@ const Topbar: React.FC<TopbarProps> = ({
                                                         </div>
                                                     )}
                                                 </div>
-                                                {/* Pine Script Editor */}
-                                                <Tooltip content="Pine Script Editor" position="bottom">
-                                                    <button
-                                                        className={classNames(styles.button, { [styles.isActive]: isPineEditorOpen })}
-                                                        aria-label="Pine Script Editor"
-                                                        onClick={onPineEditorClick}
-                                                    >
-                                                        <div className={styles.icon}>
-                                                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 28 28" width="28" height="28" fill="none">
-                                                                <path stroke="currentColor" strokeWidth="1" d="M6 7h16M6 12h12M6 17h14M6 22h10" />
-                                                                <path stroke="currentColor" strokeWidth="1.5" d="M20 15l4 4-4 4" />
-                                                            </svg>
-                                                        </div>
-                                                        <div className={styles.text}>Pine</div>
-                                                    </button>
-                                                </Tooltip>
                                             </div>
 
-                                            {/* Alert buttons */}
+                                            {/* Replay and Options buttons */}
                                             <div className={styles.separatorWrap}><div className={styles.separator}></div></div>
                                             <div className={styles.group}>
-                                                <button className={classNames(styles.button)} aria-label="Create Alert" onClick={onAlertClick}>
-                                                    <div className={styles.icon}>
-                                                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 28 28" width="28" height="28"><path fill="currentColor" d="m19.54 4.5 3.96 4.32-.74.68-3.96-4.32.74-.68ZM7.46 4.5 3.5 8.82l.74.68L8.2 5.18l-.74-.68ZM19.74 10.33A7.5 7.5 0 0 1 21 14.5v.5h1v-.5a8.5 8.5 0 1 0-8.5 8.5h.5v-1h-.5a7.5 7.5 0 1 1 6.24-11.67Z"></path><path fill="currentColor" d="M13 9v5h-3v1h4V9h-1ZM19 20v-4h1v4h4v1h-4v4h-1v-4h-4v-1h4Z"></path></svg>
-                                                    </div>
-                                                    <div className={styles.text}>Alert</div>
-                                                </button>
-                                                <Tooltip content="Create Indicator Alert" position="bottom">
-                                                    <button
-                                                        className={classNames(styles.button)}
-                                                        aria-label="Create Indicator Alert"
-                                                        onClick={onIndicatorAlertClick}
-                                                    >
-                                                        <div className={styles.icon}>
-                                                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 28 28" width="28" height="28" fill="none">
-                                                                <path stroke="currentColor" d="M20 17l-5 5M15 17l5 5M9 11.5h7M17.5 8a2.5 2.5 0 0 0-5 0v11a2.5 2.5 0 0 1-5 0"></path>
-                                                            </svg>
-                                                        </div>
-                                                        <div className={styles.text}>Indicator Alert</div>
-                                                    </button>
-                                                </Tooltip>
                                                 <button className={classNames(styles.button, { [styles.isActive]: isReplayMode })} aria-label="Bar Replay" onClick={onReplayClick}>
                                                     <div className={styles.icon}>
                                                         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 28 28" width="28" height="28"><path fill="none" stroke="currentColor" d="M13.5 20V9l-6 5.5 6 5.5zM21.5 20V9l-6 5.5 6 5.5z"></path></svg>
@@ -780,14 +711,6 @@ const Topbar: React.FC<TopbarProps> = ({
                                                     </div>
                                                     <div className={styles.text}>Options</div>
                                                 </button>
-                                                <Tooltip content="Sector Heatmap" position="bottom">
-                                                    <button className={styles.button} aria-label="Sector Heatmap" onClick={onHeatmapClick}>
-                                                        <div className={styles.icon}>
-                                                            <BarChart3 size={20} strokeWidth={1.5} />
-                                                        </div>
-                                                        <div className={styles.text}>Heatmap</div>
-                                                    </button>
-                                                </Tooltip>
                                             </div>
 
                                             {/* Undo / Redo */}
@@ -851,20 +774,6 @@ const Topbar: React.FC<TopbarProps> = ({
                                                 <button className={classNames(styles.button)} aria-label="Save" onClick={onSaveLayout}>
                                                     <div className={styles.text}>Save</div>
                                                 </button>
-                                                <Tooltip content="Layout Templates" position="bottom">
-                                                    <button className={classNames(styles.button, styles.iconButton)} aria-label="Templates" onClick={onTemplatesClick}>
-                                                        <div className={styles.icon}>
-                                                            <LayoutIcon size={20} strokeWidth={1.5} />
-                                                        </div>
-                                                    </button>
-                                                </Tooltip>
-                                                <Tooltip content="Indicator Templates" position="bottom">
-                                                    <button className={classNames(styles.button, styles.iconButton)} aria-label="Indicator Templates" onClick={onChartTemplatesClick}>
-                                                        <div className={styles.icon}>
-                                                            <Bookmark size={20} strokeWidth={1.5} />
-                                                        </div>
-                                                    </button>
-                                                </Tooltip>
 
                                                 <div className={styles.separatorWrap}><div className={styles.separator}></div></div>
 

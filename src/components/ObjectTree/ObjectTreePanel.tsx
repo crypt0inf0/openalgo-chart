@@ -9,9 +9,7 @@ import {
     TrendingUp,
     Minus,
     Square,
-    Circle,
     Type,
-    Triangle,
     PenTool,
     ArrowUpRight,
     BarChart3,
@@ -35,18 +33,11 @@ const DRAWING_ICONS: Record<string, IconComponent> = {
     HorizontalLine: Minus,
     VerticalLine: BarChart3,
     Ray: ArrowUpRight,
-    ExtendedLine: Minus,
-    HorizontalRay: ArrowUpRight,
     Rectangle: Square,
-    Circle: Circle,
-    Triangle: Triangle,
     Polyline: PenTool,
     Text: Type,
-    PriceLabel: Type,
     Callout: Type,
-    Arrow: ArrowUpRight,
     FibRetracement: Activity,
-    FibExtension: Activity,
     default: PenTool
 };
 

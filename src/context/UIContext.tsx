@@ -20,7 +20,7 @@ import {
 export type SearchMode = 'switch' | 'add' | 'compare';
 
 /** Right panel type */
-export type RightPanelType = 'watchlist' | 'orders' | 'positions' | 'alerts' | string;
+export type RightPanelType = 'watchlist' | 'objectTree' | 'dom' | 'trade' | string;
 
 /** UI context value */
 export interface UIContextValue {
@@ -38,31 +38,17 @@ export interface UIContextValue {
   setIsCommandPaletteOpen: Dispatch<SetStateAction<boolean>>;
 
   // Dialogs
-  isTemplateDialogOpen: boolean;
-  setIsTemplateDialogOpen: Dispatch<SetStateAction<boolean>>;
   isShortcutsDialogOpen: boolean;
   setIsShortcutsDialogOpen: Dispatch<SetStateAction<boolean>>;
-  isChartTemplatesOpen: boolean;
-  setIsChartTemplatesOpen: Dispatch<SetStateAction<boolean>>;
   isSettingsOpen: boolean;
   setIsSettingsOpen: Dispatch<SetStateAction<boolean>>;
 
   // Options
-  isStraddlePickerOpen: boolean;
-  setIsStraddlePickerOpen: Dispatch<SetStateAction<boolean>>;
   isOptionChainOpen: boolean;
   setIsOptionChainOpen: Dispatch<SetStateAction<boolean>>;
   optionChainInitialSymbol: string | null;
   setOptionChainInitialSymbol: Dispatch<SetStateAction<string | null>>;
   openOptionChain: (symbol?: string | null) => void;
-
-  // Alert
-  isAlertOpen: boolean;
-  setIsAlertOpen: Dispatch<SetStateAction<boolean>>;
-
-  // Sector heatmap
-  isSectorHeatmapOpen: boolean;
-  setIsSectorHeatmapOpen: Dispatch<SetStateAction<boolean>>;
 
   // Indicator settings
   isIndicatorSettingsOpen: boolean;
@@ -104,21 +90,12 @@ export function UIProvider({ children }: UIProviderProps) {
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
 
   // Dialogs
-  const [isTemplateDialogOpen, setIsTemplateDialogOpen] = useState(false);
   const [isShortcutsDialogOpen, setIsShortcutsDialogOpen] = useState(false);
-  const [isChartTemplatesOpen, setIsChartTemplatesOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
   // Options related
-  const [isStraddlePickerOpen, setIsStraddlePickerOpen] = useState(false);
   const [isOptionChainOpen, setIsOptionChainOpen] = useState(false);
   const [optionChainInitialSymbol, setOptionChainInitialSymbol] = useState<string | null>(null);
-
-  // Alert dialog
-  const [isAlertOpen, setIsAlertOpen] = useState(false);
-
-  // Sector heatmap
-  const [isSectorHeatmapOpen, setIsSectorHeatmapOpen] = useState(false);
 
   // Indicator settings
   const [isIndicatorSettingsOpen, setIsIndicatorSettingsOpen] = useState(false);
@@ -146,14 +123,9 @@ export function UIProvider({ children }: UIProviderProps) {
   const closeAllModals = useCallback(() => {
     setIsSearchOpen(false);
     setIsCommandPaletteOpen(false);
-    setIsTemplateDialogOpen(false);
     setIsShortcutsDialogOpen(false);
-    setIsChartTemplatesOpen(false);
     setIsSettingsOpen(false);
-    setIsStraddlePickerOpen(false);
     setIsOptionChainOpen(false);
-    setIsAlertOpen(false);
-    setIsSectorHeatmapOpen(false);
     setIsIndicatorSettingsOpen(false);
   }, []);
 
@@ -172,32 +144,12 @@ export function UIProvider({ children }: UIProviderProps) {
       setIsSearchOpen(false);
       return true;
     }
-    if (isAlertOpen) {
-      setIsAlertOpen(false);
-      return true;
-    }
     if (isSettingsOpen) {
       setIsSettingsOpen(false);
       return true;
     }
-    if (isTemplateDialogOpen) {
-      setIsTemplateDialogOpen(false);
-      return true;
-    }
-    if (isChartTemplatesOpen) {
-      setIsChartTemplatesOpen(false);
-      return true;
-    }
-    if (isStraddlePickerOpen) {
-      setIsStraddlePickerOpen(false);
-      return true;
-    }
     if (isOptionChainOpen) {
       setIsOptionChainOpen(false);
-      return true;
-    }
-    if (isSectorHeatmapOpen) {
-      setIsSectorHeatmapOpen(false);
       return true;
     }
     if (isIndicatorSettingsOpen) {
@@ -209,13 +161,8 @@ export function UIProvider({ children }: UIProviderProps) {
     isShortcutsDialogOpen,
     isCommandPaletteOpen,
     isSearchOpen,
-    isAlertOpen,
     isSettingsOpen,
-    isTemplateDialogOpen,
-    isChartTemplatesOpen,
-    isStraddlePickerOpen,
     isOptionChainOpen,
-    isSectorHeatmapOpen,
     isIndicatorSettingsOpen,
   ]);
 
@@ -223,14 +170,9 @@ export function UIProvider({ children }: UIProviderProps) {
   const hasOpenModal =
     isSearchOpen ||
     isCommandPaletteOpen ||
-    isTemplateDialogOpen ||
     isShortcutsDialogOpen ||
-    isChartTemplatesOpen ||
     isSettingsOpen ||
-    isStraddlePickerOpen ||
     isOptionChainOpen ||
-    isAlertOpen ||
-    isSectorHeatmapOpen ||
     isIndicatorSettingsOpen;
 
   // Memoize context value to prevent unnecessary re-renders of consumers
@@ -249,31 +191,17 @@ export function UIProvider({ children }: UIProviderProps) {
     setIsCommandPaletteOpen,
 
     // Dialogs
-    isTemplateDialogOpen,
-    setIsTemplateDialogOpen,
     isShortcutsDialogOpen,
     setIsShortcutsDialogOpen,
-    isChartTemplatesOpen,
-    setIsChartTemplatesOpen,
     isSettingsOpen,
     setIsSettingsOpen,
 
     // Options
-    isStraddlePickerOpen,
-    setIsStraddlePickerOpen,
     isOptionChainOpen,
     setIsOptionChainOpen,
     optionChainInitialSymbol,
     setOptionChainInitialSymbol,
     openOptionChain,
-
-    // Alert
-    isAlertOpen,
-    setIsAlertOpen,
-
-    // Sector heatmap
-    isSectorHeatmapOpen,
-    setIsSectorHeatmapOpen,
 
     // Indicator settings
     isIndicatorSettingsOpen,
@@ -294,10 +222,8 @@ export function UIProvider({ children }: UIProviderProps) {
   }), [
     isSearchOpen, searchMode, initialSearchValue, openSearch,
     isCommandPaletteOpen,
-    isTemplateDialogOpen, isShortcutsDialogOpen, isChartTemplatesOpen, isSettingsOpen,
-    isStraddlePickerOpen, isOptionChainOpen, optionChainInitialSymbol, openOptionChain,
-    isAlertOpen,
-    isSectorHeatmapOpen,
+    isShortcutsDialogOpen, isSettingsOpen,
+    isOptionChainOpen, optionChainInitialSymbol, openOptionChain,
     isIndicatorSettingsOpen,
     showDrawingToolbar,
     activeRightPanel,

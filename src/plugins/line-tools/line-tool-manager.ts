@@ -9,37 +9,25 @@ import { PluginBase } from '../plugin-base';
 
 import { TrendLine } from './tools/trend-line';
 import { HorizontalLine } from './tools/horizontal-line/horizontal-line';
-import { HorizontalRay } from './tools/horizontal-ray';
 import { VerticalLine } from './tools/vertical-line';
 import { Rectangle } from './tools/rectangle';
 import { Text } from './tools/text';
 import { ParallelChannel } from './tools/parallel-channel';
 import { FibRetracement } from './tools/fib-retracement';
-import { Triangle } from './tools/triangle';
 import { Polyline, PolylinePresets, LogicalPoint, Path } from './tools/polyline';
 import { Callout } from './tools/callout';
-import { CrossLine } from './tools/cross-line';
-import { Circle } from './tools/circle';
 import { PriceRange } from './tools/price-range';
 import { LongPosition } from './tools/long-position';
 import { ShortPosition } from './tools/short-position';
-import { ElliottImpulseWave } from './tools/elliott-impulse-wave';
-import { ElliottCorrectionWave } from './tools/elliott-correction-wave';
-import { DateRange } from './tools/date-range';
-import { FibExtension } from './tools/fib-extension';
 import { FloatingToolbar } from './floating-toolbar';
 import { SessionHighlighting } from './tools/session-highlighting';
-import { UserPriceAlerts } from './tools/user-price-alerts/user-price-alerts';
-import { AlertNotification } from './tools/user-price-alerts/alert-notification';
 import { ChartControls } from './chart-controls';
-import { PriceLabel } from './tools/price-label';
 import { DatePriceRange } from './tools/date-price-range';
 import { Measure } from './tools/measure';
-import { HeadAndShoulders } from './tools/head-and-shoulders';
 import { HistoryManager, ToolState, extractToolState, applyToolState } from './history-manager';
 import { TextInputDialog } from './text-input-dialog';
 
-export type ToolType = 'TrendLine' | 'HorizontalLine' | 'VerticalLine' | 'Rectangle' | 'Text' | 'ParallelChannel' | 'FibRetracement' | 'Triangle' | 'Brush' | 'Callout' | 'CrossLine' | 'Circle' | 'Highlighter' | 'Path' | 'Arrow' | 'Ray' | 'ExtendedLine' | 'HorizontalRay' | 'PriceRange' | 'LongPosition' | 'ShortPosition' | 'ElliottImpulseWave' | 'ElliottCorrectionWave' | 'DateRange' | 'FibExtension' | 'UserPriceAlerts' | 'Eraser' | 'PriceLabel' | 'DatePriceRange' | 'Measure' | 'HeadAndShoulders' | 'None';
+export type ToolType = 'TrendLine' | 'HorizontalLine' | 'VerticalLine' | 'Rectangle' | 'Text' | 'ParallelChannel' | 'FibRetracement' | 'Brush' | 'Path' | 'Callout' | 'Ray' | 'PriceRange' | 'LongPosition' | 'ShortPosition' | 'Eraser' | 'DatePriceRange' | 'Measure' | 'None';
 
 /**
  * State information for an active drag operation
@@ -56,7 +44,7 @@ interface DragState {
 export class LineToolManager extends PluginBase {
     public onToolCompleted: ((tool?: string) => void) | null = null;
     private _activeToolType: ToolType = 'None';
-    private _activeTool: TrendLine | HorizontalLine | VerticalLine | Rectangle | Text | ParallelChannel | FibRetracement | Triangle | Polyline | Callout | CrossLine | Circle | Path | PriceRange | LongPosition | ShortPosition | ElliottImpulseWave | ElliottCorrectionWave | DateRange | FibExtension | HorizontalRay | PriceLabel | DatePriceRange | Measure | HeadAndShoulders | null = null;
+    private _activeTool: TrendLine | HorizontalLine | VerticalLine | Rectangle | Text | ParallelChannel | FibRetracement | Polyline | Callout | Path | PriceRange | LongPosition | ShortPosition | DatePriceRange | Measure | null = null;
     private _points: LogicalPoint[] = [];
     private _tools: any[] = []; // Store all created tools
     private _toolOptions: Map<ToolType, any> = new Map(); // Store default options for each tool type
@@ -76,8 +64,6 @@ export class LineToolManager extends PluginBase {
     // Context menu handler reference (ML-8)
     private _contextMenuHandler: ((e: MouseEvent) => void) | null = null;
 
-    private _userPriceAlerts: UserPriceAlerts | null = null;
-    private _alertNotifications: AlertNotification | null = null;
     private _toolbar: FloatingToolbar | null = null;
     private _chartControls: ChartControls | null = null;
     private _textInputDialog: TextInputDialog = new TextInputDialog();
@@ -85,9 +71,6 @@ export class LineToolManager extends PluginBase {
     // Undo/Redo history manager
     private _historyManager: HistoryManager = new HistoryManager();
     private _dragPrevState: ToolState | null = null;  // State before drag starts
-
-    // Alert subscription tracking (ML-1)
-    private _alertSubscription: any = null;
 
     // Double-click detection for text editing
     private _lastClickedTool: any = null;
@@ -110,9 +93,6 @@ export class LineToolManager extends PluginBase {
 
     // Callback for when drawings change (for auto-save)
     private _onDrawingsChanged: (() => void) | null = null;
-
-    // Current symbol name for alerts
-    private _symbolName: string = '';
 
     // Track shift key for 45-degree angle snapping
     private _shiftPressed: boolean = false;
@@ -177,12 +157,9 @@ export class LineToolManager extends PluginBase {
 
         const tools: ToolType[] = [
             'TrendLine', 'HorizontalLine', 'VerticalLine', 'Rectangle', 'Text',
-            'ParallelChannel', 'FibRetracement', 'Triangle', 'Brush', 'Callout',
-            'CrossLine', 'Circle', 'Highlighter', 'Path', 'Arrow', 'Ray',
-            'ExtendedLine', 'HorizontalRay', 'PriceRange', 'LongPosition',
-            'ShortPosition', 'ElliottImpulseWave', 'ElliottCorrectionWave',
-            'DateRange', 'FibExtension', 'UserPriceAlerts', 'Eraser', 'PriceLabel',
-            'DatePriceRange', 'Measure', 'HeadAndShoulders'
+            'ParallelChannel', 'FibRetracement', 'Brush', 'Callout', 'Ray',
+            'PriceRange', 'LongPosition', 'ShortPosition', 'Eraser',
+            'DatePriceRange', 'Measure'
         ];
 
         tools.forEach(type => {
@@ -211,32 +188,6 @@ export class LineToolManager extends PluginBase {
         // Global keydown for undo/redo and other keyboard shortcuts
         window.addEventListener('keydown', this._keyDownHandler);
 
-        // Initialize UserPriceAlerts and AlertNotification
-        this._userPriceAlerts = new UserPriceAlerts();
-        this.series.attachPrimitive(this._userPriceAlerts);
-
-        this._alertNotifications = new AlertNotification(this);
-        this._alertSubscription = this._userPriceAlerts!.alertTriggered().subscribe((crossing) => {
-            this._alertNotifications?.show({
-                alertId: crossing.alertId,
-                symbol: crossing.symbol || this._symbolName || 'Unknown',
-                exchange: crossing.exchange,
-                price: this.series.priceFormatter().format(crossing.alertPrice),
-                numericPrice: crossing.alertPrice,
-                closePrice: crossing.closePrice,
-                timestamp: crossing.timestamp,
-                direction: crossing.direction,
-                condition: crossing.condition,
-                notificationSettings: crossing.notifications,
-                onEdit: (data) => {
-                    this._userPriceAlerts?.openEditDialog(data.alertId, {
-                        price: parseFloat(data.price),
-                        condition: data.condition
-                    });
-                }
-            });
-        }, this);
-
         this._toolbar = new FloatingToolbar(this);
 
         // Initialize Chart Controls
@@ -262,12 +213,6 @@ export class LineToolManager extends PluginBase {
             }
         }
 
-        // Unsubscribe from alerts (ML-1)
-        if (this._alertSubscription) {
-            this._alertSubscription.unsubscribe(this);
-            this._alertSubscription = null;
-        }
-
         // Detach all tools
         this._tools.forEach(tool => {
             try {
@@ -276,11 +221,6 @@ export class LineToolManager extends PluginBase {
                 console.error('Error detaching tool:', error);
             }
         });
-
-        if (this._userPriceAlerts) {
-            this.series.detachPrimitive(this._userPriceAlerts);
-            this._userPriceAlerts = null;
-        }
 
         // Remove chart controls
         if (this._chartControls) {
@@ -292,12 +232,6 @@ export class LineToolManager extends PluginBase {
         if (this._toolbar) {
             this._toolbar.destroy();
             this._toolbar = null;
-        }
-
-        // Cleanup alert notifications (ML-5)
-        if (this._alertNotifications) {
-            this._alertNotifications.destroy();
-            this._alertNotifications = null;
         }
 
         // Cleanup text input dialog
@@ -354,7 +288,7 @@ export class LineToolManager extends PluginBase {
         }
 
         // Disable chart panning for drawing tools
-        if (toolType === 'Brush' || toolType === 'Highlighter' || toolType === 'Triangle' || toolType === 'TrendLine' || toolType === 'HorizontalLine' || toolType === 'VerticalLine' || toolType === 'Rectangle' || toolType === 'Circle' || toolType === 'CrossLine' || toolType === 'Path' || toolType === 'Arrow' || toolType === 'Ray' || toolType === 'ExtendedLine' || toolType === 'HorizontalRay' || toolType === 'PriceRange' || toolType === 'LongPosition' || toolType === 'ShortPosition' || toolType === 'ElliottImpulseWave' || toolType === 'ElliottCorrectionWave' || toolType === 'DateRange' || toolType === 'FibExtension' || toolType === 'UserPriceAlerts' || toolType === 'Eraser' || toolType === 'PriceLabel' || toolType === 'Measure') {
+        if (toolType === 'Brush' || toolType === 'TrendLine' || toolType === 'HorizontalLine' || toolType === 'VerticalLine' || toolType === 'Rectangle' || toolType === 'Path' || toolType === 'Ray' || toolType === 'PriceRange' || toolType === 'LongPosition' || toolType === 'ShortPosition' || toolType === 'Eraser' || toolType === 'Measure') {
             this._setChartInteraction(false);
         } else {
             // Re-enable panning for other tools
@@ -517,32 +451,6 @@ export class LineToolManager extends PluginBase {
         this.requestUpdate();
     }
 
-    public createAlertForTool(tool: any): void {
-        if (this.toolSupportsAlerts(tool)) {
-            this._userPriceAlerts?.openToolAlertDialog(tool);
-        } else {
-            console.warn('Alerts not supported for this tool type yet');
-        }
-    }
-
-    public toolSupportsAlerts(tool: any): boolean {
-        return tool instanceof TrendLine ||
-            tool instanceof HorizontalLine ||
-            tool instanceof HorizontalRay ||
-            tool instanceof VerticalLine ||
-            tool instanceof Rectangle ||
-            tool instanceof ParallelChannel;
-    }
-
-    /**
-     * Open edit dialog for an alert by its ID
-     * Used when clicking Edit button in Alerts panel
-     */
-    public editAlertById(alertId: string): void {
-        if (this._userPriceAlerts) {
-            this._userPriceAlerts.openEditDialog(alertId);
-        }
-    }
 
     public enableSessionHighlighting(): void {
         console.log('[LineToolManager] enableSessionHighlighting called');
@@ -593,17 +501,6 @@ export class LineToolManager extends PluginBase {
 
     public setDefaultRange(range: { from: number, to: number }): void {
         this._chartControls?.setDefaultRange(range);
-    }
-
-    /**
-     * Set the symbol name and exchange for alerts
-     * @param name The symbol name (e.g., 'RELIANCE', 'NIFTY')
-     * @param exchange The exchange code (e.g., 'NSE', 'NFO')
-     */
-    public setSymbolName(name: string, exchange?: string): void {
-        this._symbolName = name;
-        // Also update the UserPriceAlerts with the symbol name and exchange
-        this._userPriceAlerts?.setSymbolName(name, exchange);
     }
 
     /**
@@ -857,11 +754,6 @@ export class LineToolManager extends PluginBase {
                 this._historyManager.recordDelete(tool, toolType);
             }
 
-            // Check if tool has an associated alert and remove it
-            if (tool instanceof TrendLine && tool._alertId) {
-                this._userPriceAlerts?.removeAlert(tool._alertId);
-            }
-
             this.series.detachPrimitive(tool);
             this._tools.splice(index, 1);
             this.requestUpdate(); // Use requestUpdate instead of applyOptions to avoid chart movement
@@ -1005,26 +897,12 @@ export class LineToolManager extends PluginBase {
                 return new VerticalLine(this.chart, this.series, p(0).logical as Logical, opts);
             case 'Rectangle':
                 return new Rectangle(this.chart, this.series, p(0), p(1), opts);
-            case 'Circle':
-                return new Circle(this.chart, this.series, p(0), p(1), opts);
-            case 'Triangle':
-                return new Triangle(this.chart, this.series, p(0), p(1), p(2), opts);
             case 'ParallelChannel':
                 return new ParallelChannel(this.chart, this.series, p(0), p(1), p(2), opts);
             case 'FibRetracement':
                 return new FibRetracement(this.chart, this.series, p(0), p(1), opts);
-            case 'FibExtension':
-                return new FibExtension(this.chart, this.series, p(0), p(1), p(2), opts);
-            case 'Arrow':
-                return new TrendLine(this.chart, this.series, p(0), p(1), { ...opts, showArrow: true });
             case 'Ray':
                 return new TrendLine(this.chart, this.series, p(0), p(1), { ...opts, extend: { left: false, right: true } });
-            case 'HorizontalRay':
-                return new HorizontalRay(this.chart, this.series, p(0), opts);
-            case 'ExtendedLine':
-                return new TrendLine(this.chart, this.series, p(0), p(1), { ...opts, extend: { left: true, right: true } });
-            case 'CrossLine':
-                return new CrossLine(this.chart, this.series, p(0), opts);
             case 'Text':
                 return new Text(this.chart, this.series, p(0), state.options?.text || 'Text', opts);
             case 'Callout':
@@ -1033,18 +911,12 @@ export class LineToolManager extends PluginBase {
                 return new Path(this.chart, this.series, points, opts);
             case 'Brush':
                 return new Polyline(this.chart, this.series, points, { ...PolylinePresets.brush, ...opts });
-            case 'Highlighter':
-                return new Polyline(this.chart, this.series, points, { ...PolylinePresets.highlighter, ...opts });
             case 'PriceRange':
                 return new PriceRange(this.chart, this.series, p(0), p(1), opts);
             case 'LongPosition':
                 return new LongPosition(this.chart, this.series, p(0), p(1), points.length >= 3 ? p(2) : undefined, opts);
             case 'ShortPosition':
                 return new ShortPosition(this.chart, this.series, p(0), p(1), points.length >= 3 ? p(2) : undefined, opts);
-            case 'DateRange':
-                return new DateRange(this.chart, this.series, p(0), p(1), opts);
-            case 'PriceLabel':
-                return new PriceLabel(this.chart, this.series, p(0), opts);
             case 'DatePriceRange':
                 return new DatePriceRange(this.chart, this.series, p(0), p(1), opts);
             default:
@@ -1191,9 +1063,7 @@ export class LineToolManager extends PluginBase {
                 if (this._shiftPressed &&
                     this._dragState.tool &&
                     (this._dragState.tool.toolType === 'TrendLine' ||
-                        this._dragState.tool.toolType === 'Ray' ||
-                        this._dragState.tool.toolType === 'ExtendedLine' ||
-                        this._dragState.tool.toolType === 'Arrow')) {
+                        this._dragState.tool.toolType === 'Ray')) {
 
                     const tool = this._dragState.tool as any;
                     // Support both _points (poly) and _p1/_p2 (legacy/simple)
@@ -1276,7 +1146,7 @@ export class LineToolManager extends PluginBase {
     private _moveToolByDelta(tool: any, deltaLogical: number, deltaPrice: number): void {
         // Check tool type and move accordingly
         if (tool._p1 && tool._p2 && !tool._p3) {
-            // Two-point tools (Rectangle, Circle, TrendLine, etc.)
+            // Two-point tools (Rectangle, TrendLine, etc.)
             tool._p1 = {
                 logical: tool._p1.logical + deltaLogical,
                 price: tool._p1.price + deltaPrice,
@@ -1287,7 +1157,7 @@ export class LineToolManager extends PluginBase {
             };
             tool.updateAllViews();
         } else if (tool._p1 && tool._p2 && tool._p3) {
-            // Three-point tools (Triangle, FibExtension)
+            // Three-point tools
             tool._p1.logical += deltaLogical;
             tool._p1.price += deltaPrice;
             tool._p2.logical += deltaLogical;
@@ -1296,7 +1166,7 @@ export class LineToolManager extends PluginBase {
             tool._p3.price += deltaPrice;
             tool.updateAllViews();
         } else if (tool._points) {
-            // Multi-point tools (Polyline, ParallelChannel, FibRetracement, ElliottImpulseWave)
+            // Multi-point tools (Polyline, ParallelChannel, FibRetracement)
             tool._points.forEach((p: LogicalPoint) => {
                 p.logical += deltaLogical;
                 p.price += deltaPrice;
@@ -1406,8 +1276,8 @@ export class LineToolManager extends PluginBase {
 
         if (!param.point) return;
 
-        // Skip for Brush/Highlighter (they use mouse drag)
-        if (this._activeToolType === 'Brush' || this._activeToolType === 'Highlighter') {
+        // Skip for Brush (uses mouse drag)
+        if (this._activeToolType === 'Brush') {
             return;
         }
 
@@ -1428,15 +1298,15 @@ export class LineToolManager extends PluginBase {
         const point: LogicalPoint = pointToPush;
         const logicalPoint: LogicalPoint = pointToPush;
 
-        if (this._activeToolType === 'TrendLine' || this._activeToolType === 'Arrow' || this._activeToolType === 'Ray' || this._activeToolType === 'ExtendedLine') {
+        if (this._activeToolType === 'TrendLine' || this._activeToolType === 'Ray') {
 
             if (this._points.length === 1) {
                 const p1 = this._points[0] as LogicalPoint;
 
                 const options: any = {
-                    rightEnd: this._activeToolType === 'Arrow' ? 1 : 0,
-                    extendRight: this._activeToolType === 'Ray' || this._activeToolType === 'ExtendedLine',
-                    extendLeft: this._activeToolType === 'ExtendedLine',
+                    extendRight: this._activeToolType === 'Ray',
+                    extendLeft: false,
+                    rightEnd: 0,
                     ...this.getToolOptions(this._activeToolType)
                 };
 
@@ -1460,33 +1330,6 @@ export class LineToolManager extends PluginBase {
                     this.onToolCompleted?.();
                 }
             }
-        } else if (this._activeToolType === 'HorizontalRay') {
-            // Finalize the horizontal ray (single click)
-            if (this._activeTool instanceof HorizontalRay) {
-                // Preview exists, finalize it
-                const p1 = this._activeTool._point;
-                this._activeTool.updatePoint(p1);
-
-                this._addTool(this._activeTool, this._activeToolType);
-                const finishedTool = this._activeTool;
-                this._activeTool = null;
-                this.chart.timeScale().applyOptions({});
-                this._selectTool(finishedTool);
-            } else {
-                // No preview (click without move)
-                const p1 = point;
-                const tool = new HorizontalRay(this.chart, this.series, p1, this.getToolOptions(this._activeToolType));
-                this.series.attachPrimitive(tool);
-                this._addTool(tool, this._activeToolType);
-                this.chart.timeScale().applyOptions({});
-                this._selectTool(tool);
-            }
-            this._points = [];
-            // Reset for immediate drag capability
-            this._activeToolType = 'None';
-            this._setChartInteraction(true);
-
-            this.onToolCompleted?.();
         } else if (this._activeToolType === 'HorizontalLine') {
             // Finalize the horizontal line
             if (this._activeTool instanceof HorizontalLine) {
@@ -1573,19 +1416,6 @@ export class LineToolManager extends PluginBase {
                     this.onToolCompleted?.();
                 }
             }
-        } else if (this._activeToolType === 'PriceLabel') {
-            const formattedPrice = this.series.priceFormatter().format(point.price);
-            const tool = new PriceLabel(this.chart, this.series, point, formattedPrice, this.getToolOptions(this._activeToolType));
-            this.series.attachPrimitive(tool);
-            this._addTool(tool, this._activeToolType);
-            this._points = [];
-            this.chart.timeScale().applyOptions({});
-            this._selectTool(tool);
-            // Reset for immediate drag capability
-            this._activeToolType = 'None';
-            this._setChartInteraction(true);
-
-            this.onToolCompleted?.();
         } else if (this._activeToolType === 'ParallelChannel') {
             if (this._points.length === 1) {
                 const p1 = this._points[0] as LogicalPoint;
@@ -1626,35 +1456,6 @@ export class LineToolManager extends PluginBase {
                     const p1 = this._points[0] as LogicalPoint;
                     const p2 = this._points[1] as LogicalPoint;
                     this._activeTool.updatePoints(p1, p2);
-                    const finishedTool = this._activeTool;
-                    this._activeTool = null;
-                    this._points = [];
-                    this._selectTool(finishedTool);
-                    // Reset for immediate drag capability
-                    this._activeToolType = 'None';
-                    this._setChartInteraction(true);
-
-                    this.onToolCompleted?.();
-                }
-            }
-        } else if (this._activeToolType === 'Triangle') {
-            if (this._points.length === 1) {
-                const p1 = this._points[0] as LogicalPoint;
-                this._activeTool = new Triangle(this.chart, this.series, p1, p1, p1, this.getToolOptions(this._activeToolType));
-                this.series.attachPrimitive(this._activeTool);
-                this._addTool(this._activeTool, this._activeToolType);
-            } else if (this._points.length === 2) {
-                if (this._activeTool instanceof Triangle) {
-                    const p1 = this._points[0] as LogicalPoint;
-                    const p2 = this._points[1] as LogicalPoint;
-                    this._activeTool.updatePoints(p1, p2, p2);
-                }
-            } else if (this._points.length === 3) {
-                if (this._activeTool instanceof Triangle) {
-                    const p1 = this._points[0] as LogicalPoint;
-                    const p2 = this._points[1] as LogicalPoint;
-                    const p3 = this._points[2] as LogicalPoint;
-                    this._activeTool.updatePoints(p1, p2, p3);
                     const finishedTool = this._activeTool;
                     this._activeTool = null;
                     this._points = [];
@@ -1741,19 +1542,6 @@ export class LineToolManager extends PluginBase {
                     this.onToolCompleted?.();
                 }
             }
-        } else if (this._activeToolType === 'CrossLine') {
-            const tool = new CrossLine(this.chart, this.series, point, this.getToolOptions(this._activeToolType));
-            this.series.attachPrimitive(tool);
-            this._addTool(tool, this._activeToolType);
-            this._points = [];
-            this.chart.timeScale().applyOptions({});
-            this._selectTool(tool);
-            // Reset for immediate drag capability
-            this._activeToolType = 'None';
-            this._setChartInteraction(true);
-
-            this.onToolCompleted?.();
-
         } else if (this._activeToolType === 'Rectangle') {
             // Store LogicalPoints for Rectangle
             if (logicalPoint) {
@@ -1794,126 +1582,6 @@ export class LineToolManager extends PluginBase {
                 this._addTool(this._activeTool, this._activeToolType);
             } else if (this._points.length === 2) {
                 if (this._activeTool instanceof PriceRange) {
-                    const p1 = this._points[0] as LogicalPoint;
-                    const p2 = this._points[1] as LogicalPoint;
-                    this._activeTool.updatePoints(p1, p2);
-                    const finishedTool = this._activeTool;
-                    this._activeTool = null;
-                    this._points = [];
-                    this._selectTool(finishedTool);
-                    // Reset for immediate drag capability
-                    this._activeToolType = 'None';
-                    this._setChartInteraction(true);
-
-                    this.onToolCompleted?.();
-                }
-            }
-        } else if (this._activeToolType === 'Circle') {
-            // Store LogicalPoints for Circle
-            if (logicalPoint) {
-                this._points[this._points.length - 1] = logicalPoint;
-            }
-
-            if (this._points.length === 1) {
-                const p1 = this._points[0] as LogicalPoint;
-                this._activeTool = new Circle(this.chart, this.series, p1, p1, this.getToolOptions(this._activeToolType));
-                this.series.attachPrimitive(this._activeTool);
-                this._addTool(this._activeTool, this._activeToolType);
-            } else if (this._points.length === 2) {
-                if (this._activeTool instanceof Circle) {
-                    const p1 = this._points[0] as LogicalPoint;
-                    const p2 = this._points[1] as LogicalPoint;
-                    this._activeTool.updatePoints(p1, p2);
-                    const finishedTool = this._activeTool;
-                    this._activeTool = null;
-                    this._points = [];
-                    this._selectTool(finishedTool);
-                    // Reset for immediate drag capability
-                    this._activeToolType = 'None';
-                    this._setChartInteraction(true);
-
-                    this.onToolCompleted?.();
-                }
-            }
-        } else if (this._activeToolType === 'ElliottImpulseWave') {
-            if (this._points.length === 1) {
-                this._activeTool = new ElliottImpulseWave(this.chart, this.series, [point], this.getToolOptions(this._activeToolType));
-                this.series.attachPrimitive(this._activeTool);
-                this._addTool(this._activeTool, this._activeToolType);
-            } else {
-                if (this._activeTool instanceof ElliottImpulseWave) {
-                    this._activeTool.addPoint(point);
-                    if (this._points.length === 6) {
-                        // Completed 5 waves (6 points: 0, 1, 2, 3, 4, 5)
-                        const finishedTool = this._activeTool;
-                        this._activeTool = null;
-                        this._points = [];
-                        this._selectTool(finishedTool);
-                        // Reset for immediate drag capability
-                        this._activeToolType = 'None';
-                        this._setChartInteraction(true);
-
-                        this.onToolCompleted?.();
-                    }
-                }
-            }
-        } else if (this._activeToolType === 'ElliottCorrectionWave') {
-            if (this._points.length === 1) {
-                this._activeTool = new ElliottCorrectionWave(this.chart, this.series, [point], this.getToolOptions(this._activeToolType));
-                this.series.attachPrimitive(this._activeTool);
-                this._addTool(this._activeTool, this._activeToolType);
-            } else {
-                if (this._activeTool instanceof ElliottCorrectionWave) {
-                    this._activeTool.addPoint(point);
-                    if (this._points.length === 4) {
-                        // Completed 3 waves (4 points: 0, A, B, C)
-                        const finishedTool = this._activeTool;
-                        this._activeTool = null;
-                        this._points = [];
-                        this._selectTool(finishedTool);
-                        // Reset for immediate drag capability
-                        this._activeToolType = 'None';
-                        this._setChartInteraction(true);
-
-                        this.onToolCompleted?.();
-                    }
-                }
-            }
-        } else if (this._activeToolType === 'HeadAndShoulders') {
-            if (this._points.length === 1) {
-                this._activeTool = new HeadAndShoulders(this.chart, this.series, [point], this.getToolOptions(this._activeToolType));
-                this.series.attachPrimitive(this._activeTool);
-                this._addTool(this._activeTool, this._activeToolType);
-            } else {
-                if (this._activeTool instanceof HeadAndShoulders) {
-                    this._activeTool.addPoint(point);
-                    if (this._points.length === 7) {
-                        // Completed 7 points pattern
-                        const finishedTool = this._activeTool;
-                        this._activeTool = null;
-                        this._points = [];
-                        this._selectTool(finishedTool);
-                        // Reset for immediate drag capability
-                        this._activeToolType = 'None';
-                        this._setChartInteraction(true);
-
-                        this.onToolCompleted?.();
-                    }
-                }
-            }
-        } else if (this._activeToolType === 'DateRange') {
-            // Store LogicalPoints for DateRange
-            if (logicalPoint) {
-                this._points[this._points.length - 1] = logicalPoint;
-            }
-
-            if (this._points.length === 1) {
-                const p1 = this._points[0] as LogicalPoint;
-                this._activeTool = new DateRange(this.chart, this.series, p1, p1, this.getToolOptions(this._activeToolType));
-                this.series.attachPrimitive(this._activeTool);
-                this._addTool(this._activeTool, this._activeToolType);
-            } else if (this._points.length === 2) {
-                if (this._activeTool instanceof DateRange) {
                     const p1 = this._points[0] as LogicalPoint;
                     const p2 = this._points[1] as LogicalPoint;
                     this._activeTool.updatePoints(p1, p2);
@@ -1976,35 +1644,6 @@ export class LineToolManager extends PluginBase {
                     this._points = [];
                     // Don't select tool (no floating toolbar for Measure)
                     finishedTool.setSelected(false);
-                }
-            }
-        } else if (this._activeToolType === 'FibExtension') {
-            if (this._points.length === 1) {
-                const p1 = this._points[0] as LogicalPoint;
-                this._activeTool = new FibExtension(this.chart, this.series, p1, p1, p1, this.getToolOptions(this._activeToolType));
-                this.series.attachPrimitive(this._activeTool);
-                this._addTool(this._activeTool, this._activeToolType);
-            } else if (this._points.length === 2) {
-                if (this._activeTool instanceof FibExtension) {
-                    const p1 = this._points[0] as LogicalPoint;
-                    const p2 = this._points[1] as LogicalPoint;
-                    this._activeTool.updatePoints(p1, p2, p2);
-                }
-            } else if (this._points.length === 3) {
-                if (this._activeTool instanceof FibExtension) {
-                    const p1 = this._points[0] as LogicalPoint;
-                    const p2 = this._points[1] as LogicalPoint;
-                    const p3 = this._points[2] as LogicalPoint;
-                    this._activeTool.updatePoints(p1, p2, p3);
-                    const finishedTool = this._activeTool;
-                    this._activeTool = null;
-                    this._points = [];
-                    this._selectTool(finishedTool);
-                    // Reset for immediate drag capability
-                    this._activeToolType = 'None';
-                    this._setChartInteraction(true);
-
-                    this.onToolCompleted?.();
                 }
             }
         } else if (this._activeToolType === 'Path') {
@@ -2108,8 +1747,8 @@ export class LineToolManager extends PluginBase {
         if (logical_move === null) return;
         const currentPoint: LogicalPoint = { logical: logical_move, price };
 
-        // Skip for Brush/Highlighter (use raw mouse handler)
-        if (this._activeToolType === 'Brush' || this._activeToolType === 'Highlighter') {
+        // Skip for Brush (uses raw mouse handler)
+        if (this._activeToolType === 'Brush') {
             return;
         }
 
@@ -2119,13 +1758,7 @@ export class LineToolManager extends PluginBase {
         } else if (this._activeToolType === 'VerticalLine' && this._activeTool instanceof VerticalLine) {
             this._activeTool.updatePosition(logical_move);
             this.chart.timeScale().applyOptions({});
-        } else if (this._activeToolType === 'CrossLine' && this._activeTool instanceof CrossLine) {
-            this._activeTool.updatePoint(currentPoint);
-            this.chart.timeScale().applyOptions({});
-        } else if (this._activeToolType === 'HorizontalRay' && this._activeTool instanceof HorizontalRay) {
-            this._activeTool.updatePoint(currentPoint);
-            this.chart.timeScale().applyOptions({});
-        } else if ((this._activeToolType === 'TrendLine' || this._activeToolType === 'Arrow' || this._activeToolType === 'Ray' || this._activeToolType === 'ExtendedLine') && this._activeTool instanceof TrendLine) {
+        } else if ((this._activeToolType === 'TrendLine' || this._activeToolType === 'Ray') && this._activeTool instanceof TrendLine) {
             // Calculate logical point for smooth preview
             const timeScale = this.chart.timeScale();
             const x = param.point.x;
@@ -2201,35 +1834,7 @@ export class LineToolManager extends PluginBase {
                 }
                 this.chart.timeScale().applyOptions({});
             }
-        } else if (this._activeToolType === 'Triangle' && this._activeTool instanceof Triangle) {
-            // Calculate logical point for smooth preview
-            const timeScale = this.chart.timeScale();
-            const x = param.point.x;
-            const logical = timeScale.coordinateToLogical(x);
-            if (logical !== null) {
-                const logicalPoint = { logical, price };
-                if (this._points.length === 1) {
-                    const p1 = this._points[0] as LogicalPoint;
-                    this._activeTool.updatePoints(p1, logicalPoint, logicalPoint);
-                } else if (this._points.length === 2) {
-                    const p1 = this._points[0] as LogicalPoint;
-                    const p2 = this._points[1] as LogicalPoint;
-                    this._activeTool.updatePoints(p1, p2, logicalPoint);
-                }
-                this.chart.timeScale().applyOptions({});
-            }
         } else if (this._activeToolType === 'PriceRange' && this._activeTool instanceof PriceRange) {
-            // Calculate logical point for smooth preview
-            const timeScale = this.chart.timeScale();
-            const x = param.point.x;
-            const logical = timeScale.coordinateToLogical(x);
-            if (logical !== null) {
-                const logicalPoint = { logical, price };
-                const p1 = this._points[0] as LogicalPoint;
-                this._activeTool.updatePoints(p1, logicalPoint);
-                this.chart.timeScale().applyOptions({});
-            }
-        } else if (this._activeToolType === 'Circle' && this._activeTool instanceof Circle) {
             // Calculate logical point for smooth preview
             const timeScale = this.chart.timeScale();
             const x = param.point.x;
@@ -2315,32 +1920,6 @@ export class LineToolManager extends PluginBase {
             const allPoints = [...this._points, currentPoint];
             this._activeTool.updatePoints(allPoints);
             this.chart.timeScale().applyOptions({});
-        } else if (this._activeToolType === 'ElliottImpulseWave' && this._activeTool instanceof ElliottImpulseWave && this._points.length >= 1) {
-            // Preview the next line segment
-            const allPoints = [...this._points, currentPoint];
-            this._activeTool.updatePoints(allPoints);
-            this.chart.timeScale().applyOptions({});
-        } else if (this._activeToolType === 'ElliottCorrectionWave' && this._activeTool instanceof ElliottCorrectionWave && this._points.length >= 1) {
-            // Preview the next line segment
-            const allPoints = [...this._points, currentPoint];
-            this._activeTool.updatePoints(allPoints);
-            this.chart.timeScale().applyOptions({});
-        } else if (this._activeToolType === 'HeadAndShoulders' && this._activeTool instanceof HeadAndShoulders && this._points.length >= 1) {
-            // Preview the next line segment
-            const allPoints = [...this._points, currentPoint];
-            this._activeTool.updatePoints(allPoints);
-            this.chart.timeScale().applyOptions({});
-        } else if (this._activeToolType === 'DateRange' && this._activeTool instanceof DateRange) {
-            // Calculate logical point for smooth preview
-            const timeScale = this.chart.timeScale();
-            const x = param.point.x;
-            const logical = timeScale.coordinateToLogical(x);
-            if (logical !== null) {
-                const logicalPoint = { logical, price };
-                const p1 = this._points[0] as LogicalPoint;
-                this._activeTool.updatePoints(p1, logicalPoint);
-                this.chart.timeScale().applyOptions({});
-            }
         } else if (this._activeToolType === 'DatePriceRange' && this._activeTool instanceof DatePriceRange) {
             // Calculate logical point for smooth preview
             const timeScale = this.chart.timeScale();
@@ -2361,21 +1940,6 @@ export class LineToolManager extends PluginBase {
                 const logicalPoint = { logical, price };
                 const p1 = this._points[0] as LogicalPoint;
                 this._activeTool.updatePoints(p1, logicalPoint);
-                this.chart.timeScale().applyOptions({});
-            }
-        } else if (this._activeToolType === 'FibExtension' && this._activeTool instanceof FibExtension) {
-            const timeScale = this.chart.timeScale();
-            const x = param.point.x;
-            const logical = timeScale.coordinateToLogical(x);
-            if (logical !== null) {
-                const logicalPoint = { logical, price };
-                const p1 = this._points[0] as LogicalPoint;
-                if (this._points.length === 1) {
-                    this._activeTool.updatePoints(p1, logicalPoint, logicalPoint);
-                } else if (this._points.length === 2) {
-                    const p2 = this._points[1] as LogicalPoint;
-                    this._activeTool.updatePoints(p1, p2, logicalPoint);
-                }
                 this.chart.timeScale().applyOptions({});
             }
         }
@@ -2446,8 +2010,8 @@ export class LineToolManager extends PluginBase {
             }
         }
 
-        // Left-click starts drawing for Brush/Highlighter/Rectangle/Circle
-        if (event.button === 0 && (this._activeToolType === 'Brush' || this._activeToolType === 'Highlighter')) {
+        // Left-click starts drawing for Brush
+        if (event.button === 0 && this._activeToolType === 'Brush') {
             event.preventDefault();
             event.stopPropagation();
             this._isDrawing = true;
@@ -2472,8 +2036,8 @@ export class LineToolManager extends PluginBase {
             // event.stopPropagation(); 
             this._isDrawing = false;
 
-            // FIX: Continuous drawing for Brush/Highlighter
-            if (this._activeToolType === 'Brush' || this._activeToolType === 'Highlighter') {
+            // FIX: Continuous drawing for Brush
+            if (this._activeToolType === 'Brush') {
                 // Stay in Brush mode:
                 // 1. Do NOT reset _activeToolType
                 // 2. Do NOT setChartInteraction(true)
@@ -2542,7 +2106,7 @@ export class LineToolManager extends PluginBase {
         }
 
         // Smooth drawing with raw coordinates
-        if (!this._isDrawing || (this._activeToolType !== 'Brush' && this._activeToolType !== 'Highlighter')) {
+        if (!this._isDrawing || this._activeToolType !== 'Brush') {
             return;
         }
 
@@ -2562,7 +2126,7 @@ export class LineToolManager extends PluginBase {
         // Use LogicalPoint for continuous coordinates
         const currentPoint: LogicalPoint = { logical, price };
 
-        // Brush/Highlighter logic
+        // Brush logic
         // Scale minDistance by horizontalPixelRatio for DPI awareness
         const scope = (this.chart as any)._impl?.model?.().rendererOptionsProvider?.().options();
         const pixelRatio = scope?.horizontalPixelRatio || window.devicePixelRatio || 1;
@@ -2581,7 +2145,7 @@ export class LineToolManager extends PluginBase {
             // Start stroke
             this._points.push(currentPoint);
             this._lastPixelPoint = { x, y };
-            const preset = this._activeToolType === 'Brush' ? PolylinePresets.brush : PolylinePresets.highlighter;
+            const preset = PolylinePresets.brush;
             const savedOptions = this.getToolOptions(this._activeToolType);
             // Merge saved options into preset
             const options = { ...preset, ...savedOptions };
@@ -2771,8 +2335,8 @@ export class LineToolManager extends PluginBase {
         for (const tool of this._tools) {
             try {
                 const toolType = (tool as any).toolType as ToolType;
-                if (!toolType || toolType === 'None' || toolType === 'UserPriceAlerts') {
-                    continue; // Skip unknown types and price alerts (handled separately)
+                if (!toolType || toolType === 'None') {
+                    continue; // Skip unknown types
                 }
 
                 const state = extractToolState(tool);
@@ -2909,7 +2473,7 @@ export class LineToolManager extends PluginBase {
         for (const tool of this._tools) {
             const toolType = (tool as any).toolType as ToolType;
             // distinct filtering logic must match exportDrawings exactly
-            if (!toolType || toolType === 'None' || toolType === 'UserPriceAlerts') {
+            if (!toolType || toolType === 'None') {
                 continue;
             }
 

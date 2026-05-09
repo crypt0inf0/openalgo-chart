@@ -296,22 +296,7 @@ export class FloatingToolbar {
 
         this._addSeparator();
 
-
-
-        // 8. Alert
-        if (this._manager && this._manager.toolSupportsAlerts(tool)) {
-            const alertBtn = this._createButton(FloatingToolbar.ICONS.alert, 'Add Alert');
-            alertBtn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                e.preventDefault();
-                if (this._activeTool && this._manager) {
-                    this._manager.createAlertForTool(this._activeTool);
-                }
-            });
-            this._container.appendChild(alertBtn);
-        }
-
-        // 9. Lock
+        // 8. Lock
         const lockBtn = this._createButton(FloatingToolbar.ICONS.lock, 'Lock');
         const isLocked = tool._locked || false;
         if (isLocked) {

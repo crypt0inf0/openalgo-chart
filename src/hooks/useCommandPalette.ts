@@ -217,17 +217,12 @@ const buildCommands = (handlers: CommandPaletteHandlers): Command[] => {
     { id: 'horizontal', title: 'Horizontal Line', keywords: ['horizontal', 'support', 'resistance'] },
     { id: 'vertical', title: 'Vertical Line', keywords: ['vertical'] },
     { id: 'ray', title: 'Ray', keywords: ['ray', 'line'] },
-    { id: 'arrow', title: 'Arrow', keywords: ['arrow', 'pointer'] },
     { id: 'parallel_channel', title: 'Parallel Channel', keywords: ['channel', 'parallel'] },
     { id: 'fibonacci', title: 'Fibonacci Retracement', keywords: ['fibonacci', 'fib', 'retracement'] },
-    { id: 'fib_extension', title: 'Fibonacci Extension', keywords: ['fibonacci', 'fib', 'extension'] },
     { id: 'rectangle', title: 'Rectangle', keywords: ['rectangle', 'box', 'shape'] },
-    { id: 'circle', title: 'Circle', keywords: ['circle', 'ellipse', 'shape'] },
-    { id: 'triangle', title: 'Triangle', keywords: ['triangle', 'shape'] },
     { id: 'text', title: 'Text', keywords: ['text', 'label', 'annotation'] },
     { id: 'callout', title: 'Callout', keywords: ['callout', 'bubble', 'annotation'] },
     { id: 'brush', title: 'Brush', keywords: ['brush', 'draw', 'freehand'] },
-    { id: 'highlighter', title: 'Highlighter', keywords: ['highlighter', 'mark'] },
   ];
 
   drawingTools.forEach((tool) => {

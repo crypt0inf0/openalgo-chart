@@ -40,9 +40,6 @@ export { calculatePriceActionRange, getLatestPriceActionRange } from './priceAct
 // Range Breakout Strategy (Opening Range 9:30-10:00)
 export { calculateRangeBreakout, getLatestRangeBreakout } from './rangeBreakout';
 
-// ANN Strategy (Artificial Neural Network)
-export { calculateANNStrategy, getLatestANNSignal } from './annStrategy';
-
 // Hilenga-Milenga Indicator
 export { calculateHilengaMilenga, getLatestHilengaMilenga } from './hilengaMilenga';
 

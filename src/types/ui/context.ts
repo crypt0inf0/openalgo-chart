@@ -5,7 +5,6 @@
 
 import type { ReactNode } from 'react';
 import type { Order, Position, Holding, Trade, Funds } from '../api';
-import type { Alert } from '../domain/alerts';
 import type { DrawingType, Drawing } from '../domain/chart';
 
 /** User context value */
@@ -53,18 +52,6 @@ export interface TradingDataContextValue extends TradingData {
   refreshHoldings: () => Promise<void>;
   refreshTrades: () => Promise<void>;
   refreshFunds: () => Promise<void>;
-}
-
-/** Alert context value */
-export interface AlertContextValue {
-  alerts: Alert[];
-  activeAlerts: Alert[];
-  triggeredAlerts: Alert[];
-  addAlert: (alert: Omit<Alert, 'id' | 'status' | 'createdAt'>) => Alert;
-  updateAlert: (id: string, updates: Partial<Alert>) => void;
-  removeAlert: (id: string) => void;
-  clearTriggered: () => void;
-  checkAlerts: (symbol: string, price: number) => void;
 }
 
 /** Theme mode */

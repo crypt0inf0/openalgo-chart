@@ -42,7 +42,6 @@ export type {
   OrderContextValue,
   TradingData,
   TradingDataContextValue,
-  AlertContextValue,
   ThemeMode,
   ThemeContextValue,
   ToolContextValue,

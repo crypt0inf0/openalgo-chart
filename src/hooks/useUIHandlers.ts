@@ -68,50 +68,6 @@ export interface ChartConfig {
   [key: string]: unknown;
 }
 
-/** Template indicator config */
-interface TemplateIndicatorConfig {
-  sma?: boolean | undefined;
-  ema?: boolean | undefined;
-  rsi?: { enabled: boolean; period: number; color: string } | undefined;
-  macd?: { enabled: boolean; fast: number; slow: number; signal: number; macdColor: string; signalColor: string } | undefined;
-  bollingerBands?: { enabled: boolean; period: number; stdDev: number } | undefined;
-  volume?: { enabled: boolean; colorUp: string; colorDown: string } | undefined;
-  atr?: { enabled: boolean; period: number; color: string } | undefined;
-  stochastic?: { enabled: boolean; kPeriod: number; dPeriod: number; smooth: number; kColor: string; dColor: string } | undefined;
-  vwap?: { enabled: boolean; color: string } | undefined;
-  supertrend?: { enabled: boolean; period: number; multiplier: number } | undefined;
-  tpo?: { enabled: boolean; blockSize: string; tickSize: string } | undefined;
-  firstCandle?: { enabled: boolean; highlightColor: string; highLineColor: string; lowLineColor: string } | undefined;
-  priceActionRange?: { enabled: boolean; supportColor: string; resistanceColor: string } | undefined;
-  [key: string]: unknown;
-}
-
-/** Chart template */
-export interface ChartTemplate {
-  name: string;
-  chartType?: string | undefined;
-  indicators?: IndicatorSettings[] | undefined;
-  appearance?: Partial<ChartAppearance> | undefined;
-}
-
-/** Layout template */
-export interface LayoutTemplate {
-  name: string;
-  layout?: string | undefined;
-  chartType?: string | undefined;
-  charts?: Array<{
-    symbol?: string | undefined;
-    exchange?: string | undefined;
-    interval?: string | undefined;
-    indicators?: TemplateIndicatorConfig | undefined;
-    comparisonSymbols?: unknown[] | undefined;
-  }> | undefined;
-  appearance?: {
-    chartAppearance?: Partial<ChartAppearance> | undefined;
-    theme?: string | undefined;
-  } | undefined;
-}
-
 /** Option chain symbol */
 export interface OptionChainSymbol {
   symbol: string;
@@ -128,23 +84,14 @@ export type RightPanelType = 'alerts' | 'watchlist' | 'account' | null;
 export interface UseUIHandlersParams {
   // Panel setters
   setActiveRightPanel: Dispatch<SetStateAction<RightPanelType>>;
-  setUnreadAlertCount: Dispatch<SetStateAction<number>>;
   setIsSettingsOpen: Dispatch<SetStateAction<boolean>>;
-  setIsTemplateDialogOpen: Dispatch<SetStateAction<boolean>>;
-  setIsChartTemplatesOpen: Dispatch<SetStateAction<boolean>>;
   setIsOptionChainOpen: Dispatch<SetStateAction<boolean>>;
   setOptionChainInitialSymbol: Dispatch<SetStateAction<OptionChainSymbol | null>>;
   // Chart settings
-  setChartType: Dispatch<SetStateAction<string>>;
   setCharts: Dispatch<SetStateAction<ChartConfig[]>>;
   activeChartId: number;
-  activeChart: ChartConfig | null;
-  chartType: string;
   chartAppearance: ChartAppearance;
   setChartAppearance: Dispatch<SetStateAction<ChartAppearance>>;
-  setLayout: Dispatch<SetStateAction<string>>;
-  setActiveChartId: Dispatch<SetStateAction<number>>;
-  setTheme: Dispatch<SetStateAction<string>>;
   // Timer/session
   setIsTimerVisible: Dispatch<SetStateAction<boolean>>;
   setIsSessionBreakVisible: Dispatch<SetStateAction<boolean>>;
@@ -163,14 +110,9 @@ export interface UseUIHandlersParams {
 export interface UseUIHandlersReturn {
   handleRightPanelToggle: (panel: RightPanelType) => void;
   handleSettingsClick: () => void;
-  handleTemplatesClick: () => void;
-  handleChartTemplatesClick: () => void;
-  handleLoadChartTemplate: (template: ChartTemplate | null) => void;
-  getCurrentChartConfig: () => { chartType: string; indicators: IndicatorSettings[]; appearance: ChartAppearance };
   handleOptionChainClick: () => void;
   handleOptionSelect: (symbol: string, exchange: string) => void;
   handleOpenOptionChainForSymbol: (symbol: string, exchange: string) => void;
-  handleLoadTemplate: (template: LayoutTemplate | null) => void;
   handleTimerToggle: () => void;
   handleSessionBreakToggle: () => void;
   handleChartAppearanceChange: (newAppearance: Partial<ChartAppearance>) => void;
@@ -231,23 +173,14 @@ const DEFAULT_DRAWING_OPTIONS: DrawingDefaults = {
 export const useUIHandlers = ({
   // Panel setters
   setActiveRightPanel,
-  setUnreadAlertCount,
   setIsSettingsOpen,
-  setIsTemplateDialogOpen,
-  setIsChartTemplatesOpen,
   setIsOptionChainOpen,
   setOptionChainInitialSymbol,
   // Chart settings
-  setChartType,
   setCharts,
   activeChartId,
-  activeChart,
-  chartType,
   chartAppearance,
   setChartAppearance,
-  setLayout,
-  setActiveChartId,
-  setTheme,
   // Timer/session
   setIsTimerVisible,
   setIsSessionBreakVisible,
@@ -265,62 +198,14 @@ export const useUIHandlers = ({
   const handleRightPanelToggle = useCallback(
     (panel: RightPanelType) => {
       setActiveRightPanel(panel);
-      if (panel === 'alerts') {
-        setUnreadAlertCount(0);
-      }
     },
-    [setActiveRightPanel, setUnreadAlertCount]
+    [setActiveRightPanel]
   );
 
   // Settings dialog
   const handleSettingsClick = useCallback(() => {
     setIsSettingsOpen(true);
   }, [setIsSettingsOpen]);
-
-  // Layout template dialog
-  const handleTemplatesClick = useCallback(() => {
-    setIsTemplateDialogOpen(true);
-  }, [setIsTemplateDialogOpen]);
-
-  // Chart templates dialog
-  const handleChartTemplatesClick = useCallback(() => {
-    setIsChartTemplatesOpen(true);
-  }, [setIsChartTemplatesOpen]);
-
-  // Load chart template (indicators)
-  const handleLoadChartTemplate = useCallback(
-    (template: ChartTemplate | null) => {
-      if (!template) return;
-
-      if (template.chartType) {
-        setChartType(template.chartType);
-      }
-
-      if (template.indicators && Array.isArray(template.indicators)) {
-        setCharts((prev) =>
-          prev.map((chart) =>
-            chart.id === activeChartId ? { ...chart, indicators: template.indicators! } : chart
-          )
-        );
-      }
-
-      if (template.appearance) {
-        setChartAppearance((prev) => ({ ...prev, ...template.appearance } as ChartAppearance));
-      }
-
-      showToast(`Loaded template: ${template.name}`, 'success');
-    },
-    [activeChartId, setChartType, setCharts, setChartAppearance, showToast]
-  );
-
-  // Get current chart config for saving
-  const getCurrentChartConfig = useCallback(() => {
-    return {
-      chartType,
-      indicators: activeChart?.indicators || [],
-      appearance: chartAppearance,
-    };
-  }, [chartType, activeChart, chartAppearance]);
 
   // Option chain dialog
   const handleOptionChainClick = useCallback(() => {
@@ -345,80 +230,6 @@ export const useUIHandlers = ({
       setIsOptionChainOpen(true);
     },
     [setOptionChainInitialSymbol, setIsOptionChainOpen]
-  );
-
-  // Load layout template
-  const handleLoadTemplate = useCallback(
-    (template: LayoutTemplate | null) => {
-      if (!template) return;
-
-      if (template.layout) {
-        setLayout(template.layout);
-      }
-
-      if (template.chartType) {
-        setChartType(template.chartType);
-      }
-
-      if (template.charts && Array.isArray(template.charts)) {
-        const defaultIndicators: TemplateIndicatorConfig = {
-          sma: false,
-          ema: false,
-          rsi: { enabled: false, period: 14, color: '#7B1FA2' },
-          macd: {
-            enabled: false,
-            fast: 12,
-            slow: 26,
-            signal: 9,
-            macdColor: '#2962FF',
-            signalColor: '#FF6D00',
-          },
-          bollingerBands: { enabled: false, period: 20, stdDev: 2 },
-          volume: { enabled: false, colorUp: '#089981', colorDown: '#F23645' },
-          atr: { enabled: false, period: 14, color: '#FF9800' },
-          stochastic: {
-            enabled: false,
-            kPeriod: 14,
-            dPeriod: 3,
-            smooth: 3,
-            kColor: '#2962FF',
-            dColor: '#FF6D00',
-          },
-          vwap: { enabled: false, color: '#FF9800' },
-          supertrend: { enabled: false, period: 10, multiplier: 3 },
-          tpo: { enabled: false, blockSize: '30m', tickSize: 'auto' },
-          firstCandle: {
-            enabled: false,
-            highlightColor: '#FFD700',
-            highLineColor: '#ef5350',
-            lowLineColor: '#26a69a',
-          },
-          priceActionRange: { enabled: false, supportColor: '#26a69a', resistanceColor: '#ef5350' },
-        };
-
-        const loadedCharts = template.charts.map((chart, index) => ({
-          id: index + 1,
-          symbol: chart.symbol || 'RELIANCE',
-          exchange: chart.exchange || 'NSE',
-          interval: chart.interval || '1d',
-          indicators: { ...defaultIndicators, ...chart.indicators } as unknown as IndicatorSettings[],
-          comparisonSymbols: chart.comparisonSymbols || [],
-        }));
-
-        setCharts(loadedCharts as ChartConfig[]);
-        setActiveChartId(1);
-      }
-
-      if (template.appearance) {
-        if (template.appearance.chartAppearance) {
-          setChartAppearance((prev) => ({ ...prev, ...template.appearance!.chartAppearance } as ChartAppearance));
-        }
-        if (template.appearance.theme) {
-          setTheme(template.appearance.theme);
-        }
-      }
-    },
-    [setLayout, setChartType, setCharts, setActiveChartId, setChartAppearance, setTheme]
   );
 
   // Timer toggle
@@ -503,14 +314,9 @@ export const useUIHandlers = ({
   return {
     handleRightPanelToggle,
     handleSettingsClick,
-    handleTemplatesClick,
-    handleChartTemplatesClick,
-    handleLoadChartTemplate,
-    getCurrentChartConfig,
     handleOptionChainClick,
     handleOptionSelect,
     handleOpenOptionChainForSymbol,
-    handleLoadTemplate,
     handleTimerToggle,
     handleSessionBreakToggle,
     handleChartAppearanceChange,

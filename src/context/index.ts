@@ -21,17 +21,6 @@ export {
   type ThemeProviderProps,
 } from './ThemeContext';
 
-// Alert Context
-export {
-  AlertProvider,
-  useAlert,
-  type AlertContextValue,
-  type Alert,
-  type AlertLog,
-  type GlobalAlertPopup,
-  type AlertProviderProps,
-} from './AlertContext';
-
 // Order Context
 export {
   OrderProvider,

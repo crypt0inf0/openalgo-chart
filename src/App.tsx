@@ -10,27 +10,20 @@ import Toast from './components/Toast/Toast';
 import SnapshotToast from './components/Toast/SnapshotToast';
 // html2canvas is lazy loaded in useToolHandlers.ts when screenshot is taken
 import { getTickerPrice, subscribeToMultiTicker, checkAuth, closeAllWebSockets, forceCloseAllWebSockets, saveUserPreferences, modifyOrder, cancelOrder, getKlines } from './services/openalgo';
-import { globalAlertMonitor } from './services/globalAlertMonitor';
 
 import BottomBar from './components/BottomBar/BottomBar';
 import ChartGrid from './components/Chart/ChartGrid';
-import AlertDialog from './components/Alert/AlertDialog';
-import IndicatorAlertDialog from './components/IndicatorAlert/IndicatorAlertDialog';
 import RightToolbar from './components/Toolbar/RightToolbar';
-import AlertsPanel from './components/Alerts/AlertsPanel';
 import ApiKeyDialog from './components/ApiKeyDialog/ApiKeyDialog';
 import MobileNav from './components/MobileNav/MobileNav';
-import LayoutTemplateDialog from './components/LayoutTemplates/LayoutTemplateDialog';
 import { ConfirmDialog } from './components/shared';
 
 // Lazy load heavy modal components for better initial load performance
 const SettingsPopup = lazy(() => import('./components/Settings/SettingsPopup'));
 const CommandPalette = lazy(() => import('./components/CommandPalette/CommandPalette'));
 const ShortcutsDialog = lazy(() => import('./components/ShortcutsDialog/ShortcutsDialog'));
-const OptionChainPicker = lazy(() => import('./components/OptionChainPicker/OptionChainPicker'));
 const OptionChainModal = lazy(() => import('./components/OptionChainModal/OptionChainModal'));
 import { initTimeService, destroyTimeService } from './services/timeService';
-import { getJSON, setJSON, STORAGE_KEYS } from './services/storageService';
 import logger from './utils/logger';
 import { useIsMobile, useCommandPalette, useGlobalShortcuts } from './hooks';
 import { useLocalStorage } from './hooks/useLocalStorage';
@@ -41,37 +34,26 @@ import { useIndicatorHandlers } from './hooks/useIndicatorHandlers';
 import { useIntervalHandlers } from './hooks/useIntervalHandlers';
 import { useSymbolHandlers } from './hooks/useSymbolHandlers';
 import { useLayoutHandlers } from './hooks/useLayoutHandlers';
-import { useAlertHandlers } from './hooks/useAlertHandlers';
 import { useToolHandlers } from './hooks/useToolHandlers';
 import { useUIHandlers } from './hooks/useUIHandlers';
-import { useIndicatorAlertHandlers } from './hooks/useIndicatorAlertHandlers';
-import { useANNScanner } from './hooks/useANNScanner';
 import { useToastManager } from './hooks/useToastManager';
 import { useTheme } from './context/ThemeContext';
 import { useUI } from './context/UIContext';
-import { useAlert } from './context/AlertContext';
 import { useUser } from './context/UserContext';
 import { OrderProvider } from './context/OrderContext';
 import { indicatorConfigs } from './components/IndicatorSettings/indicatorConfigs';
 import { useChart } from './hooks/useChart';
 
-import PositionTracker from './components/PositionTracker/PositionTracker';
-import GlobalAlertPopup from './components/GlobalAlertPopup/GlobalAlertPopup';
 import AccountPanel from './components/AccountPanel/AccountPanel';
 import TradingPanel from './components/TradingPanel/TradingPanel';
 import OrderEntryModal from './components/OrderEntryModal/OrderEntryModal';
 import ObjectTreePanel from './components/ObjectTree/ObjectTreePanel';
-import MarketScreenerPanel from './components/MarketScreener/MarketScreenerPanel';
 import CompareOptionsDialog from './components/Chart/CompareOptionsDialog';
 
 // Lazy load additional heavy components
-const SectorHeatmapModal = lazy(() => import('./components/SectorHeatmap/SectorHeatmapModal'));
 const DepthOfMarket = lazy(() => import('./components/DepthOfMarket/DepthOfMarket'));
-const ANNScanner = lazy(() => import('./components/ANNScanner/ANNScanner'));
-const ChartTemplatesDialog = lazy(() => import('./components/ChartTemplates/ChartTemplatesDialog'));
 const ShortcutsSettings = lazy(() => import('./components/ShortcutsSettings/ShortcutsSettings'));
 const IndicatorSettingsDialog = lazy(() => import('./components/IndicatorSettings/IndicatorSettingsDialog'));
-const PineScriptEditor = lazy(() => import('./components/PineEditor/PineScriptEditor'));
 import {
   VALID_INTERVAL_UNITS,
   DEFAULT_FAVORITE_INTERVALS,
@@ -79,7 +61,6 @@ import {
   sanitizeFavoriteIntervals,
   sanitizeCustomIntervals,
   safeParseJSON,
-  ALERT_RETENTION_MS,
   DEFAULT_WATCHLIST,
   migrateWatchlistData,
   DEFAULT_CHART_APPEARANCE,
@@ -141,24 +122,14 @@ function AppContent({ isAuthenticated, setIsAuthenticated }) {
     setInitialSearchValue,
     isCommandPaletteOpen,
     setIsCommandPaletteOpen,
-    isTemplateDialogOpen,
-    setIsTemplateDialogOpen,
     isShortcutsDialogOpen,
     setIsShortcutsDialogOpen,
-    isChartTemplatesOpen,
-    setIsChartTemplatesOpen,
     isSettingsOpen,
     setIsSettingsOpen,
-    isStraddlePickerOpen,
-    setIsStraddlePickerOpen,
     isOptionChainOpen,
     setIsOptionChainOpen,
     optionChainInitialSymbol,
     setOptionChainInitialSymbol,
-    isAlertOpen,
-    setIsAlertOpen,
-    isSectorHeatmapOpen,
-    setIsSectorHeatmapOpen,
     isIndicatorSettingsOpen,
     setIsIndicatorSettingsOpen,
     activeRightPanel,
@@ -181,13 +152,6 @@ function AppContent({ isAuthenticated, setIsAuthenticated }) {
   // Let's check useChart implementation.
   // I implemented: chartRefs: { current: chartRefsMap }
   // So consuming code `chartRefs.current[id]` works.
-
-  // Ref to track active chart symbol/exchange for background alert popup logic
-  const activeChartRef = React.useRef({ symbol: currentSymbol, exchange: currentExchange });
-
-  useEffect(() => {
-    activeChartRef.current = { symbol: currentSymbol, exchange: currentExchange };
-  }, [currentSymbol, currentExchange]);
 
   // Flag to skip next sync (used during resume to prevent duplicate)
   const skipNextSyncRef = React.useRef(false);
@@ -234,93 +198,9 @@ function AppContent({ isAuthenticated, setIsAuthenticated }) {
   // Toast management (extracted to hook for cleaner code)
   const { toasts, snapshotToast, showToast, removeToast, showSnapshotToast, clearSnapshotToast } = useToastManager(3);
 
-  // Alert dialog state (isAlertOpen is now from UIContext)
-  const [alertPrice, setAlertPrice] = useState(null);
-  const [isIndicatorAlertOpen, setIsIndicatorAlertOpen] = useState(false);
-  const [indicatorAlertToEdit, setIndicatorAlertToEdit] = useState(null);
-  const [indicatorAlertInitialIndicator, setIndicatorAlertInitialIndicator] = useState(null);
-
-  // Alert State - now from AlertContext (centralized with persistence)
-  const {
-    alerts,
-    setAlerts,
-    alertsRef,
-    alertLogs,
-    setAlertLogs,
-    unreadAlertCount,
-    setUnreadAlertCount,
-    globalAlertPopups,
-    setGlobalAlertPopups,
-    alertPricesRef,
-  } = useAlert();
-
-  const { handleSaveIndicatorAlert } = useIndicatorAlertHandlers({
-    setAlerts: setAlerts as any,
-    showToast,
-    setIsIndicatorAlertOpen,
-    setIndicatorAlertToEdit: setIndicatorAlertToEdit as any,
-    indicatorAlertToEdit: indicatorAlertToEdit as any
-  });
-
-  // === GlobalAlertMonitor ===
-  // Background price monitoring using SharedWebSocket
-  useEffect(() => {
-    if (!isAuthenticated) return;
-
-    const handleBackgroundAlertTrigger = (evt) => {
-      const msg = evt.message || `${evt.symbol} alert triggered`;
-      showToast(msg, 'info');
-
-      // Update logs
-      setAlertLogs(prev => {
-        const newLog = {
-          id: evt.alertId || crypto.randomUUID(),
-          time: new Date().toISOString(),
-          message: msg,
-          symbol: evt.symbol,
-          price: evt.currentPrice,
-          type: evt.alertType || 'price'
-        };
-        const updated = [newLog, ...prev].slice(0, 100); // Keep last 100
-        localStorage.setItem('tv_alert_logs', JSON.stringify(updated));
-        return updated;
-      });
-
-      setUnreadAlertCount(c => c + 1);
-
-      // Add to popup queue for visual notification
-      setGlobalAlertPopups(prev => [...prev, { ...evt, id: evt.alertId || crypto.randomUUID() }]);
-
-      // Update alert status in React state (for indicator alerts)
-      if (evt.alertType === 'indicator' && evt.alertId) {
-        setAlerts(prev => prev.map(a =>
-          a.id === evt.alertId ? { ...a, status: 'Triggered' } : a
-        ));
-      }
-    };
-
-    // Load alerts and start monitoring
-    // Small delay to ensure other services are ready
-    const timer = setTimeout(() => {
-      globalAlertMonitor.start(handleBackgroundAlertTrigger);
-    }, 1000);
-
-    return () => {
-      clearTimeout(timer);
-      globalAlertMonitor.stop();
-    };
-  }, [isAuthenticated, showToast]);
-
-  // Handler to share OHLC data with GlobalAlertMonitor for indicator alerts
-  const handleOHLCDataUpdate = useCallback((symbol, exchange, interval, ohlcData) => {
-    if (symbol && exchange && interval && ohlcData && Array.isArray(ohlcData) && ohlcData.length > 0) {
-      globalAlertMonitor.updateOHLCData(symbol, exchange, interval, ohlcData);
-    }
-  }, []);
-
   // Mobile State
   const isMobile = useIsMobile();
-  const [mobileTab, setMobileTab] = useState<'chart' | 'watchlist' | 'alerts' | 'tools' | 'settings'>('chart');
+  const [mobileTab, setMobileTab] = useState<'chart' | 'watchlist' | 'tools' | 'settings'>('chart');
   const [isWatchlistVisible, setIsWatchlistVisible] = useState(false);
 
   // Handle mobile tab changes
@@ -337,12 +217,6 @@ function AppContent({ isAuthenticated, setIsAuthenticated }) {
     if (tab === 'settings') {
       setIsSettingsOpen(true);
       setMobileTab('chart'); // Reset to chart after opening settings
-    }
-    // Handle alerts tab
-    if (tab === 'alerts') {
-      setActiveRightPanel('alerts');
-      setIsWatchlistVisible(true);
-      setMobileTab('alerts');
     }
     // Handle tools tab
     if (tab === 'tools') {
@@ -372,31 +246,6 @@ function AppContent({ isAuthenticated, setIsAuthenticated }) {
     isOpen: false,
     isModal: false
   });
-
-  // Position Tracker State
-  const [positionTrackerSettings, setPositionTrackerSettings] = useState(() => {
-    const saved = safeParseJSON(localStorage.getItem('tv_position_tracker_settings'), null);
-    return saved || { sourceMode: 'watchlist', customSymbols: [] };
-  });
-
-  // ANN Scanner persisted state (survives tab switches)
-  const [annScannerState, setAnnScannerState] = useState({
-    results: [],
-    previousResults: [],
-    lastScanTime: null,
-    source: 'watchlist',
-    filter: 'all',
-    refreshInterval: 'off',
-    alertsEnabled: true,
-    sectorFilter: 'All',
-    // Background scan state
-    isScanning: false,
-    progress: { current: 0, total: 0 },
-    scanError: null,
-  });
-
-  // ANN Scanner background scan handlers
-  const { startAnnScan, cancelAnnScan } = useANNScanner(annScannerState, setAnnScannerState);
 
   // Confirm Dialog State
   const [confirmDialogState, setConfirmDialogState] = useState({
@@ -429,8 +278,6 @@ function AppContent({ isAuthenticated, setIsAuthenticated }) {
     });
   }, []);
 
-  // Sector Heatmap Modal State (isSectorHeatmapOpen now from UIContext)
-
   // Account Panel State - defaults to visible (true) on new browsers
   const [isAccountPanelOpen, setIsAccountPanelOpen] = useState(() => {
     const saved = localStorage.getItem('tv_account_panel_open');
@@ -450,66 +297,10 @@ function AppContent({ isAuthenticated, setIsAuthenticated }) {
     if (isAccountPanelMaximized) setIsAccountPanelMaximized(false);
   }, [isAccountPanelMaximized]);
 
-  // Pine Script Editor State
-  const [showPineEditor, setShowPineEditor] = useState(false);
-  const [pineIndicatorCounter, setPineIndicatorCounter] = useState(1);
-
-  // Handler for adding Pine Script indicator to chart
-  const handleAddPineIndicator = useCallback((code: string, inputs: any[]) => {
-    const indicatorName = (() => {
-      // Extract indicator name from code
-      const match = code.match(/indicator\s*\(\s*["']([^"']+)["']/);
-      return match ? match[1] : `Pine Script ${pineIndicatorCounter}`;
-    })();
-
-    // Create default settings from inputs
-    const defaultSettings: Record<string, unknown> = {};
-    inputs.forEach((input: any) => {
-      defaultSettings[input.name] = input.default;
-    });
-
-    // Check if it's an overlay indicator
-    const isOverlay = /overlay\s*=\s*true/.test(code);
-
-    setCharts((prev: any[]) =>
-      prev.map((chart: any) => {
-        if (chart.id !== activeChartId) return chart;
-
-        const newIndicator = {
-          id: `pine_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-          type: 'pine',
-          name: indicatorName,
-          visible: true,
-          pineCode: code,
-          pineInputs: inputs,
-          pane: isOverlay ? 'main' : 'pine_indicator',
-          ...defaultSettings,
-        };
-
-        return {
-          ...chart,
-          indicators: [...(chart.indicators || []), newIndicator],
-        };
-      })
-    );
-
-    setPineIndicatorCounter((c: number) => c + 1);
-    showToast(`Added "${indicatorName}" to chart`, 'success');
-  }, [activeChartId, pineIndicatorCounter, setCharts, showToast]);
-
   const handleAccountPanelMaximize = useCallback(() => {
     setIsAccountPanelMaximized(prev => !prev);
     if (isAccountPanelMinimized) setIsAccountPanelMinimized(false);
   }, [isAccountPanelMinimized]);
-
-  // Persist position tracker settings
-  useEffect(() => {
-    try {
-      localStorage.setItem('tv_position_tracker_settings', JSON.stringify(positionTrackerSettings));
-    } catch (error) {
-      console.error('Failed to persist position tracker settings:', error);
-    }
-  }, [positionTrackerSettings]);
 
   // Persist OI Lines toggle
   useEffect(() => {
@@ -806,30 +597,6 @@ function AppContent({ isAuthenticated, setIsAuthenticated }) {
     showToast
   });
 
-  // Alert handlers extracted to hook
-  const {
-    handleAlertClick,
-    handleSaveAlert,
-    handleRemoveAlert,
-    handleRestartAlert,
-    handlePauseAlert,
-    handleChartAlertsSync,
-    handleChartAlertTriggered
-  } = useAlertHandlers({
-    chartRefs: chartRefs as any,
-    activeChartId,
-    setAlertPrice,
-    setIsAlertOpen,
-    showToast,
-    currentSymbol,
-    currentExchange,
-    alerts: alerts as any,
-    setAlerts: setAlerts as any,
-    skipNextSyncRef: skipNextSyncRef as any,
-    setAlertLogs: setAlertLogs as any,
-    setUnreadAlertCount
-  });
-
   // Tool-related state - moved early for use in useToolHandlers
   const [activeTool, setActiveTool] = useState(null);
   const [isMagnetMode, setIsMagnetMode] = useState(false);
@@ -905,14 +672,9 @@ function AppContent({ isAuthenticated, setIsAuthenticated }) {
   const {
     handleRightPanelToggle,
     handleSettingsClick,
-    handleTemplatesClick,
-    handleChartTemplatesClick,
-    handleLoadChartTemplate,
-    getCurrentChartConfig,
     handleOptionChainClick,
     handleOptionSelect,
     handleOpenOptionChainForSymbol,
-    handleLoadTemplate,
     handleTimerToggle,
     handleSessionBreakToggle,
     handleChartAppearanceChange,
@@ -926,22 +688,13 @@ function AppContent({ isAuthenticated, setIsAuthenticated }) {
     handleUsernameSave
   } = useUIHandlers({
     setActiveRightPanel,
-    setUnreadAlertCount,
     setIsSettingsOpen,
-    setIsTemplateDialogOpen,
-    setIsChartTemplatesOpen,
     setIsOptionChainOpen,
     setOptionChainInitialSymbol: setOptionChainInitialSymbol as any,
-    setChartType,
     setCharts: setCharts as any,
     activeChartId,
-    activeChart: activeChart as any,
-    chartType,
     chartAppearance,
     setChartAppearance,
-    setLayout,
-    setActiveChartId,
-    setTheme,
     setIsTimerVisible,
     setIsSessionBreakVisible,
     setDrawingDefaults,
@@ -988,69 +741,6 @@ function AppContent({ isAuthenticated, setIsAuthenticated }) {
   const lastActiveListIdRef = React.useRef(null);
   // Track fetch state to prevent race condition where second effect run aborts first run's requests
   const watchlistFetchingRef = React.useRef(false);
-
-  // Track previous prices for alert crossing detection (key: "SYMBOL:EXCHANGE", value: last price)
-  // alertPricesRef is now from useAlert context
-
-  // Helper to play alert alarm sound
-  const playAlertSound = useCallback(() => {
-    try {
-      const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
-      if (!AudioContext) return;
-
-      const ctx = new AudioContext();
-      const oscillator = ctx.createOscillator();
-      const gainNode = ctx.createGain();
-
-      oscillator.connect(gainNode);
-      gainNode.connect(ctx.destination);
-
-      oscillator.type = 'square';
-      oscillator.frequency.value = 2048; // ~2kHz sharp alarm pitch
-
-      const now = ctx.currentTime;
-
-      // 3 seconds: beep ON 150ms → OFF 150ms repeating = 10 pulses
-      for (let i = 0; i < 10; i++) {
-        const t = now + i * 0.30;
-        gainNode.gain.setValueAtTime(1.0, t);       // beep
-        gainNode.gain.setValueAtTime(0.0, t + 0.15); // off pause
-      }
-
-      oscillator.start(now);
-      oscillator.stop(now + 3.1);
-
-      oscillator.onended = () => ctx.close();
-    } catch (error) {
-      console.error('Alert sound failed:', error);
-    }
-  }, []);
-
-  // Helper to get all symbols with active alerts from localStorage
-  const getAlertSymbols = useCallback(() => {
-    try {
-      const chartAlertsStr = localStorage.getItem('tv_chart_alerts');
-      if (!chartAlertsStr) return [];
-
-      const chartAlertsData = JSON.parse(chartAlertsStr);
-      const alertSymbols = [];
-
-      for (const [key, alerts] of Object.entries(chartAlertsData)) {
-        // Key is in format "SYMBOL:EXCHANGE"
-        if (!Array.isArray(alerts)) continue;
-        const hasActiveAlert = alerts.some(a => a && a.price && !a.triggered);
-        if (hasActiveAlert) {
-          const [symbol, exchange] = key.split(':');
-          alertSymbols.push({ symbol, exchange: exchange || 'NSE' });
-        }
-      }
-
-      return alertSymbols;
-    } catch (err) {
-      console.warn('[Alerts] Failed to get alert symbols:', err);
-      return [];
-    }
-  }, []);
 
   // Fetch watchlist data - only when authenticated (with incremental updates)
   useEffect(() => {
@@ -1238,112 +928,13 @@ function AppContent({ isAuthenticated, setIsAuthenticated }) {
             ws.close();
           }
 
-          // === MERGE alert symbols with watchlist symbols ===
-          // Get symbols with active alerts that aren't already in watchlist
-          const alertSymbols = getAlertSymbols();
-          const watchlistKeys = new Set(symbolObjs.map(s =>
-            typeof s === 'string' ? `${s}:NSE` : `${s.symbol}:${s.exchange || 'NSE'}`
-          ));
-
-          const additionalAlertSymbols = alertSymbols.filter(as =>
-            !watchlistKeys.has(`${as.symbol}:${as.exchange}`)
-          );
-
-          const allSymbolsToSubscribe = [...symbolObjs, ...additionalAlertSymbols];
           console.log('=== SETTING UP WEBSOCKET ===');
           console.log('Watchlist symbols:', symbolObjs.length);
-          console.log('Additional alert symbols:', additionalAlertSymbols.length);
-          console.log('Total subscribed:', allSymbolsToSubscribe.length);
 
-          ws = subscribeToMultiTicker(allSymbolsToSubscribe, (ticker) => {
+          ws = subscribeToMultiTicker(symbolObjs, (ticker) => {
             if (!mounted || !initialDataLoaded) return;
 
-            // === ALERT MONITORING: Check chart alerts with proper crossing detection ===
-            try {
-              const chartAlertsData = getJSON(STORAGE_KEYS.CHART_ALERTS, {});
-              const alertKey = `${ticker.symbol}:${ticker.exchange || 'NSE'}`;
-              const symbolAlerts = chartAlertsData[alertKey] || [];
-
-              const currentPrice = parseFloat(String(ticker.last));
-              if (!Number.isFinite(currentPrice)) return;
-
-              // Get previous price for this symbol (for crossing detection)
-              const prevPrice = alertPricesRef.current.get(alertKey);
-              alertPricesRef.current.set(alertKey, currentPrice);
-
-              // Skip first tick (no previous price to compare)
-              if (prevPrice === undefined) return;
-
-              for (const alert of symbolAlerts) {
-                if (!alert.price || alert.triggered) continue;
-
-                const alertPrice = parseFloat(alert.price);
-                if (!Number.isFinite(alertPrice)) continue;
-
-                const condition = alert.condition || 'crossing';
-                let triggered = false;
-                let direction = '';
-
-                // Proper crossing detection
-                const crossedUp = prevPrice < alertPrice && currentPrice >= alertPrice;
-                const crossedDown = prevPrice > alertPrice && currentPrice <= alertPrice;
-
-                if (condition === 'crossing') {
-                  triggered = crossedUp || crossedDown;
-                  direction = crossedUp ? 'up' : 'down';
-                } else if (condition === 'crossing_up') {
-                  triggered = crossedUp;
-                  direction = 'up';
-                } else if (condition === 'crossing_down') {
-                  triggered = crossedDown;
-                  direction = 'down';
-                }
-
-                if (triggered) {
-                  console.log('[Alerts] TRIGGERED:', ticker.symbol, 'crossed', direction, 'at', currentPrice, 'target:', alertPrice);
-
-                  // Mark as triggered in localStorage
-                  alert.triggered = true;
-                  chartAlertsData[alertKey] = symbolAlerts;
-                  setJSON(STORAGE_KEYS.CHART_ALERTS, chartAlertsData);
-
-                  // Play alarm sound
-                  playAlertSound();
-
-                  // Only show GlobalAlertPopup if NOT on the same chart
-                  const isOnCurrentChart =
-                    ticker.symbol === activeChartRef.current.symbol &&
-                    (ticker.exchange || 'NSE') === activeChartRef.current.exchange;
-
-                  if (!isOnCurrentChart) {
-                    setGlobalAlertPopups((prev: any) => [{
-                      id: `popup-${crypto.randomUUID()}-${alert.id}`,
-                      alertId: alert.id,
-                      symbol: ticker.symbol,
-                      exchange: ticker.exchange || 'NSE',
-                      price: alertPrice.toFixed(2),
-                      direction: direction,
-                      timestamp: Date.now()
-                    }, ...prev].slice(0, 5));
-                  }
-
-                  // Log entry
-                  setAlertLogs(prev => [{
-                    id: crypto.randomUUID(),
-                    alertId: alert.id,
-                    symbol: ticker.symbol,
-                    exchange: ticker.exchange || 'NSE',
-                    message: `Alert: ${ticker.symbol} crossed ${direction} ${alertPrice.toFixed(2)}`,
-                    time: new Date().toISOString()
-                  }, ...prev]);
-                  setUnreadAlertCount(prev => prev + 1);
-                }
-              }
-            } catch (err) {
-              // Silent fail for alert check
-            }
-
-            // === Original watchlist update logic ===
+            // === Watchlist update logic ===
             setWatchlistData(prev => {
               const tickerExchange = ticker.exchange || 'NSE';
               const index = prev.findIndex(item =>
@@ -1467,84 +1058,8 @@ function AppContent({ isAuthenticated, setIsAuthenticated }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [watchlistSymbolsKey, watchlistsState.activeListId, isAuthenticated, handleRemoveFromWatchlist]);
 
-  // Persist alerts/logs to localStorage with 24h retention
-  useEffect(() => {
-    const cutoff = Date.now() - ALERT_RETENTION_MS;
-    const filtered = alerts.filter((a: any) => {
-      const ts = a && a.created_at ? new Date(a.created_at as string | number).getTime() : NaN;
-      return Number.isFinite(ts) && ts >= cutoff;
-    });
-
-    if (filtered.length !== alerts.length) {
-      setAlerts(filtered as any);
-      return; // avoid persisting stale data in this pass
-    }
-
-    try {
-      localStorage.setItem('tv_alerts', JSON.stringify(filtered));
-      // Refresh global alert monitor when alerts change (after localStorage is updated)
-      if (isAuthenticated) {
-        globalAlertMonitor.refresh();
-      }
-    } catch (error) {
-      console.error('Failed to persist alerts:', error);
-    }
-  }, [alerts, isAuthenticated]);
-
-  useEffect(() => {
-    const cutoff = Date.now() - ALERT_RETENTION_MS;
-    const filtered = alertLogs.filter((l: any) => {
-      const ts = l && l.time ? new Date(l.time as string | number).getTime() : NaN;
-      return Number.isFinite(ts) && ts >= cutoff;
-    });
-
-    if (filtered.length !== alertLogs.length) {
-      setAlertLogs(filtered);
-      return;
-    }
-
-    try {
-      localStorage.setItem('tv_alert_logs', JSON.stringify(filtered));
-    } catch (error) {
-      console.error('Failed to persist alert logs:', error);
-    }
-  }, [alertLogs]);
-
-  // Check Alerts Logic (only for non line-tools alerts to avoid conflicting with plugin)
-  // Uses alertsRef to check current alerts without triggering reconnections
-  const alertSymbolsRef = React.useRef([]);
-
-  // Update symbol list when alerts change, but only if symbols actually changed
-  useEffect(() => {
-    const activeNonLineToolAlerts = alerts.filter(a => a.status === 'Active' && a._source !== 'lineTools');
-    const newSymbols = [...new Set(activeNonLineToolAlerts.map(a => a.symbol))].sort();
-    const currentSymbols = alertSymbolsRef.current;
-
-    // Only update ref if symbol list actually changed
-    if (JSON.stringify(newSymbols) !== JSON.stringify(currentSymbols)) {
-      alertSymbolsRef.current = newSymbols;
-    }
-  }, [alerts]);
-
-  // Separate effect for WebSocket - only reconnects when symbols actually change
-  // === ALERT WEBSOCKET DISABLED ===
-  // Alert monitoring is now handled by the watchlist WebSocket (above)
-  // to avoid creating a second connection which conflicts with OpenAlgo.
-  // The watchlist callback checks tv_chart_alerts localStorage on each price update.
-  //
-  // const [alertWsSymbols, setAlertWsSymbols] = useState([]);
-  // useEffect(() => { ... interval for alertWsSymbols ... });
-  // useEffect(() => { subscribeToMultiTicker(alertWsSymbols, ...) });
-
   // Watchlist handlers are now provided by useWatchlistHandlers hook
   // Symbol handlers are now provided by useSymbolHandlers hook
-
-  // Handler to open indicator alert dialog (create new)
-  const handleOpenIndicatorAlert = useCallback((indicatorType) => {
-    setIndicatorAlertToEdit(null);
-    setIndicatorAlertInitialIndicator(indicatorType);
-    setIsIndicatorAlertOpen(true);
-  }, []);
 
   // Handle moving indicator up in the list (visually up in panes)
   const handleIndicatorMoveUp = React.useCallback((indicatorId: any) => {
@@ -1627,10 +1142,9 @@ function AppContent({ isAuthenticated, setIsAuthenticated }) {
     toggleFullscreen: handleFullScreen,
     takeScreenshot: handleDownloadImage,
     copyImage: handleCopyImage,
-    createAlert: handleAlertClick,
     clearDrawings: () => handleToolChange('clear_all'),
     resetChart: handleResetChart,
-  }), [toggleIndicator, handleToolChange, handleUndo, handleRedo, toggleTheme, setTheme, handleFullScreen, handleDownloadImage, handleCopyImage, handleAlertClick, handleResetChart, setChartType, setSearchMode, setIsSearchOpen, setIsSettingsOpen, setIsShortcutsDialogOpen]);
+  }), [toggleIndicator, handleToolChange, handleUndo, handleRedo, toggleTheme, setTheme, handleFullScreen, handleDownloadImage, handleCopyImage, handleResetChart, setChartType, setSearchMode, setIsSearchOpen, setIsSettingsOpen, setIsShortcutsDialogOpen]);
 
   const {
     commands,
@@ -1669,9 +1183,7 @@ function AppContent({ isAuthenticated, setIsAuthenticated }) {
       if (isShortcutsDialogOpen) setIsShortcutsDialogOpen(false);
       else if (isCommandPaletteOpen) setIsCommandPaletteOpen(false);
       else if (isSearchOpen) setIsSearchOpen(false);
-      else if (isAlertOpen) setIsAlertOpen(false);
       else if (isSettingsOpen) setIsSettingsOpen(false);
-      else if (isTemplateDialogOpen) setIsTemplateDialogOpen(false);
     },
     setChartType: (chartTypeName) => {
       const mappedType = CHART_TYPE_MAP[chartTypeName];
@@ -1698,7 +1210,6 @@ function AppContent({ isAuthenticated, setIsAuthenticated }) {
     },
     undo: handleUndo,
     redo: handleRedo,
-    createAlert: handleAlertClick,
     toggleFullscreen: handleFullScreen,
 
     // Context Menu Shortcuts
@@ -1706,16 +1217,6 @@ function AppContent({ isAuthenticated, setIsAuthenticated }) {
       const activeRef = chartRefs.current[activeChartId];
       if (activeRef && typeof activeRef.resetZoom === 'function') {
         activeRef.resetZoom();
-      }
-    },
-    addAlertAtPrice: () => {
-      // Add alert at current crosshair price
-      const activeRef = chartRefs.current[activeChartId];
-      if (activeRef && typeof activeRef.addAlertAtCrosshair === 'function') {
-        activeRef.addAlertAtCrosshair();
-      } else {
-        // Fallback: open alert dialog
-        handleAlertClick();
       }
     },
     sellLimitOrder: () => {
@@ -1769,12 +1270,12 @@ function AppContent({ isAuthenticated, setIsAuthenticated }) {
     },
     takeScreenshot: handleDownloadImage,
   }), [
-    isShortcutsDialogOpen, isCommandPaletteOpen, isSearchOpen, isAlertOpen, isSettingsOpen, isTemplateDialogOpen,
-    handleToolChange, handleUndo, handleRedo, handleAlertClick, handleFullScreen, activeChartId, chartRefs, setTradingPanelConfig
+    isShortcutsDialogOpen, isCommandPaletteOpen, isSearchOpen, isSettingsOpen,
+    handleToolChange, handleUndo, handleRedo, handleFullScreen, activeChartId, chartRefs, setTradingPanelConfig
   ]);
 
   // Determine if any dialog is open (to disable single-key shortcuts)
-  const anyDialogOpen = isCommandPaletteOpen || isSearchOpen || isAlertOpen || isSettingsOpen || isTemplateDialogOpen || isShortcutsDialogOpen;
+  const anyDialogOpen = isCommandPaletteOpen || isSearchOpen || isSettingsOpen || isShortcutsDialogOpen;
 
   // Apply global keyboard shortcuts
   useGlobalShortcuts(shortcutHandlers, {
@@ -1869,7 +1370,6 @@ function AppContent({ isAuthenticated, setIsAuthenticated }) {
           <MobileNav
             activeTab={mobileTab}
             onTabChange={handleMobileTabChange}
-            alertCount={unreadAlertCount}
             theme={theme}
           />
         }
@@ -1899,25 +1399,12 @@ function AppContent({ isAuthenticated, setIsAuthenticated }) {
             onFullScreen={handleFullScreen}
             onReplayClick={handleReplayClick}
             isReplayMode={isReplayMode}
-            onAlertClick={handleAlertClick}
             onCompareClick={handleCompareClick}
             layout={layout}
             onLayoutChange={handleLayoutChange}
             onSaveLayout={handleSaveLayout}
             onSettingsClick={handleSettingsClick}
-            onTemplatesClick={handleTemplatesClick}
-            onChartTemplatesClick={handleChartTemplatesClick}
-            onStraddleClick={() => setIsStraddlePickerOpen(true)}
-
-            strategyConfig={(activeChart as any)?.strategyConfig}
-            onIndicatorAlertClick={() => {
-              setIndicatorAlertToEdit(null); // Ensure creation mode
-              setIsIndicatorAlertOpen(true);
-            }}
             onOptionsClick={() => setIsOptionChainOpen(true)}
-            onHeatmapClick={() => setIsSectorHeatmapOpen(true)}
-            onPineEditorClick={() => setShowPineEditor(prev => !prev)}
-            isPineEditorOpen={showPineEditor}
           />
         }
         leftToolbar={
@@ -2053,114 +1540,6 @@ function AppContent({ isAuthenticated, setIsAuthenticated }) {
               symbol={currentSymbol}
               interval={currentInterval}
             />
-          ) : activeRightPanel === 'screener' ? (
-            <MarketScreenerPanel
-              items={watchlistData}
-              currentSymbol={currentSymbol}
-              currentExchange={currentExchange}
-              onSymbolSelect={(symData: any) => {
-                const symbol = typeof symData === 'string' ? symData : symData.symbol;
-                const exchange = typeof symData === 'string' ? 'NSE' : (symData.exchange || 'NSE');
-                setCharts((prev: any[]) => prev.map((chart: any) =>
-                  chart.id === activeChartId ? { ...chart, symbol: symbol, exchange: exchange, strategyConfig: null } : chart
-                ));
-              }}
-            />
-          ) : activeRightPanel === 'alerts' ? (
-            <AlertsPanel
-              alerts={alerts as any}
-              logs={alertLogs as any}
-              onRemoveAlert={handleRemoveAlert}
-              onRestartAlert={handleRestartAlert}
-              onPauseAlert={handlePauseAlert}
-              onNavigate={(symbolData: any) => {
-                // Switch active chart to the alert's symbol
-                setCharts((prev: any[]) => prev.map((chart: any) =>
-                  chart.id === activeChartId ? { ...chart, symbol: symbolData.symbol, exchange: symbolData.exchange, strategyConfig: null } : chart
-                ));
-              }}
-              onEditAlert={(alert: any) => {
-                if (alert.type === 'indicator') {
-                  setIndicatorAlertToEdit(alert);
-                  setIsIndicatorAlertOpen(true);
-                  // Ensure we are on the correct symbol if needed
-                  setCharts((prev: any[]) => prev.map((chart: any) =>
-                    chart.id === activeChartId ? { ...chart, symbol: alert.symbol, exchange: alert.exchange || 'NSE', strategyConfig: null } : chart
-                  ));
-                  return;
-                }
-
-                // Navigate to the symbol first
-                setCharts((prev: any[]) => prev.map((chart: any) =>
-                  chart.id === activeChartId ? { ...chart, symbol: alert.symbol, exchange: alert.exchange || 'NSE', strategyConfig: null } : chart
-                ));
-                // Call editAlertById on the chart after a short delay to allow chart to update
-                setTimeout(() => {
-                  const activeRef = (chartRefs as any).current[activeChartId];
-                  if (activeRef && typeof activeRef.editAlertById === 'function' && alert.externalId) {
-                    activeRef.editAlertById(alert.externalId);
-                  }
-                }, 500);
-              }}
-            />
-          ) : activeRightPanel === 'position_tracker' ? (
-            <PositionTracker
-              sourceMode={positionTrackerSettings.sourceMode}
-              customSymbols={positionTrackerSettings.customSymbols}
-              watchlistData={watchlistData}
-              isLoading={watchlistLoading}
-              onSourceModeChange={(mode) => setPositionTrackerSettings(prev => ({ ...prev, sourceMode: mode }))}
-              onCustomSymbolsChange={(symbols) => setPositionTrackerSettings(prev => ({ ...prev, customSymbols: symbols }))}
-              onSymbolSelect={(symData: any) => {
-                const symbol = typeof symData === 'string' ? symData : symData.symbol;
-                const exchange = typeof symData === 'string' ? 'NSE' : (symData.exchange || 'NSE');
-                setCharts((prev: any[]) => prev.map((chart: any) =>
-                  chart.id === activeChartId ? { ...chart, symbol: symbol, exchange: exchange, strategyConfig: null } : chart
-                ));
-              }}
-              isAuthenticated={isAuthenticated}
-            />
-          ) : activeRightPanel === 'ann_scanner' ? (
-            <Suspense fallback={<div style={{ padding: 20 }}>Loading Scanner...</div>}>
-              <ANNScanner
-                watchlistSymbols={(watchlistSymbols as any[])
-                  .filter((s: any) => !(typeof s === 'string' && s.startsWith('###')))
-                  .map((s: any) => typeof s === 'string'
-                    ? { symbol: s, exchange: 'NSE' }
-                    : { symbol: s.symbol, exchange: s.exchange || 'NSE' }
-                  )}
-                onSymbolSelect={(symData: any) => {
-                  const symbol = typeof symData === 'string' ? symData : symData.symbol;
-                  const exchange = typeof symData === 'string' ? 'NSE' : (symData.exchange || 'NSE');
-                  setCharts((prev: any[]) => prev.map((chart: any) =>
-                    chart.id === activeChartId ? { ...chart, symbol: symbol, exchange: exchange, strategyConfig: null } : chart
-                  ));
-                }}
-                isAuthenticated={isAuthenticated}
-                onAddToWatchlist={(symbolData: any) => {
-                  const { symbol, exchange } = symbolData;
-                  const existsInWatchlist = (watchlistSymbols as any[]).some((s: any) => {
-                    if (typeof s === 'string') return s === symbol;
-                    return s.symbol === symbol && s.exchange === exchange;
-                  });
-                  if (!existsInWatchlist) {
-                    setWatchlistsState(prev => ({
-                      ...prev,
-                      lists: prev.lists.map(wl =>
-                        wl.id === prev.activeListId
-                          ? { ...wl, symbols: [...wl.symbols, { symbol, exchange: exchange || 'NSE' }] }
-                          : wl
-                      ),
-                    }));
-                  }
-                }}
-                showToast={showToast}
-                persistedState={annScannerState as any}
-                onStateChange={setAnnScannerState as any}
-                onStartScan={startAnnScan}
-                onCancelScan={cancelAnnScan}
-              />
-            </Suspense>
           ) : activeRightPanel === 'dom' ? (
             <Suspense fallback={<div style={{ padding: 20 }}>Loading DOM...</div>}>
               <DepthOfMarket
@@ -2187,7 +1566,7 @@ function AppContent({ isAuthenticated, setIsAuthenticated }) {
           <RightToolbar
             activePanel={activeRightPanel}
             onPanelChange={handleRightPanelToggle}
-            badges={{ alerts: unreadAlertCount }}
+            badges={{}}
           />
         }
         chart={
@@ -2198,11 +1577,8 @@ function AppContent({ isAuthenticated, setIsAuthenticated }) {
             onActiveChartChange={setActiveChartId as any}
             onMaximizeChart={handleMaximizeChart as any}
             chartRefs={chartRefs as any}
-            onAlertsSync={handleChartAlertsSync as any}
             onDrawingsSync={handleDrawingsSync}
-            onAlertTriggered={handleChartAlertTriggered as any}
             onReplayModeChange={handleReplayModeChange as any}
-            onOHLCDataUpdate={handleOHLCDataUpdate as any}
             // Common props
             chartType={chartType}
             // indicators={indicators} // Handled per chart now
@@ -2221,7 +1597,6 @@ function AppContent({ isAuthenticated, setIsAuthenticated }) {
             onIndicatorRemove={handleIndicatorRemove}
             onIndicatorVisibilityToggle={handleIndicatorVisibilityToggle}
             onIndicatorSettings={handleIndicatorSettings}
-            onOpenIndicatorAlert={handleOpenIndicatorAlert}
             onIndicatorMoveUp={handleIndicatorMoveUp}
             chartAppearance={chartAppearance}
             onOpenOptionChain={handleOpenOptionChainForSymbol}
@@ -2311,39 +1686,6 @@ function AppContent({ isAuthenticated, setIsAuthenticated }) {
           />
         )
       }
-      {/* Global Alert Popup Restored */}
-      <GlobalAlertPopup
-        alerts={globalAlertPopups as any}
-        onDismiss={(alertId: any) => setGlobalAlertPopups((prev: any[]) => prev.filter((a: any) => a.id !== alertId))}
-        onClick={(symbolData: any) => {
-          setCharts((prev: any[]) => prev.map((chart: any) =>
-            chart.id === activeChartId ? { ...chart, symbol: symbolData.symbol, exchange: symbolData.exchange, strategyConfig: null } : chart
-          ));
-        }}
-      />
-      <AlertDialog
-        isOpen={isAlertOpen}
-        onClose={() => setIsAlertOpen(false)}
-        onSave={handleSaveAlert as any}
-        initialPrice={alertPrice as any}
-        theme={theme}
-      />
-      <IndicatorAlertDialog
-        isOpen={isIndicatorAlertOpen}
-        onClose={() => {
-          setIsIndicatorAlertOpen(false);
-          setIndicatorAlertToEdit(null);
-          setIndicatorAlertInitialIndicator(null);
-        }}
-        onSave={handleSaveIndicatorAlert as any}
-        activeIndicators={(activeChart?.indicators || []) as any}
-        symbol={indicatorAlertToEdit ? indicatorAlertToEdit.symbol : currentSymbol}
-        exchange={indicatorAlertToEdit ? indicatorAlertToEdit.exchange : currentExchange}
-        theme={theme}
-        alertToEdit={indicatorAlertToEdit}
-        initialIndicator={indicatorAlertInitialIndicator}
-        currentInterval={currentInterval} // Pass current chart interval
-      />
       <Suspense fallback={null}>
         {isSettingsOpen && (
           <SettingsPopup
@@ -2411,48 +1753,11 @@ function AppContent({ isAuthenticated, setIsAuthenticated }) {
         )}
       </Suspense>
 
-      <LayoutTemplateDialog
-        isOpen={isTemplateDialogOpen}
-        onClose={() => setIsTemplateDialogOpen(false)}
-        currentState={{
-          layout,
-          charts: charts as any,
-          chartType,
-          chartAppearance,
-          theme,
-        }}
-        onLoadTemplate={handleLoadTemplate as any}
-        showToast={showToast}
-      />
       <Suspense fallback={null}>
         {isShortcutsDialogOpen && (
           <ShortcutsDialog
             isOpen={isShortcutsDialogOpen}
             onClose={() => setIsShortcutsDialogOpen(false)}
-          />
-        )}
-      </Suspense>
-      <Suspense fallback={null}>
-        {isChartTemplatesOpen && (
-          <ChartTemplatesDialog
-            isOpen={isChartTemplatesOpen}
-            onClose={() => setIsChartTemplatesOpen(false)}
-            currentConfig={getCurrentChartConfig() as any}
-            onLoadTemplate={handleLoadChartTemplate as any}
-          />
-        )}
-      </Suspense>
-      <Suspense fallback={null}>
-        {isStraddlePickerOpen && (
-          <OptionChainPicker
-            isOpen={isStraddlePickerOpen}
-            onClose={() => setIsStraddlePickerOpen(false)}
-            onSelect={(config: any) => {
-              setCharts((prev: any) => prev.map((chart: any) =>
-                chart.id === activeChartId ? { ...chart, strategyConfig: config } : chart
-              ));
-              setIsStraddlePickerOpen(false);
-            }}
           />
         )}
       </Suspense>
@@ -2469,28 +1774,6 @@ function AppContent({ isAuthenticated, setIsAuthenticated }) {
           />
         )}
       </Suspense>
-      <Suspense fallback={null}>
-        {isSectorHeatmapOpen && (
-          <SectorHeatmapModal
-            isOpen={isSectorHeatmapOpen}
-            onClose={() => setIsSectorHeatmapOpen(false)}
-            watchlistData={watchlistData}
-            onSectorSelect={(sector) => {
-              setPositionTrackerSettings(prev => ({ ...prev, sectorFilter: sector }));
-              setIsSectorHeatmapOpen(false);
-            }}
-            onSymbolSelect={(symData: any) => {
-              const symbol = typeof symData === 'string' ? symData : symData.symbol;
-              const exchange = typeof symData === 'string' ? 'NSE' : (symData.exchange || 'NSE');
-              setCharts((prev: any[]) => prev.map((chart: any) =>
-                chart.id === activeChartId ? { ...chart, symbol: symbol, exchange: exchange, strategyConfig: null } : chart
-              ));
-              setIsSectorHeatmapOpen(false);
-            }}
-          />
-        )}
-      </Suspense>
-
       <ConfirmDialog
         isOpen={confirmDialogState.isOpen}
         title={confirmDialogState.title}
@@ -2502,16 +1785,6 @@ function AppContent({ isAuthenticated, setIsAuthenticated }) {
         danger={confirmDialogState.danger}
       />
 
-      {/* Pine Script Editor - Bottom Panel */}
-      <Suspense fallback={null}>
-        {showPineEditor && (
-          <PineScriptEditor
-            isOpen={showPineEditor}
-            onClose={() => setShowPineEditor(false)}
-            onAddToChart={handleAddPineIndicator}
-          />
-        )}
-      </Suspense>
     </OrderProvider >
   );
 }

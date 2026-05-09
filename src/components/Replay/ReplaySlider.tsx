@@ -24,7 +24,6 @@ export interface ReplaySliderProps {
     fullData: CandleData[] | null;
     onSliderChange?: (index: number, hideFuture: boolean) => void;
     containerRef: RefObject<HTMLDivElement | null>;
-    isSelectingReplayPoint?: boolean;
     isPlaying?: boolean;
 }
 
@@ -35,7 +34,6 @@ const ReplaySlider: React.FC<ReplaySliderProps> = ({
     fullData,
     onSliderChange,
     containerRef,
-    isSelectingReplayPoint,
     isPlaying = false
 }) => {
     const [sliderPosition, setSliderPosition] = useState(0);
@@ -46,14 +44,6 @@ const ReplaySlider: React.FC<ReplaySliderProps> = ({
     const [isLocked, setIsLocked] = useState(false);
     const sliderRef = useRef<HTMLDivElement>(null);
     const animationFrameRef = useRef<number | null>(null);
-
-    // Unlock when "Jump to Bar" button is clicked
-    useEffect(() => {
-        if (isSelectingReplayPoint) {
-            setIsLocked(false);
-            setJustClicked(false);
-        }
-    }, [isSelectingReplayPoint]);
 
     // Track playback state changes
     const prevIsPlayingRef = useRef(isPlaying);
@@ -70,7 +60,7 @@ const ReplaySlider: React.FC<ReplaySliderProps> = ({
     // Lock slider when replayIndex changes from a click
     const prevReplayIndexRef = useRef(replayIndex);
     useEffect(() => {
-        if (!isReplayMode || isPlaying || isSelectingReplayPoint) {
+        if (!isReplayMode || isPlaying) {
             prevReplayIndexRef.current = replayIndex;
             return;
         }
@@ -82,7 +72,7 @@ const ReplaySlider: React.FC<ReplaySliderProps> = ({
         }
 
         prevReplayIndexRef.current = replayIndex;
-    }, [replayIndex, isReplayMode, isPlaying, isSelectingReplayPoint]);
+    }, [replayIndex, isReplayMode, isPlaying]);
 
     // Calculate slider position based on replay index
     useEffect(() => {
@@ -90,20 +80,20 @@ const ReplaySlider: React.FC<ReplaySliderProps> = ({
             return;
         }
 
-        if (!isDragging && !isSelectingReplayPoint && (!isMouseInChart || isLocked || isPlaying)) {
+        if (!isDragging && (!isMouseInChart || isLocked || isPlaying)) {
             const progress = (replayIndex + 1) / fullData.length;
             const containerWidth = containerRef?.current?.clientWidth || 0;
             const position = progress * containerWidth;
             setSliderPosition(position);
         }
-    }, [replayIndex, fullData, isReplayMode, containerRef, isDragging, isMouseInChart, isLocked, isPlaying, isSelectingReplayPoint]);
+    }, [replayIndex, fullData, isReplayMode, containerRef, isDragging, isMouseInChart, isLocked, isPlaying]);
 
     // Handle mouse move for slider follow within chart bounds
     useEffect(() => {
         if (!isReplayMode || !containerRef.current) return;
 
         const handleMouseMove = (e: globalThis.MouseEvent): void => {
-            if ((isLocked || justClicked || isPlaying) && !isSelectingReplayPoint) return;
+            if (isLocked || justClicked || isPlaying) return;
 
             const rect = containerRef.current!.getBoundingClientRect();
             const x = e.clientX - rect.left;
@@ -127,16 +117,6 @@ const ReplaySlider: React.FC<ReplaySliderProps> = ({
         };
 
         const handleMouseEnter = (e: globalThis.MouseEvent): void => {
-            if (isSelectingReplayPoint) {
-                setIsMouseInChart(true);
-                const rect = containerRef.current!.getBoundingClientRect();
-                const x = e.clientX - rect.left;
-                if (x >= 0 && x <= rect.width) {
-                    setSliderPosition(x);
-                }
-                return;
-            }
-
             if (isLocked || isPlaying) return;
 
             setIsMouseInChart(true);
@@ -160,7 +140,7 @@ const ReplaySlider: React.FC<ReplaySliderProps> = ({
                 cancelAnimationFrame(animationFrameRef.current);
             }
         };
-    }, [isReplayMode, containerRef, justClicked, isLocked, isPlaying, isSelectingReplayPoint]);
+    }, [isReplayMode, containerRef, justClicked, isLocked, isPlaying]);
 
     // Handle drag state changes
     useEffect(() => {
@@ -222,7 +202,7 @@ const ReplaySlider: React.FC<ReplaySliderProps> = ({
 
     if (!isReplayMode) return null;
 
-    const showSlider = (isMouseInChart && !isLocked && !isPlaying) || isDragging || isSelectingReplayPoint;
+    const showSlider = (isMouseInChart && !isLocked && !isPlaying) || isDragging;
 
     const getReplayPosition = (): number | null => {
         if (!chartRef.current || !fullData || replayIndex === null) return null;

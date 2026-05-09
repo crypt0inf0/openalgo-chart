@@ -7,7 +7,6 @@ import { ThemeProvider } from './context/ThemeContext';
 import { UserProvider } from './context/UserContext';
 import { UIProvider } from './context/UIContext';
 import { ToolProvider } from './context/ToolContext';
-import { AlertProvider } from './context/AlertContext';
 import { WatchlistProvider } from './context/WatchlistContext';
 
 // Apply theme immediately to prevent flash of default theme
@@ -35,11 +34,9 @@ if (rootElement) {
           <ThemeProvider>
             <UIProvider>
               <ToolProvider>
-                <AlertProvider>
-                  <WatchlistProvider>
-                    <App />
-                  </WatchlistProvider>
-                </AlertProvider>
+                <WatchlistProvider>
+                  <App />
+                </WatchlistProvider>
               </ToolProvider>
             </UIProvider>
           </ThemeProvider>

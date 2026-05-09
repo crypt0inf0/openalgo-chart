@@ -5,5 +5,4 @@
 
 export * from './trading';
 export * from './chart';
-export * from './alerts';
 export * from './workspace';

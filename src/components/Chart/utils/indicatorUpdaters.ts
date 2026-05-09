@@ -18,7 +18,6 @@ import {
     calculateIchimoku,
     calculatePivotPoints
 } from '../../../utils/indicators';
-import { calculateANNStrategy } from '../../../utils/indicators/annStrategy';
 import { calculateHilengaMilenga } from '../../../utils/indicators/hilengaMilenga';
 import { CHART_COLORS } from '../../../utils/colorUtils';
 import { IndicatorConfig } from './indicatorCreators';
@@ -174,84 +173,6 @@ export const updateVolumeSeries = (series: any, ind: IndicatorConfig, data: OHLC
     // No MA line to update
 };
 
-/**
- * Update ANN Strategy series
- * @returns markers for signals
- */
-export const updateANNStrategySeries = (series: any, ind: IndicatorConfig, data: OHLCData[], isVisible: boolean): ChartMarker[] => {
-    const markers: ChartMarker[] = [];
-
-    if (series.prediction) {
-        series.prediction.applyOptions({
-            visible: isVisible,
-            lineColor: ind.predictionColor || '#00BCD4'
-        });
-
-        // Update threshold lines
-        const thresholdValue = ind.threshold || 0.0014;
-        if (series.prediction._upperThreshold) {
-            series.prediction._upperThreshold.applyOptions({
-                price: thresholdValue,
-                color: ind.longColor || '#26A69A'
-            });
-        }
-        if (series.prediction._lowerThreshold) {
-            series.prediction._lowerThreshold.applyOptions({
-                price: -thresholdValue,
-                color: ind.shortColor || '#EF5350'
-            });
-        }
-
-        // Calculate ANN predictions
-        const result = calculateANNStrategy(data, {
-            threshold: ind.threshold || 0.0014,
-            longColor: ind.longColor || '#26A69A',
-            shortColor: ind.shortColor || '#EF5350',
-            showSignals: ind.showSignals !== false,
-            showBackground: ind.showBackground !== false
-        });
-
-        // Set prediction data
-        if (result.predictions && result.predictions.length > 0) {
-            series.prediction.setData(result.predictions);
-        }
-
-        // Set background area data for signal coloring on main chart
-        if ((series.bgLong || series.bgShort) && result.signals && result.signals.length > 0 && ind.showBackground !== false && isVisible) {
-            // Calculate price range for background
-            const priceMax = Math.max(...data.map(d => d.high));
-            const priceMin = Math.min(...data.map(d => d.low));
-            const padding = (priceMax - priceMin) * 0.1;
-            const bgTop = priceMax + padding;
-            const bgBottom = priceMin - padding;
-
-            // Create data for LONG background
-            const longBgData = result.signals.map((sig: any) => ({
-                time: sig.time,
-                value: sig.buying === true ? bgTop : bgBottom
-            }));
-
-            // Create data for SHORT background
-            const shortBgData = result.signals.map((sig: any) => ({
-                time: sig.time,
-                value: sig.buying === false ? bgTop : bgBottom
-            }));
-
-            if (series.bgLong) series.bgLong.setData(longBgData);
-            if (series.bgShort) series.bgShort.setData(shortBgData);
-        } else {
-            if (series.bgLong) series.bgLong.setData([]);
-            if (series.bgShort) series.bgShort.setData([]);
-        }
-
-        // Collect markers for buy/sell signals
-        if (result.markers && result.markers.length > 0 && isVisible) {
-            markers.push(...result.markers);
-        }
-    }
-
-    return markers;
-};
 
 /**
  * Update Hilenga-Milenga series
@@ -485,9 +406,6 @@ export const updateIndicatorSeries = (series: any, ind: IndicatorConfig, data: O
         case 'volume':
             updateVolumeSeries(series, ind, data, isVisible);
             return [];
-
-        case 'annStrategy':
-            return updateANNStrategySeries(series, ind, data, isVisible);
 
         case 'hilengaMilenga':
             updateHilengaMilengaSeries(series, ind, data, isVisible);
