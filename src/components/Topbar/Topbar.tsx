@@ -7,7 +7,7 @@ import { getIntervals } from '../../services/openalgo';
 import { logger } from '../../utils/logger';
 import Tooltip from '../Tooltip/Tooltip';
 import {
-    Home, Plus, Star, Trash2, X
+    Plus, Star, Trash2, X
 } from 'lucide-react';
 
 interface ChartType {
@@ -438,10 +438,10 @@ const Topbar: React.FC<TopbarProps> = ({
 
                                             {/* Logo + Hamburger Menu */}
                                             <div className={styles.group}>
-                                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '0 4px' }}>
+                                                <a href="/dashboard" style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '0 4px', textDecoration: 'none', color: 'inherit' }}>
                                                     <img src="/logo.png" alt="OpenAlgo" style={{ width: '20px', height: '20px', display: 'block' }} />
                                                     <span style={{ fontSize: '13px', fontWeight: 600, whiteSpace: 'nowrap' }}>OpenAlgo</span>
-                                                </div>
+                                                </a>
                                                 <button
                                                     className={classNames(styles.button, styles.iconButton)}
                                                     aria-label="Menu"
@@ -859,19 +859,6 @@ const Topbar: React.FC<TopbarProps> = ({
                                                     )}
                                                 </div>
 
-                                                <div className={styles.separatorWrap}><div className={styles.separator}></div></div>
-
-                                                <Tooltip content="Back to OpenAlgo" position="bottom">
-                                                    <a
-                                                        href="/dashboard"
-                                                        className={classNames(styles.button, styles.iconButton)}
-                                                        aria-label="Back to OpenAlgo"
-                                                    >
-                                                        <div className={styles.icon}>
-                                                            <Home size={16} />
-                                                        </div>
-                                                    </a>
-                                                </Tooltip>
                                             </div>
 
                                         </div>
