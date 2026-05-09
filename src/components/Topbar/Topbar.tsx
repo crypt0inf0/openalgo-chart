@@ -438,8 +438,9 @@ const Topbar: React.FC<TopbarProps> = ({
 
                                             {/* Logo + Hamburger Menu */}
                                             <div className={styles.group}>
-                                                <div className={styles.icon} style={{ padding: '0 4px' }}>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '0 4px' }}>
                                                     <img src="/logo.png" alt="OpenAlgo" style={{ width: '20px', height: '20px', display: 'block' }} />
+                                                    <span style={{ fontSize: '13px', fontWeight: 600, whiteSpace: 'nowrap' }}>OpenAlgo</span>
                                                 </div>
                                                 <button
                                                     className={classNames(styles.button, styles.iconButton)}
