@@ -7,7 +7,7 @@ import { getIntervals } from '../../services/openalgo';
 import { logger } from '../../utils/logger';
 import Tooltip from '../Tooltip/Tooltip';
 import {
-    Plus, Star, Trash2, X
+    Home, Plus, Star, Trash2, X
 } from 'lucide-react';
 
 interface ChartType {
@@ -854,6 +854,20 @@ const Topbar: React.FC<TopbarProps> = ({
                                                         </div>
                                                     )}
                                                 </div>
+
+                                                <div className={styles.separatorWrap}><div className={styles.separator}></div></div>
+
+                                                <Tooltip content="Back to OpenAlgo" position="bottom">
+                                                    <a
+                                                        href="/dashboard"
+                                                        className={classNames(styles.button, styles.iconButton)}
+                                                        aria-label="Back to OpenAlgo"
+                                                    >
+                                                        <div className={styles.icon}>
+                                                            <Home size={16} />
+                                                        </div>
+                                                    </a>
+                                                </Tooltip>
                                             </div>
 
                                         </div>
