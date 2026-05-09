@@ -436,8 +436,11 @@ const Topbar: React.FC<TopbarProps> = ({
                                     <div className={styles.content}>
                                         <div className={styles.innerWrap}>
 
-                                            {/* Hamburger Menu */}
+                                            {/* Logo + Hamburger Menu */}
                                             <div className={styles.group}>
+                                                <div className={styles.icon} style={{ padding: '0 4px' }}>
+                                                    <img src="/logo.png" alt="OpenAlgo" style={{ width: '20px', height: '20px', display: 'block' }} />
+                                                </div>
                                                 <button
                                                     className={classNames(styles.button, styles.iconButton)}
                                                     aria-label="Menu"
